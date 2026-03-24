@@ -1,7 +1,5 @@
 # AESCSFv2
 
-AESCSF v2 Evidence Tracker
-Overview
 
 AESCSF v2 Evidence Tracker
 Overview
