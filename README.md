@@ -54,3 +54,5 @@ Runs locally only (no multi-user support)
 No authentication
 No database backend
 Designed for single assessor use
+
+AI was used in creating this tool
