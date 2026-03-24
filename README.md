@@ -30,4 +30,4 @@ This tool is provided for assessment and evidence tracking purposes only and doe
 
 AI was used in creating this tool
 
-https://github.com/SecureLinkSolutions/AESCSFv2/blob/main/Dashboard.png
+SecureLinkSolutions/AESCSFv2/blob/main/Dashboard.png
