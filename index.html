@@ -1175,30 +1175,94 @@
       };
     }
 
-    let state = loadState();
+    const STORAGE_ADAPTERS = {
+      browserLocalStorage: {
+        id: "browserLocalStorage",
+        label: "Browser Local Storage",
+        load() {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          return raw ? JSON.parse(raw) : null;
+        },
+        save(data) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        },
+        clear() {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+    };
+
+    /*
+      Migration note:
+      Keep all persistence routed through activeStorageAdapter, replaceState(),
+      updateAssessmentField(), and buildExportState(). When the tool moves to a
+      backend, swap the adapter methods for API calls rather than rewriting the UI.
+    */
+    const activeStorageAdapter = STORAGE_ADAPTERS.browserLocalStorage;
+
+    function hydrateState(rawState) {
+      const base = buildInitialState();
+      if (rawState && rawState.assessments) {
+        for (const [practiceId, value] of Object.entries(rawState.assessments)) {
+          if (base.assessments[practiceId]) {
+            base.assessments[practiceId] = { ...defaultAssessment(), ...value };
+          }
+        }
+      }
+      return {
+        ...base,
+        version: rawState?.version || base.version,
+        framework: rawState?.framework || base.framework,
+        exportedAt: rawState?.exportedAt || null
+      };
+    }
 
     function loadState() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return buildInitialState();
-        const parsed = JSON.parse(raw);
-        const base = buildInitialState();
-        if (parsed && parsed.assessments) {
-          for (const [practiceId, value] of Object.entries(parsed.assessments)) {
-            if (base.assessments[practiceId]) {
-              base.assessments[practiceId] = { ...defaultAssessment(), ...value };
-            }
-          }
-        }
-        return base;
+        return hydrateState(activeStorageAdapter.load());
       } catch (error) {
         console.warn("Failed to load state:", error);
         return buildInitialState();
       }
     }
 
+    let state = loadState();
+
     function saveState() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      activeStorageAdapter.save(state);
+    }
+
+    function buildExportState() {
+      return {
+        version: state.version || "1.0",
+        framework: state.framework || "AESCSF v2",
+        exportedAt: new Date().toISOString(),
+        assessments: state.assessments
+      };
+    }
+
+    function replaceState(nextState, { persist = true } = {}) {
+      state = hydrateState(nextState);
+      if (persist) saveState();
+      return state;
+    }
+
+    function resetState() {
+      replaceState(buildInitialState());
+    }
+
+    function getAssessment(practiceId) {
+      if (!state.assessments[practiceId]) {
+        state.assessments[practiceId] = defaultAssessment();
+      }
+      return state.assessments[practiceId];
+    }
+
+    function updateAssessmentField(practiceId, field, value, { persist = true } = {}) {
+      const assessment = getAssessment(practiceId);
+      assessment[field] = value;
+      if (persist) saveState();
+      return assessment;
     }
 
     const app = document.getElementById("app");
@@ -1286,7 +1350,7 @@
     }
 
     function isCompletedStatus(status) {
-      return status === "Fully" || status === "Present";
+      return status === "Fully" || status === "Not Present";
     }
 
     function getStatusOptions(practice) {
@@ -1297,20 +1361,20 @@
     }
 
     function normaliseStatusForSummary(status) {
-      if (status === "Present") return "Fully";
-      if (status === "Not Present") return "Partial";
+      if (status === "Not Present") return "Fully";
+      if (status === "Present") return "Partial";
       return status;
     }
 
     function statusClass(status) {
       switch (status) {
         case "Partial":
-        case "Not Present":
+        case "Present":
           return "status-notstarted";
         case "Largely":
           return "status-Largely";
         case "Fully":
-        case "Present":
+        case "Not Present":
           return "status-Fully";
         case "N/A":
           return "status-na";
@@ -1322,7 +1386,7 @@
     function getFilteredPractices() {
       const search = searchInput.value.trim().toLowerCase();
       return PRACTICES.filter(practice => {
-        const assessment = state.assessments[practice.practiceId] || defaultAssessment();
+        const assessment = getAssessment(practice.practiceId);
         const matchesSearch = !search || [
           practice.domain,
           practice.objectiveId,
@@ -1395,15 +1459,15 @@
       if (status === "Partial") return 1;
       if (status === "Largely") return 2;
       if (status === "Fully") return 3;
-      if (status === "Present") return 3;
-      if (status === "Not Present") return 0;
+      if (status === "Not Present") return 3;
+      if (status === "Present") return 0;
       return 0;
     }
 
     function getAllRows() {
       return PRACTICES.map(practice => ({
         practice,
-        assessment: state.assessments[practice.practiceId] || defaultAssessment()
+        assessment: getAssessment(practice.practiceId)
       }));
     }
 
@@ -1478,7 +1542,7 @@
     }
 
     function renderPracticeCard(practice) {
-      const a = state.assessments[practice.practiceId] || defaultAssessment();
+      const a = getAssessment(practice.practiceId);
       return `
         <article class="practice-card ${statusClass(a.status)}" data-practice-id="${escapeHtml(practice.practiceId)}">
           <div class="practice-top">
@@ -1548,7 +1612,7 @@
       let noDate = 0;
 
       for (const practice of PRACTICES) {
-        const assessment = state.assessments[practice.practiceId] || defaultAssessment();
+        const assessment = getAssessment(practice.practiceId);
         if (!assessment.targetDate) {
           noDate++;
           continue;
@@ -1659,7 +1723,7 @@
       const total = rows.length;
       const fully = rows.filter(row => isCompletedStatus(row.assessment.status)).length;
       const largely = rows.filter(row => row.assessment.status === "Largely").length;
-      const partial = rows.filter(row => row.assessment.status === "Partial" || row.assessment.status === "Not Present").length;
+      const partial = rows.filter(row => row.assessment.status === "Partial" || row.assessment.status === "Present").length;
       const overdue = rows.filter(row => row.assessment.targetDate && !isCompletedStatus(row.assessment.status) && (daysUntil(row.assessment.targetDate) ?? 0) < 0).length;
       const gaps = getGapRows().length;
       const evidenceCount = rows.filter(row => row.assessment.evidence.trim() || row.assessment.attachments.trim()).length;
@@ -1692,7 +1756,7 @@
         const rows = Presentrics.rows.filter(row => row.practice.domain === domain);
         const fully = rows.filter(row => isCompletedStatus(row.assessment.status)).length;
         const largely = rows.filter(row => row.assessment.status === "Largely").length;
-        const partial = rows.filter(row => row.assessment.status === "Partial" || row.assessment.status === "Not Present").length;
+        const partial = rows.filter(row => row.assessment.status === "Partial" || row.assessment.status === "Present").length;
         const gaps = rows.filter(row => !isCompletedStatus(row.assessment.status) || row.assessment.gap.trim()).length;
         return {
           label: domain,
@@ -1884,7 +1948,7 @@
           String(rows.length),
           String(rows.filter(r => isCompletedStatus(r.assessment.status)).length),
           String(rows.filter(r => r.assessment.status === "Largely").length),
-          String(rows.filter(r => r.assessment.status === "Partial" || r.assessment.status === "Not Present").length),
+          String(rows.filter(r => r.assessment.status === "Partial" || r.assessment.status === "Present").length),
           averageScoreForGroup(rows).toFixed(2)
         ];
       });
@@ -1946,7 +2010,7 @@
         card.querySelectorAll("[data-field]").forEach(input => {
           input.addEventListener("input", () => {
             const field = input.dataset.field;
-            state.assessments[practiceId][field] = input.value;
+            updateAssessmentField(practiceId, field, input.value, { persist: false });
             if (field === "status") {
               input.className = `status-select ${statusClass(input.value)}`;
               card.className = `practice-card ${statusClass(input.value)}`;
@@ -1961,7 +2025,7 @@
           });
           input.addEventListener("change", () => {
             const field = input.dataset.field;
-            state.assessments[practiceId][field] = input.value;
+            updateAssessmentField(practiceId, field, input.value, { persist: false });
             if (field === "status") {
               input.className = `status-select ${statusClass(input.value)}`;
               card.className = `practice-card ${statusClass(input.value)}`;
@@ -1977,12 +2041,7 @@
     }
 
     function exportJson() {
-      const exportState = {
-        version: "1.0",
-        framework: "AESCSF v2",
-        exportedAt: new Date().toISOString(),
-        assessments: state.assessments
-      };
+      const exportState = buildExportState();
       const blob = new Blob([JSON.stringify(exportState, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -2003,14 +2062,7 @@
           if (!parsed || typeof parsed !== "object" || !parsed.assessments) {
             throw new Error("JSON does not contain an assessments object.");
           }
-          const next = buildInitialState();
-          for (const [practiceId, value] of Object.entries(parsed.assessments)) {
-            if (next.assessments[practiceId]) {
-              next.assessments[practiceId] = { ...defaultAssessment(), ...value };
-            }
-          }
-          state = next;
-          saveState();
+          replaceState(parsed);
           render();
           alert("Assessment data imported successfully.");
         } catch (error) {
@@ -2036,8 +2088,7 @@
     });
     document.getElementById("resetBtn").addEventListener("click", () => {
       if (confirm("This will clear all saved assessment data in this browser. Continue?")) {
-        state = buildInitialState();
-        saveState();
+        resetState();
         render();
       }
     });
