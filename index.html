@@ -1126,7 +1126,7 @@
             <div class="value" id="dashLargely">0</div>
           </div>
           <div class="stat">
-            <div class="label">Partial</div>
+            <div class="label">Partially / Not</div>
             <div class="value" id="dashPartial">0</div>
           </div>
           <div class="stat">
@@ -1155,7 +1155,7 @@
           <div class="panel-header">
             <div>
               <h3>Domain Maturity</h3>
-              <div class="footer-note">Average score by domain based on Partial, Largely, and Fully ratings.</div>
+              <div class="footer-note">Average score by domain based on MIL-aligned status ratings.</div>
             </div>
           </div>
           <div class="chart-wrap"><canvas id="domainRadarChart"></canvas></div>
@@ -1209,7 +1209,7 @@
           <div class="value" id="statLargely">0</div>
         </div>
         <div class="stat">
-          <div class="label">Partial</div>
+          <div class="label">Partially / Not</div>
           <div class="value" id="statNotStarted">0</div>
         </div>
         <div class="stat">
@@ -1258,11 +1258,14 @@
           <select id="statusFilter">
             <option value="">All</option>
             <option value="Not Assessed">Not Assessed</option>
-            <option value="Partial">Partial</option>
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+            <option value="Not">Not</option>
+            <option value="Partially">Partially</option>
             <option value="Largely">Largely</option>
             <option value="Fully">Fully</option>
-            <option value="Present">Present</option>
-            <option value="Not Present">Not Present</option>
+            <option value="Met">Met</option>
+            <option value="Not Met">Not Met</option>
             <option value="N/A">N/A</option>
           </select>
         </div>
@@ -1663,31 +1666,43 @@
     }
 
     function isCompletedStatus(status) {
-      return status === "Fully" || status === "Not Present";
+      return ["Fully", "Yes", "Met", "Largely"].includes(status);
+    }
+
+    function isOpenStatus(status) {
+      return ["No", "Not", "Partially", "Not Met", "Partial", "Present"].includes(status);
     }
 
     function getStatusOptions(practice) {
       if (isAntiPractice(practice)) {
-        return ["Not Assessed", "Present", "Not Present", "N/A"];
+        return ["Not Assessed", "Met", "Not Met", "N/A"];
       }
-      return ["Not Assessed", "Partial", "Largely", "Fully", "N/A"];
+      if (practice.mil === "MIL-1") {
+        return ["Not Assessed", "Yes", "No", "N/A"];
+      }
+      return ["Not Assessed", "Not", "Partially", "Largely", "Fully", "N/A"];
     }
 
     function normaliseStatusForSummary(status) {
+      if (status === "Yes") return "Fully";
+      if (status === "No") return "Not";
+      if (status === "Met") return "Fully";
+      if (status === "Not Met") return "Not";
+      if (status === "Partial") return "Partially";
+      if (status === "Present") return "Not";
       if (status === "Not Present") return "Fully";
-      if (status === "Present") return "Partial";
       return status;
     }
 
     function statusClass(status) {
-      switch (status) {
-        case "Partial":
-        case "Present":
+      const normalised = normaliseStatusForSummary(status);
+      switch (normalised) {
+        case "Not":
+        case "Partially":
           return "status-notstarted";
         case "Largely":
           return "status-Largely";
         case "Fully":
-        case "Not Present":
           return "status-Fully";
         case "N/A":
           return "status-na";
@@ -1769,11 +1784,11 @@
     }
 
     function scoreForStatus(status) {
-      if (status === "Partial") return 1;
-      if (status === "Largely") return 2;
-      if (status === "Fully") return 3;
-      if (status === "Not Present") return 3;
-      if (status === "Present") return 0;
+      const normalised = normaliseStatusForSummary(status);
+      if (normalised === "Not") return 0;
+      if (normalised === "Partially") return 1;
+      if (normalised === "Largely") return 2;
+      if (normalised === "Fully") return 3;
       return 0;
     }
 
@@ -1796,20 +1811,20 @@
 
     function updateSummary() {
       const practices = getFilteredPractices();
-      let Fully = 0, Largely = 0, notStarted = 0, notAssessed = 0;
+      let fully = 0, largely = 0, partial = 0, notAssessed = 0;
       for (const p of practices) {
         const rawStatus = (state.assessments[p.practiceId] || defaultAssessment()).status;
         const status = normaliseStatusForSummary(rawStatus);
-        if (status === "Fully") Fully++;
-        else if (status === "Largely") Largely++;
-        else if (status === "Partial") notStarted++;
+        if (status === "Fully") fully++;
+        else if (status === "Largely") largely++;
+        else if (status === "Partially" || status === "Not") partial++;
         else if (status === "Not Assessed") notAssessed++;
       }
-      const completion = practices.length ? Math.round((Fully / practices.length) * 100) : 0;
+      const completion = practices.length ? Math.round((fully / practices.length) * 100) : 0;
       document.getElementById("statTotal").textContent = practices.length;
-      document.getElementById("statFully").textContent = Fully;
-      document.getElementById("statLargely").textContent = Largely;
-      document.getElementById("statNotStarted").textContent = notStarted;
+      document.getElementById("statFully").textContent = fully;
+      document.getElementById("statLargely").textContent = largely;
+      document.getElementById("statNotStarted").textContent = partial;
       document.getElementById("statNotAssessed").textContent = notAssessed;
       document.getElementById("statCompletion").textContent = completion + "%";
       document.getElementById("completionBar").style.width = completion + "%";
@@ -2034,9 +2049,12 @@
     function buildDashboardMetrics() {
       const rows = getAllRows();
       const total = rows.length;
-      const fully = rows.filter(row => isCompletedStatus(row.assessment.status)).length;
-      const largely = rows.filter(row => row.assessment.status === "Largely").length;
-      const partial = rows.filter(row => row.assessment.status === "Partial" || row.assessment.status === "Present").length;
+      const fully = rows.filter(row => normaliseStatusForSummary(row.assessment.status) === "Fully").length;
+      const largely = rows.filter(row => normaliseStatusForSummary(row.assessment.status) === "Largely").length;
+      const partial = rows.filter(row => {
+        const status = normaliseStatusForSummary(row.assessment.status);
+        return status === "Partially" || status === "Not";
+      }).length;
       const overdue = rows.filter(row => row.assessment.targetDate && !isCompletedStatus(row.assessment.status) && (daysUntil(row.assessment.targetDate) ?? 0) < 0).length;
       const gaps = getGapRows().length;
       const evidenceCount = rows.filter(row => row.assessment.evidence.trim() || row.assessment.attachments.trim()).length;
@@ -2069,7 +2087,7 @@
         const rows = metrics.rows.filter(row => row.practice.domain === domain);
         const fully = rows.filter(row => isCompletedStatus(row.assessment.status)).length;
         const largely = rows.filter(row => row.assessment.status === "Largely").length;
-        const partial = rows.filter(row => row.assessment.status === "Partial" || row.assessment.status === "Present").length;
+        const partial = rows.filter(row => { const status = normaliseStatusForSummary(row.assessment.status); return status === "Partially" || status === "Not"; }).length;
         const gaps = rows.filter(row => !isCompletedStatus(row.assessment.status) || row.assessment.gap.trim()).length;
         return {
           label: domain,
@@ -2097,7 +2115,7 @@
           </div>
           <div class="metric-row"><span>Fully</span><strong>${item.fully}</strong></div>
           <div class="metric-row"><span>Largely</span><strong>${item.largely}</strong></div>
-          <div class="metric-row"><span>Partial</span><strong>${item.partial}</strong></div>
+          <div class="metric-row"><span>Partially / Not</span><strong>${item.partial}</strong></div>
           <div class="metric-row"><span>Open Gaps</span><strong>${item.gaps}</strong></div>
           <div class="mini-bar"><span style="width:${item.completion}%"></span></div>
         </article>
@@ -2251,7 +2269,7 @@
         body: [
           ["Practices", String(metrics.total), "Completion", metrics.completion + "%"],
           ["Fully", String(metrics.fully), "Largely", String(metrics.largely)],
-          ["Partial", String(metrics.partial), "Open Gaps", String(metrics.gaps)],
+          ["Partially / Not", String(metrics.partial), "Open Gaps", String(metrics.gaps)],
           ["Overdue", String(metrics.overdue), "Evidence Coverage", metrics.evidenceCoverage + "%"]
         ],
         theme: "grid",
@@ -2265,14 +2283,14 @@
           String(rows.length),
           String(rows.filter(r => isCompletedStatus(r.assessment.status)).length),
           String(rows.filter(r => r.assessment.status === "Largely").length),
-          String(rows.filter(r => r.assessment.status === "Partial" || r.assessment.status === "Present").length),
+          String(rows.filter(r => { const status = normaliseStatusForSummary(r.assessment.status); return status === "Partially" || status === "Not"; }).length),
           averageScoreForGroup(rows).toFixed(2)
         ];
       });
 
       doc.autoTable({
         startY: doc.lastAutoTable.finalY + 20,
-        head: [["Domain", "Practices", "Fully", "Largely", "Partial", "Avg Score / 3"]],
+        head: [["Domain", "Practices", "Fully", "Largely", "Partially / Not", "Avg Score / 3"]],
         body: domainRows,
         theme: "striped",
         styles: { fontSize: 9, cellPadding: 5 }
@@ -2460,12 +2478,13 @@
     }
 
     function statusDistributionFromSnapshot(snapshot) {
-      const counts = { Partial: 0, Largely: 0, Fully: 0, "Not Assessed": 0, "N/A": 0 };
+      const counts = { "Not / No / Not Met": 0, Partially: 0, Largely: 0, "Fully / Yes / Met": 0, "Not Assessed": 0, "N/A": 0 };
       for (const practice of PRACTICES) {
         const status = normaliseStatusForSummary(getAssessmentFromSnapshot(snapshot, practice.practiceId).status);
-        if (status === "Partial") counts.Partial++;
+        if (status === "Not") counts["Not / No / Not Met"]++;
+        else if (status === "Partially") counts.Partially++;
         else if (status === "Largely") counts.Largely++;
-        else if (status === "Fully") counts.Fully++;
+        else if (status === "Fully") counts["Fully / Yes / Met"]++;
         else if (status === "N/A") counts["N/A"]++;
         else counts["Not Assessed"]++;
       }
@@ -2518,10 +2537,10 @@
       comparisonStatusChart = new Chart(comparisonStatusCanvas, {
         type: "bar",
         data: {
-          labels: ["Partial", "Largely", "Fully", "Not Assessed", "N/A"],
+          labels: ["Not / No / Not Met", "Partially", "Largely", "Fully / Yes / Met", "Not Assessed", "N/A"],
           datasets: [
-            { label: comparisonState.previousLabel, data: [previousDistribution.Partial, previousDistribution.Largely, previousDistribution.Fully, previousDistribution["Not Assessed"], previousDistribution["N/A"]], borderWidth: 1 },
-            { label: comparisonState.currentLabel, data: [currentDistribution.Partial, currentDistribution.Largely, currentDistribution.Fully, currentDistribution["Not Assessed"], currentDistribution["N/A"]], borderWidth: 1 }
+            { label: comparisonState.previousLabel, data: [previousDistribution["Not / No / Not Met"], previousDistribution.Partially, previousDistribution.Largely, previousDistribution["Fully / Yes / Met"], previousDistribution["Not Assessed"], previousDistribution["N/A"]], borderWidth: 1 },
+            { label: comparisonState.currentLabel, data: [currentDistribution["Not / No / Not Met"], currentDistribution.Partially, currentDistribution.Largely, currentDistribution["Fully / Yes / Met"], currentDistribution["Not Assessed"], currentDistribution["N/A"]], borderWidth: 1 }
           ]
         },
         options: {
