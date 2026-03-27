@@ -918,6 +918,12 @@
       }
     }
 
+
+    .comparison-change { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+    .comparison-change.improved { background:rgba(34,197,94,0.14); color:#166534; }
+    .comparison-change.regressed { background:rgba(239,68,68,0.14); color:#991b1b; }
+    .comparison-change.unchanged { background:rgba(59,130,246,0.12); color:#1d4ed8; }
+
 </style>
 
 </head>
@@ -939,6 +945,7 @@
         <button class="page-tab active" data-page-tab="dashboard">Dashboard</button>
         <button class="page-tab" data-page-tab="assessment">Assessment</button>
         <button class="page-tab" data-page-tab="timeline">Target Date Timeline</button>
+        <button class="page-tab" data-page-tab="comparison">Comparison</button>
       </div>
     </section>
 
@@ -965,7 +972,7 @@
             <div class="value" id="dashLargely">0</div>
           </div>
           <div class="stat">
-            <div class="label">Partial</div>
+            <div class="label">Open / Partial</div>
             <div class="value" id="dashPartial">0</div>
           </div>
           <div class="stat">
@@ -994,7 +1001,7 @@
           <div class="panel-header">
             <div>
               <h3>Domain Maturity</h3>
-              <div class="footer-note">Average score by domain based on Partial, Largely, and Fully ratings.</div>
+              <div class="footer-note">Average score by domain based on current assessment statuses across all MIL levels.</div>
             </div>
           </div>
           <div class="chart-wrap"><canvas id="domainRadarChart"></canvas></div>
@@ -1048,7 +1055,7 @@
           <div class="value" id="statLargely">0</div>
         </div>
         <div class="stat">
-          <div class="label">Partial</div>
+          <div class="label">Open / Partial</div>
           <div class="value" id="statNotStarted">0</div>
         </div>
         <div class="stat">
@@ -1097,7 +1104,10 @@
           <select id="statusFilter">
             <option value="">All</option>
             <option value="Not Assessed">Not Assessed</option>
-            <option value="Partial">Partial</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+            <option value="Not">Not</option>
+            <option value="Partially">Partially</option>
             <option value="Largely">Largely</option>
             <option value="Fully">Fully</option>
             <option value="Present">Present</option>
@@ -1143,6 +1153,125 @@
       </section>
       <div id="timelineApp"></div>
     </div>
+
+    <div id="comparisonPage" class="page">
+      <section class="summary">
+        <div class="timeline-toolbar">
+          <div>
+            <h2 style="margin:0 0 6px 0;">Comparison</h2>
+            <div class="footer-note" style="margin-top:0;">Compare a previous assessment JSON against a current assessment JSON, or compare the previous file against the live assessment currently loaded in the tracker.</div>
+          </div>
+        </div>
+        <div class="dashboard-grid">
+          <section class="dashboard-panel">
+            <div class="panel-header">
+              <div>
+                <h3>Previous Assessment</h3>
+                <div class="footer-note" id="comparisonPreviousMeta">Upload a JSON export from the previous assessment period.</div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Loaded File</label>
+              <input id="comparisonPreviousName" type="text" value="No file loaded" readonly />
+            </div>
+            <div class="top-actions" style="margin-top:12px;">
+              <label class="button-like secondary" for="comparisonPreviousFile">Import Previous JSON</label>
+              <input id="comparisonPreviousFile" type="file" accept=".json,application/json" hidden />
+              <button class="ghost" id="comparisonExportPreviousBtn" type="button">Export Previous JSON</button>
+            </div>
+          </section>
+
+          <section class="dashboard-panel">
+            <div class="panel-header">
+              <div>
+                <h3>Current Assessment</h3>
+                <div class="footer-note" id="comparisonCurrentMeta">Upload a JSON export from the current assessment period or use the live assessment.</div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Loaded File</label>
+              <input id="comparisonCurrentName" type="text" value="No file loaded" readonly />
+            </div>
+            <div class="top-actions" style="margin-top:12px;">
+              <label class="button-like secondary" for="comparisonCurrentFile">Import Current JSON</label>
+              <input id="comparisonCurrentFile" type="file" accept=".json,application/json" hidden />
+              <button class="secondary" id="comparisonUseLiveBtn" type="button">Use Live Assessment</button>
+              <button class="ghost" id="comparisonExportCurrentBtn" type="button">Export Current JSON</button>
+              <button class="ghost" id="clearComparisonBtn" type="button">Clear Comparison</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="summary">
+        <div class="summary-grid">
+          <div class="stat"><div class="label">Improved</div><div class="value" id="compImproved">0</div></div>
+          <div class="stat"><div class="label">Regressed</div><div class="value" id="compRegressed">0</div></div>
+          <div class="stat"><div class="label">Unchanged</div><div class="value" id="compUnchanged">0</div></div>
+          <div class="stat"><div class="label">Previous Gaps</div><div class="value" id="compPrevGaps">0</div></div>
+          <div class="stat"><div class="label">Current Gaps</div><div class="value" id="compCurrGaps">0</div></div>
+          <div class="stat"><div class="label">Gap Delta</div><div class="value" id="compGapDelta">0</div></div>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <section class="dashboard-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Domain Maturity Comparison</h3>
+              <div class="footer-note">Radar chart comparing average domain maturity by assessment.</div>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="comparisonRadarChart"></canvas></div>
+        </section>
+
+        <section class="dashboard-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Status Distribution Comparison</h3>
+              <div class="footer-note">Side-by-side comparison of status distribution.</div>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="comparisonStatusChart"></canvas></div>
+        </section>
+
+        <section class="dashboard-panel dashboard-panel-span">
+          <div class="panel-header">
+            <div>
+              <h3>Gap Comparison</h3>
+              <div class="footer-note">Open gap count comparison between the selected assessments.</div>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="comparisonGapChart"></canvas></div>
+        </section>
+
+        <section class="dashboard-panel dashboard-panel-span">
+          <div class="panel-header">
+            <div>
+              <h3>Practice Change Register</h3>
+              <div class="footer-note">Improved, regressed, and unchanged outcomes across practices.</div>
+            </div>
+          </div>
+          <div id="comparisonNotice" class="empty">Load both JSON files, or load a previous JSON and use the live assessment, to view the comparison.</div>
+          <div style="overflow:auto;">
+            <table class="gap-table">
+              <thead>
+                <tr>
+                  <th>Domain</th>
+                  <th>Practice</th>
+                  <th>Previous</th>
+                  <th>Current</th>
+                  <th>Change</th>
+                  <th>Gap / Remediation</th>
+                </tr>
+              </thead>
+              <tbody id="comparisonTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </div>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1318,7 +1447,10 @@
     const dashboardPage = document.getElementById("dashboardPage");
     const assessmentPage = document.getElementById("assessmentPage");
     const timelinePage = document.getElementById("timelinePage");
+    const comparisonPage = document.getElementById("comparisonPage");
     const pageTabs = document.querySelectorAll("[data-page-tab]");
+    const comparisonPreviousFile = document.getElementById("comparisonPreviousFile");
+    const comparisonCurrentFile = document.getElementById("comparisonCurrentFile");
     const searchInput = document.getElementById("searchInput");
     const domainFilter = document.getElementById("domainFilter");
     const milFilter = document.getElementById("milFilter");
@@ -1327,6 +1459,10 @@
     const importFile = document.getElementById("importFile");
     let domainRadarChart = null;
     let milRadarChart = null;
+    let comparisonRadarChart = null;
+    let comparisonStatusChart = null;
+    let comparisonGapChart = null;
+    let comparisonState = { previous: null, current: null, previousLabel: "Previous Assessment", currentLabel: "Current Assessment" };
     const openObjectiveKeys = new Set();
 
     function objectiveKeyFor(group) {
@@ -1347,11 +1483,13 @@
       dashboardPage.classList.toggle("active", page === "dashboard");
       assessmentPage.classList.toggle("active", page === "assessment");
       timelinePage.classList.toggle("active", page === "timeline");
+      if (comparisonPage) comparisonPage.classList.toggle("active", page === "comparison");
       pageTabs.forEach(tab => {
         tab.classList.toggle("active", tab.dataset.pageTab === page);
       });
       if (page === "timeline") renderTimeline();
       if (page === "dashboard") renderDashboard();
+      if (page === "comparison") renderComparison();
     }
 
     function formatDate(dateString) {
@@ -1398,30 +1536,39 @@
     }
 
     function isCompletedStatus(status) {
-      return status === "Fully" || status === "Present";
+      return status === "Fully" || status === "Yes" || status === "Present";
     }
 
     function getStatusOptions(practice) {
       if (isAntiPractice(practice)) {
         return ["Not Assessed", "Present", "Not Present", "N/A"];
       }
-      return ["Not Assessed", "Partial", "Largely", "Fully", "N/A"];
+      if (practice.mil === "MIL-1") {
+        return ["Not Assessed", "Yes", "No", "N/A"];
+      }
+      return ["Not Assessed", "Not", "Partially", "Largely", "Fully", "N/A"];
     }
 
     function normaliseStatusForSummary(status) {
       if (status === "Present") return "Fully";
       if (status === "Not Present") return "Partial";
+      if (status === "Yes") return "Fully";
+      if (status === "No") return "Not";
       return status;
     }
 
     function statusClass(status) {
       switch (status) {
         case "Partial":
+        case "Partially":
+        case "Not":
+        case "No":
         case "Not Present":
           return "status-notstarted";
         case "Largely":
           return "status-Largely";
         case "Fully":
+        case "Yes":
         case "Present":
           return "status-Fully";
         case "N/A":
@@ -1504,11 +1651,10 @@
     }
 
     function scoreForStatus(status) {
-      if (status === "Partial") return 1;
+      if (status === "Partial" || status === "Partially") return 1;
       if (status === "Largely") return 2;
-      if (status === "Fully") return 3;
-      if (status === "Present") return 3;
-      if (status === "Not Present") return 0;
+      if (status === "Fully" || status === "Yes" || status === "Present") return 3;
+      if (status === "No" || status === "Not" || status === "Not Present") return 0;
       return 0;
     }
 
@@ -1537,7 +1683,7 @@
         const status = normaliseStatusForSummary(rawStatus);
         if (status === "Fully") Fully++;
         else if (status === "Largely") Largely++;
-        else if (status === "Partial") notStarted++;
+        else if (status === "Partial" || status === "Partially" || status === "Not" || status === "No" || status === "Not Present") notStarted++;
         else if (status === "Not Assessed") notAssessed++;
       }
       const completion = practices.length ? Math.round((Fully / practices.length) * 100) : 0;
@@ -1771,7 +1917,7 @@
       const total = rows.length;
       const fully = rows.filter(row => isCompletedStatus(row.assessment.status)).length;
       const largely = rows.filter(row => row.assessment.status === "Largely").length;
-      const partial = rows.filter(row => row.assessment.status === "Partial" || row.assessment.status === "Not Present").length;
+      const partial = rows.filter(row => ["Partial","Partially","Not","No","Not Present"].includes(row.assessment.status)).length;
       const overdue = rows.filter(row => row.assessment.targetDate && !isCompletedStatus(row.assessment.status) && (daysUntil(row.assessment.targetDate) ?? 0) < 0).length;
       const gaps = getGapRows().length;
       const evidenceCount = rows.filter(row => row.assessment.evidence.trim() || row.assessment.attachments.trim()).length;
@@ -1804,7 +1950,7 @@
         const rows = Presentrics.rows.filter(row => row.practice.domain === domain);
         const fully = rows.filter(row => isCompletedStatus(row.assessment.status)).length;
         const largely = rows.filter(row => row.assessment.status === "Largely").length;
-        const partial = rows.filter(row => row.assessment.status === "Partial" || row.assessment.status === "Not Present").length;
+        const partial = rows.filter(row => ["Partial","Partially","Not","No","Not Present"].includes(row.assessment.status)).length;
         const gaps = rows.filter(row => !isCompletedStatus(row.assessment.status) || row.assessment.gap.trim()).length;
         return {
           label: domain,
@@ -1959,83 +2105,327 @@
       URL.revokeObjectURL(url);
     }
 
-    function generatePdfReport() {
-      if (!(window.jspdf && window.jspdf.jsPDF)) {
-        alert("PDF library is not available yet. Please wait a moment and try again.");
-        return;
+    
+    function getCanvasImageData(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || !canvas.toDataURL) return null;
+      try {
+        return canvas.toDataURL("image/png", 1.0);
+      } catch (error) {
+        return null;
       }
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-      const Presentrics = buildDashboardPresentrics();
-      const gapRows = getGapRows();
+    }
 
+    function addPdfPageFrame(doc, title, subtitle = "") {
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      doc.setFillColor(18, 52, 86);
+      doc.rect(0, 0, pageWidth, 56, "F");
+      doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(20);
-      doc.text("AESCSF v2 Assessment Report", 40, 42);
+      doc.text(title, 40, 34);
+      if (subtitle) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.text(subtitle, 40, 48);
+      }
+      doc.setDrawColor(220, 226, 232);
+      doc.line(40, pageHeight - 32, pageWidth - 40, pageHeight - 32);
+      doc.setTextColor(100, 110, 120);
+      doc.setFontSize(9);
+      doc.text("AESCSF v2 Evidence Tracker", 40, pageHeight - 14);
+      doc.text(`Page ${doc.getNumberOfPages()}`, pageWidth - 70, pageHeight - 14);
+      doc.setTextColor(33, 37, 41);
+    }
+
+    function drawSummaryCard(doc, x, y, w, h, label, value, accent) {
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(221, 226, 232);
+      doc.roundedRect(x, y, w, h, 8, 8, "FD");
+      doc.setFillColor(accent[0], accent[1], accent[2]);
+      doc.roundedRect(x, y, 8, h, 8, 8, "F");
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
-      doc.text(`Generated: ${new Date().toLocaleString("en-AU")}`, 40, 62);
-
-      doc.autoTable({
-        startY: 80,
-        head: [["Presentric", "Value", "Presentric", "Value"]],
-        body: [
-          ["Practices", String(Presentrics.total), "Completion", Presentrics.completion + "%"],
-          ["Fully", String(Presentrics.fully), "Largely", String(Presentrics.largely)],
-          ["Partial", String(Presentrics.partial), "Open Gaps", String(Presentrics.gaps)],
-          ["Overdue", String(Presentrics.overdue), "Evidence Coverage", Presentrics.evidenceCoverage + "%"]
-        ],
-        theme: "grid",
-        styles: { fontSize: 10, cellPadding: 6 }
-      });
-
-      const domainRows = [...new Set(PRACTICES.map(p => p.domain))].sort().map(domain => {
-        const rows = Presentrics.rows.filter(row => row.practice.domain === domain);
-        return [
-          domain,
-          String(rows.length),
-          String(rows.filter(r => isCompletedStatus(r.assessment.status)).length),
-          String(rows.filter(r => r.assessment.status === "Largely").length),
-          String(rows.filter(r => r.assessment.status === "Partial" || r.assessment.status === "Not Present").length),
-          averageScoreForGroup(rows).toFixed(2)
-        ];
-      });
-
-      doc.autoTable({
-        startY: doc.lastAutoTable.finalY + 20,
-        head: [["Domain", "Practices", "Fully", "Largely", "Partial", "Avg Score / 3"]],
-        body: domainRows,
-        theme: "striped",
-        styles: { fontSize: 9, cellPadding: 5 }
-      });
-
-      doc.addPage("a4", "landscape");
+      doc.setTextColor(92, 102, 112);
+      doc.text(label, x + 18, y + 20);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text("Gap Register", 40, 36);
-      doc.autoTable({
-        startY: 50,
-        head: [["Practice ID", "Domain", "Status", "Owner", "Target Date", "Gap / Remediation", "Attachment Links"]],
-        body: gapRows.map(row => [
-          row.practice.practiceId,
-          row.practice.domain,
-          row.assessment.status,
-          row.assessment.owner || "Not assigned",
-          formatDate(row.assessment.targetDate) || "Not set",
-          row.assessment.gap || "Incomplete status - remediation detail not recorded.",
-          row.assessment.attachments || ""
-        ]),
-        theme: "grid",
-        styles: { fontSize: 8, cellPadding: 4, overflow: "linebreak" },
-        columnStyles: {
-          5: { cellWidth: 260 },
-          6: { cellWidth: 180 }
-        }
-      });
-
-      const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
-      doc.save(`aescsf-v2-assessment-report-${stamp}.pdf`);
+      doc.setFontSize(22);
+      doc.setTextColor(33, 37, 41);
+      doc.text(String(value), x + 18, y + 46);
     }
+
+    
+function buildPdfDomainRows(rows) {
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      return domains.map(domain => {
+        const scopedRows = rows.filter(row => row.practice.domain === domain);
+        const completed = scopedRows.filter(row => isCompletedStatus(row.assessment.status)).length;
+        const largely = scopedRows.filter(row => row.assessment.status === "Largely").length;
+        const partial = scopedRows.filter(row => {
+          const status = normaliseStatusForSummary(row.assessment.status);
+          return status === "Partial" || status === "Partially" || status === "Not" || status === "No";
+        }).length;
+        const gaps = scopedRows.filter(row => !isCompletedStatus(row.assessment.status) || row.assessment.gap.trim()).length;
+        return {
+          label: domain,
+          total: scopedRows.length,
+          completed,
+          largely,
+          partial,
+          gaps,
+          score: averageScoreForGroup(scopedRows)
+        };
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function openPrintablePdfFallback(metrics, domainRows, gapRows, generatedAt) {
+      const domainRadarImage = getCanvasImageData("domainRadarChart");
+      const milRadarImage = getCanvasImageData("milRadarChart");
+      const gapRowsHtml = (gapRows.length ? gapRows : [{ practice: { practiceId: "-", domain: "-" }, assessment: { status: "No open gaps", owner: "", targetDate: "", gap: "", attachments: "" } }])
+        .map(row => `
+          <tr>
+            <td>${escapeHtml(row.practice.practiceId)}</td>
+            <td>${escapeHtml(row.practice.domain)}</td>
+            <td>${escapeHtml(row.assessment.status || "Not Assessed")}</td>
+            <td>${escapeHtml(row.assessment.owner || "Not assigned")}</td>
+            <td>${escapeHtml(formatDate(row.assessment.targetDate) || "Not set")}</td>
+            <td>${escapeHtml(row.assessment.gap || "No remediation detail recorded.")}</td>
+          </tr>`).join("");
+      const domainRowsHtml = domainRows.map(item => `
+          <tr>
+            <td>${escapeHtml(item.label)}</td>
+            <td>${item.total}</td>
+            <td>${item.completed}</td>
+            <td>${item.largely}</td>
+            <td>${item.partial}</td>
+            <td>${item.gaps}</td>
+            <td>${Number(item.score || 0).toFixed(2)}</td>
+          </tr>`).join("");
+
+      const reportHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AESCSF v2 Assessment Report</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:32px;color:#1f2937;background:#fff}
+  h1,h2{margin:0 0 12px 0}
+  .muted{color:#6b7280;font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}
+  .card{border:1px solid #dbe2ea;border-radius:12px;padding:14px;background:#f8fafc}
+  .label{font-size:12px;color:#64748b;margin-bottom:6px}
+  .value{font-size:24px;font-weight:700;color:#0f172a}
+  .section{margin-top:28px}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border:1px solid #dbe2ea;padding:8px;font-size:12px;vertical-align:top;text-align:left}
+  th{background:#123456;color:#fff}
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+  .chart-box{border:1px solid #dbe2ea;border-radius:12px;padding:12px}
+  .chart-box img{max-width:100%;height:auto;display:block;margin:auto}
+
+    .comparison-change { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+    .comparison-change.improved { background:rgba(34,197,94,0.14); color:#166534; }
+    .comparison-change.regressed { background:rgba(239,68,68,0.14); color:#991b1b; }
+    .comparison-change.unchanged { background:rgba(59,130,246,0.12); color:#1d4ed8; }
+
+</style>
+</head>
+<body>
+  <h1>AESCSF v2 Assessment Report</h1>
+  <div class="muted">Generated ${escapeHtml(generatedAt)}</div>
+  <div class="grid">
+    <div class="card"><div class="label">Practices</div><div class="value">${metrics.total}</div></div>
+    <div class="card"><div class="label">Completion</div><div class="value">${metrics.completion}%</div></div>
+    <div class="card"><div class="label">Open Gaps</div><div class="value">${metrics.gaps}</div></div>
+    <div class="card"><div class="label">Overdue</div><div class="value">${metrics.overdue}</div></div>
+    <div class="card"><div class="label">Evidence Coverage</div><div class="value">${metrics.evidenceCoverage}%</div></div>
+    <div class="card"><div class="label">Completed</div><div class="value">${metrics.fully}</div></div>
+    <div class="card"><div class="label">Largely</div><div class="value">${metrics.largely}</div></div>
+    <div class="card"><div class="label">Partial / Open</div><div class="value">${metrics.partial}</div></div>
+  </div>
+  <div class="section">
+    <h2>Dashboard visuals</h2>
+    <div class="charts">
+      <div class="chart-box"><h3>Domain maturity radar</h3>${domainRadarImage ? `<img src="${domainRadarImage}" alt="Domain radar" />` : '<p class="muted">Chart unavailable</p>'}</div>
+      <div class="chart-box"><h3>MIL coverage radar</h3>${milRadarImage ? `<img src="${milRadarImage}" alt="MIL radar" />` : '<p class="muted">Chart unavailable</p>'}</div>
+    </div>
+  </div>
+  <div class="section">
+    <h2>Domain summary</h2>
+    <table>
+      <thead><tr><th>Domain</th><th>Practices</th><th>Completed</th><th>Largely</th><th>Partial / Open</th><th>Gaps</th><th>Average score / 3</th></tr></thead>
+      <tbody>${domainRowsHtml}</tbody>
+    </table>
+  </div>
+  <div class="section">
+    <h2>Gap register</h2>
+    <table>
+      <thead><tr><th>Practice ID</th><th>Domain</th><th>Status</th><th>Owner</th><th>Target Date</th><th>Gap / Remediation</th></tr></thead>
+      <tbody>${gapRowsHtml}</tbody>
+    </table>
+  </div>
+</body>
+</html>`;
+      const printWindow = window.open("", "_blank", "width=1200,height=900");
+      if (!printWindow) {
+        alert("The PDF report could not open because the browser blocked the report window. Please allow pop-ups for this page and try again.");
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(reportHtml);
+      printWindow.document.close();
+      printWindow.focus();
+      window.setTimeout(() => printWindow.print(), 500);
+    }
+
+    function generatePdfReport() {
+      try {
+        renderDashboard();
+        renderTimeline();
+
+        const metrics = buildDashboardPresentrics();
+        const gapRows = getGapRows();
+        const rows = metrics.rows;
+        const generatedAt = new Date().toLocaleString("en-AU");
+        const domainRows = buildPdfDomainRows(rows);
+
+        if (!(window.jspdf && window.jspdf.jsPDF)) {
+          openPrintablePdfFallback(metrics, domainRows, gapRows, generatedAt);
+          return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        addPdfPageFrame(doc, "AESCSF v2 Assessment Report", `Generated ${generatedAt}`);
+        doc.setTextColor(92, 102, 112);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        doc.text("Executive summary", 40, 84);
+        doc.setTextColor(33, 37, 41);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(28);
+        doc.text("Assessment overview", 40, 114);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        doc.setTextColor(92, 102, 112);
+        const overview = "This report summarises assessment coverage, dashboard maturity indicators, domain performance, and the current remediation position captured in the AESCSF v2 Evidence Tracker.";
+        doc.text(doc.splitTextToSize(overview, 420), 40, 138);
+
+        drawSummaryCard(doc, 40, 178, 160, 72, "Practices", metrics.total, [21, 94, 239]);
+        drawSummaryCard(doc, 215, 178, 160, 72, "Completion", metrics.completion + "%", [22, 163, 74]);
+        drawSummaryCard(doc, 390, 178, 160, 72, "Open gaps", metrics.gaps, [217, 119, 6]);
+        drawSummaryCard(doc, 565, 178, 160, 72, "Overdue", metrics.overdue, [220, 38, 38]);
+        drawSummaryCard(doc, 40, 266, 160, 72, "Evidence coverage", metrics.evidenceCoverage + "%", [14, 165, 233]);
+        drawSummaryCard(doc, 215, 266, 160, 72, "Completed", metrics.fully, [34, 197, 94]);
+        drawSummaryCard(doc, 390, 266, 160, 72, "Largely", metrics.largely, [124, 58, 237]);
+        drawSummaryCard(doc, 565, 266, 160, 72, "Partial / open", metrics.partial, [245, 158, 11]);
+
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(221, 226, 232);
+        doc.roundedRect(40, 364, pageWidth - 80, 150, 10, 10, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(13);
+        doc.setTextColor(33, 37, 41);
+        doc.text("Assessment notes", 56, 390);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(92, 102, 112);
+        const notes = [
+          `Total domains assessed: ${domainRows.length}`,
+          `Gap register items captured: ${gapRows.length}`,
+          `Completion is based on statuses recognised as complete within the tracker logic.`,
+          `Evidence coverage reflects practices where evidence text or attachment references have been recorded.`
+        ];
+        let yy = 414;
+        notes.forEach(line => {
+          doc.circle(62, yy - 3, 2, "F");
+          doc.text(line, 72, yy);
+          yy += 22;
+        });
+
+        doc.addPage("a4", "landscape");
+        addPdfPageFrame(doc, "Dashboard visuals", "Domain and maturity charts captured from the dashboard view");
+        const domainRadarImage = getCanvasImageData("domainRadarChart");
+        const milRadarImage = getCanvasImageData("milRadarChart");
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(221, 226, 232);
+        doc.roundedRect(40, 84, 360, 210, 10, 10, "FD");
+        doc.roundedRect(420, 84, 360, 210, 10, 10, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(33, 37, 41);
+        doc.text("Domain maturity radar", 56, 108);
+        doc.text("MIL coverage radar", 436, 108);
+        if (domainRadarImage) doc.addImage(domainRadarImage, "PNG", 58, 118, 324, 160, undefined, "FAST");
+        else doc.text("Chart unavailable", 56, 142);
+        if (milRadarImage) doc.addImage(milRadarImage, "PNG", 438, 118, 324, 160, undefined, "FAST");
+        else doc.text("Chart unavailable", 436, 142);
+
+        if (typeof doc.autoTable === "function") {
+          doc.autoTable({
+            startY: 324,
+            head: [["Domain", "Practices", "Completed", "Largely", "Partial / Open", "Gaps", "Average score / 3"]],
+            body: domainRows.map(item => [
+              item.label,
+              String(item.total),
+              String(item.completed),
+              String(item.largely),
+              String(item.partial),
+              String(item.gaps),
+              Number(item.score || 0).toFixed(2)
+            ]),
+            theme: "grid",
+            headStyles: { fillColor: [18, 52, 86] },
+            styles: { fontSize: 9, cellPadding: 5 }
+          });
+        }
+
+        doc.addPage("a4", "landscape");
+        addPdfPageFrame(doc, "Gap register", "Open remediation items and target dates from the live assessment");
+        if (typeof doc.autoTable === "function") {
+          doc.autoTable({
+            startY: 84,
+            head: [["Practice ID", "Domain", "Status", "Owner", "Target Date", "Gap / Remediation", "Evidence / Links"]],
+            body: (gapRows.length ? gapRows : [{ practice: { practiceId: "-", domain: "-" }, assessment: { status: "No open gaps", owner: "", targetDate: "", gap: "", attachments: "" } }]).map(row => [
+              row.practice.practiceId,
+              row.practice.domain,
+              row.assessment.status || "Not Assessed",
+              row.assessment.owner || "Not assigned",
+              formatDate(row.assessment.targetDate) || "Not set",
+              row.assessment.gap || "No remediation detail recorded.",
+              row.assessment.attachments || row.assessment.evidence || ""
+            ]),
+            theme: "grid",
+            headStyles: { fillColor: [18, 52, 86] },
+            styles: { fontSize: 8, cellPadding: 4, overflow: "linebreak", valign: "top" },
+            columnStyles: { 5: { cellWidth: 240 }, 6: { cellWidth: 200 } },
+            didDrawPage: () => addPdfPageFrame(doc, "Gap register", "Open remediation items and target dates from the live assessment")
+          });
+        }
+
+        const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+        doc.save(`aescsf-v2-assessment-report-${stamp}.pdf`);
+      } catch (error) {
+        console.error("PDF generation failed", error);
+        const metrics = buildDashboardPresentrics();
+        const gapRows = getGapRows();
+        const domainRows = buildPdfDomainRows(metrics.rows);
+        openPrintablePdfFallback(metrics, domainRows, gapRows, new Date().toLocaleString("en-AU"));
+      }
+    }
+
 
 
     function bindObjectiveToggles() {
@@ -2120,6 +2510,258 @@
       downloadBlob(blob, `AESCSF_Full_Template_${dateStamp}.csv`);
     }
 
+
+
+    function comparisonStatusScore(status) {
+      switch (status) {
+        case "Fully":
+        case "Yes":
+        case "Present":
+          return 3;
+        case "Largely":
+          return 2;
+        case "Partial":
+        case "Partially":
+          return 1;
+        case "Not":
+        case "No":
+        case "Not Present":
+          return 0;
+        default:
+          return 0;
+      }
+    }
+
+    function isOpenComparisonStatus(status) {
+      return status === "Partial" || status === "Partially" || status === "Not" || status === "No" || status === "Not Present";
+    }
+
+    function destroyChartInstance(instance) {
+      if (instance && typeof instance.destroy === "function") instance.destroy();
+    }
+
+    function buildSnapshotFromAssessments(assessments, fileName, label) {
+      const snapshot = { assessments: {}, fileName: fileName || "", label: label || "" };
+      const source = assessments && typeof assessments === "object" ? assessments : {};
+      for (const practice of PRACTICES) {
+        snapshot.assessments[practice.practiceId] = { ...defaultAssessment(), ...(source[practice.practiceId] || {}) };
+      }
+      return snapshot;
+    }
+
+    function getLiveComparisonSnapshot() {
+      return buildSnapshotFromAssessments(state.assessments, "Live assessment", "Live Assessment");
+    }
+
+    function statusDistributionFromSnapshot(snapshot) {
+      const counts = { "Open / Partial": 0, Largely: 0, "Fully / Yes / Present": 0, "Not Assessed": 0, "N/A": 0 };
+      if (!snapshot) return counts;
+      for (const practice of PRACTICES) {
+        const status = snapshot.assessments?.[practice.practiceId]?.status || "Not Assessed";
+        if (status === "Fully" || status === "Yes" || status === "Present") counts["Fully / Yes / Present"]++;
+        else if (status === "Largely") counts.Largely++;
+        else if (status === "Partial" || status === "Partially" || status === "Not" || status === "No" || status === "Not Present") counts["Open / Partial"]++;
+        else if (status === "N/A") counts["N/A"]++;
+        else counts["Not Assessed"]++;
+      }
+      return counts;
+    }
+
+    function buildDomainScoresFromSnapshot(snapshot) {
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      return domains.map(domain => {
+        const practices = PRACTICES.filter(p => p.domain === domain);
+        let total = 0;
+        let count = 0;
+        practices.forEach(practice => {
+          const status = snapshot?.assessments?.[practice.practiceId]?.status || "Not Assessed";
+          if (status !== "Not Assessed" && status !== "N/A") {
+            total += comparisonStatusScore(status);
+            count += 1;
+          }
+        });
+        return count ? Number((total / count).toFixed(2)) : 0;
+      });
+    }
+
+    function buildComparisonMetrics(previousSnapshot, currentSnapshot) {
+      const rows = [];
+      let improved = 0;
+      let regressed = 0;
+      let unchanged = 0;
+      let previousGaps = 0;
+      let currentGaps = 0;
+
+      PRACTICES.forEach(practice => {
+        const previous = { ...defaultAssessment(), ...(previousSnapshot?.assessments?.[practice.practiceId] || {}) };
+        const current = { ...defaultAssessment(), ...(currentSnapshot?.assessments?.[practice.practiceId] || {}) };
+        if (isOpenComparisonStatus(previous.status)) previousGaps++;
+        if (isOpenComparisonStatus(current.status)) currentGaps++;
+        const previousScore = comparisonStatusScore(previous.status);
+        const currentScore = comparisonStatusScore(current.status);
+        let change = "Unchanged";
+        if (currentScore > previousScore) { change = "Improved"; improved++; }
+        else if (currentScore < previousScore) { change = "Regressed"; regressed++; }
+        else { unchanged++; }
+        rows.push({ practice, previous, current, change });
+      });
+
+      return { improved, regressed, unchanged, previousGaps, currentGaps, gapDelta: currentGaps - previousGaps, rows };
+    }
+
+    function updateComparisonMeta() {
+      const previousName = document.getElementById("comparisonPreviousName");
+      const currentName = document.getElementById("comparisonCurrentName");
+      const previousMeta = document.getElementById("comparisonPreviousMeta");
+      const currentMeta = document.getElementById("comparisonCurrentMeta");
+      if (previousName) previousName.value = comparisonState.previous?.fileName || "No file loaded";
+      if (currentName) currentName.value = comparisonState.current?.fileName || "No file loaded";
+      if (previousMeta) previousMeta.textContent = comparisonState.previous ? `Assessment label: ${comparisonState.previousLabel}` : "Upload a JSON export from the previous assessment period.";
+      if (currentMeta) currentMeta.textContent = comparisonState.current ? `Assessment label: ${comparisonState.currentLabel}` : "Upload a JSON export from the current assessment period or use the live assessment.";
+    }
+
+    function renderComparisonCharts(previousSnapshot, currentSnapshot) {
+      const comparisonRadarCanvas = document.getElementById("comparisonRadarChart");
+      const comparisonStatusCanvas = document.getElementById("comparisonStatusChart");
+      const comparisonGapCanvas = document.getElementById("comparisonGapChart");
+      destroyChartInstance(comparisonRadarChart);
+      destroyChartInstance(comparisonStatusChart);
+      destroyChartInstance(comparisonGapChart);
+      if (!comparisonRadarCanvas || !comparisonStatusCanvas || !comparisonGapCanvas || typeof Chart === "undefined") return;
+
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const previousDomainScores = buildDomainScoresFromSnapshot(previousSnapshot);
+      const currentDomainScores = buildDomainScoresFromSnapshot(currentSnapshot);
+      const previousDistribution = statusDistributionFromSnapshot(previousSnapshot);
+      const currentDistribution = statusDistributionFromSnapshot(currentSnapshot);
+      const metrics = buildComparisonMetrics(previousSnapshot, currentSnapshot);
+
+      comparisonRadarChart = new Chart(comparisonRadarCanvas, {
+        type: "radar",
+        data: {
+          labels: domains,
+          datasets: [
+            { label: comparisonState.previousLabel, data: previousDomainScores, fill: true, borderWidth: 2 },
+            { label: comparisonState.currentLabel, data: currentDomainScores, fill: true, borderWidth: 2 }
+          ]
+        },
+        options: { maintainAspectRatio: false, scales: { r: { suggestedMin: 0, suggestedMax: 3, ticks: { stepSize: 1 } } }, plugins: { legend: { position: "bottom" } } }
+      });
+
+      comparisonStatusChart = new Chart(comparisonStatusCanvas, {
+        type: "bar",
+        data: {
+          labels: ["Open / Partial", "Largely", "Fully / Yes / Present", "Not Assessed", "N/A"],
+          datasets: [
+            { label: comparisonState.previousLabel, data: [previousDistribution["Open / Partial"], previousDistribution.Largely, previousDistribution["Fully / Yes / Present"], previousDistribution["Not Assessed"], previousDistribution["N/A"]], borderWidth: 1 },
+            { label: comparisonState.currentLabel, data: [currentDistribution["Open / Partial"], currentDistribution.Largely, currentDistribution["Fully / Yes / Present"], currentDistribution["Not Assessed"], currentDistribution["N/A"]], borderWidth: 1 }
+          ]
+        },
+        options: { maintainAspectRatio: false, responsive: true, plugins: { legend: { position: "bottom" } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+      });
+
+      comparisonGapChart = new Chart(comparisonGapCanvas, {
+        type: "bar",
+        data: { labels: [comparisonState.previousLabel, comparisonState.currentLabel], datasets: [{ label: "Open Gaps", data: [metrics.previousGaps, metrics.currentGaps], borderWidth: 1 }] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+      });
+    }
+
+    function renderComparisonTable(rows) {
+      const tbody = document.getElementById("comparisonTableBody");
+      const notice = document.getElementById("comparisonNotice");
+      if (!tbody) return;
+      if (!rows.length) {
+        tbody.innerHTML = "";
+        if (notice) notice.style.display = "block";
+        return;
+      }
+      if (notice) notice.style.display = "none";
+      const order = { Regressed: 0, Improved: 1, Unchanged: 2 };
+      tbody.innerHTML = rows.sort((a,b) => (order[a.change] - order[b.change]) || a.practice.practiceId.localeCompare(b.practice.practiceId)).map(row => `
+        <tr>
+          <td>${escapeHtml(row.practice.domain)}</td>
+          <td><strong>${escapeHtml(row.practice.practiceId)}</strong><br>${escapeHtml(row.practice.practice)}</td>
+          <td>${escapeHtml(row.previous.status || "Not Assessed")}</td>
+          <td>${escapeHtml(row.current.status || "Not Assessed")}</td>
+          <td><span class="comparison-change ${row.change.toLowerCase()}">${escapeHtml(row.change)}</span></td>
+          <td>${escapeHtml(row.current.gap || row.previous.gap || "")}</td>
+        </tr>`).join("");
+    }
+
+    function resetComparisonSummary() {
+      ["compImproved","compRegressed","compUnchanged","compPrevGaps","compCurrGaps","compGapDelta"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = "0";
+      });
+      renderComparisonTable([]);
+      destroyChartInstance(comparisonRadarChart);
+      destroyChartInstance(comparisonStatusChart);
+      destroyChartInstance(comparisonGapChart);
+      comparisonRadarChart = null; comparisonStatusChart = null; comparisonGapChart = null;
+    }
+
+    function renderComparison() {
+      updateComparisonMeta();
+      if (comparisonState.current?.isLive) {
+        comparisonState.current = { ...getLiveComparisonSnapshot(), isLive: true };
+        comparisonState.currentLabel = "Live Assessment";
+        updateComparisonMeta();
+      }
+      if (!comparisonState.previous || !comparisonState.current) {
+        resetComparisonSummary();
+        return;
+      }
+      const metrics = buildComparisonMetrics(comparisonState.previous, comparisonState.current);
+      const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+      setText("compImproved", metrics.improved);
+      setText("compRegressed", metrics.regressed);
+      setText("compUnchanged", metrics.unchanged);
+      setText("compPrevGaps", metrics.previousGaps);
+      setText("compCurrGaps", metrics.currentGaps);
+      setText("compGapDelta", metrics.gapDelta > 0 ? `+${metrics.gapDelta}` : metrics.gapDelta);
+      renderComparisonCharts(comparisonState.previous, comparisonState.current);
+      renderComparisonTable(metrics.rows);
+    }
+
+    function importComparisonFile(file, side) {
+      const reader = new FileReader();
+      reader.onload = event => {
+        try {
+          const parsed = JSON.parse(event.target.result);
+          if (!parsed || typeof parsed !== "object" || !parsed.assessments) throw new Error("JSON does not contain an assessments object.");
+          const label = side === "previous" ? "Previous Assessment" : "Current Assessment";
+          const snapshot = buildSnapshotFromAssessments(parsed.assessments, file.name, label);
+          comparisonState[side] = snapshot;
+          comparisonState[side + "Label"] = file.name.replace(/\.json$/i, "") || label;
+          renderComparison();
+        } catch (error) {
+          alert("Comparison import failed: " + error.message);
+        } finally {
+          if (side === "previous" && comparisonPreviousFile) comparisonPreviousFile.value = "";
+          if (side === "current" && comparisonCurrentFile) comparisonCurrentFile.value = "";
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function exportComparisonSnapshot(side) {
+      const snapshot = comparisonState[side];
+      if (!snapshot) {
+        alert(`No ${side} comparison data is loaded.`);
+        return;
+      }
+      const payload = { version: "1.0", framework: "AESCSF v2", exportedAt: new Date().toISOString(), assessments: snapshot.assessments };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+      downloadBlob(blob, `${side}-comparison-${stamp}.json`);
+    }
+
+    function clearComparisonState() {
+      comparisonState = { previous: null, current: null, previousLabel: "Previous Assessment", currentLabel: "Current Assessment" };
+      updateComparisonMeta();
+      resetComparisonSummary();
+    }
 
     function exportJson() {
       const exportState = {
@@ -2211,6 +2853,29 @@
       el.addEventListener("input", render);
       el.addEventListener("change", render);
     });
+
+    if (comparisonPreviousFile) {
+      comparisonPreviousFile.addEventListener("change", () => {
+        if (comparisonPreviousFile.files && comparisonPreviousFile.files[0]) importComparisonFile(comparisonPreviousFile.files[0], "previous");
+      });
+    }
+    if (comparisonCurrentFile) {
+      comparisonCurrentFile.addEventListener("change", () => {
+        if (comparisonCurrentFile.files && comparisonCurrentFile.files[0]) importComparisonFile(comparisonCurrentFile.files[0], "current");
+      });
+    }
+    const useLiveBtn = document.getElementById("comparisonUseLiveBtn");
+    if (useLiveBtn) useLiveBtn.addEventListener("click", () => {
+      comparisonState.current = { ...getLiveComparisonSnapshot(), isLive: true };
+      comparisonState.currentLabel = "Live Assessment";
+      renderComparison();
+    });
+    const exportPrevBtn = document.getElementById("comparisonExportPreviousBtn");
+    if (exportPrevBtn) exportPrevBtn.addEventListener("click", () => exportComparisonSnapshot("previous"));
+    const exportCurrBtn = document.getElementById("comparisonExportCurrentBtn");
+    if (exportCurrBtn) exportCurrBtn.addEventListener("click", () => exportComparisonSnapshot("current"));
+    const clearCompBtn = document.getElementById("clearComparisonBtn");
+    if (clearCompBtn) clearCompBtn.addEventListener("click", clearComparisonState);
 
     populateDomains();
     render();
