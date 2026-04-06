@@ -1007,6 +1007,7 @@
         <button class="secondary" id="exportTemplateCsvBtn">AEMO Export</button>
         <button class="secondary" id="exportGapBtn">Export Gap Register</button>
         <button class="secondary" id="pdfBtn">Generate PDF Report</button>
+        <button class="secondary" id="saveSnapshotBtn" title="Save the current assessment as a named snapshot for year-on-year comparison">Save Snapshot</button>
         <label class="button-like secondary" for="importFile">Import JSON</label>
         <input id="importFile" type="file" accept=".json,application/json" hidden />
         <button class="ghost" id="resetBtn">Reset Assessment Data</button>
@@ -1229,48 +1230,66 @@
       <section class="summary">
         <div class="timeline-toolbar">
           <div>
-            <h2 style="margin:0 0 6px 0;">Comparison</h2>
-            <div class="footer-note" style="margin-top:0;">Compare a previous assessment JSON against a current assessment JSON, or compare the previous file against the live assessment currently loaded in the tracker.</div>
+            <h2 style="margin:0 0 6px 0;">Year-on-Year Comparison</h2>
+            <div class="footer-note" style="margin-top:0;">Select saved snapshots to compare, or import JSON exports from previous periods. Use <strong>Save Snapshot</strong> in the toolbar to archive the current assessment state.</div>
           </div>
+          <button class="ghost" id="clearComparisonBtn" type="button">Clear Comparison</button>
         </div>
         <div class="dashboard-grid">
+
           <section class="dashboard-panel">
-            <div class="panel-header">
-              <div>
-                <h3>Previous Assessment</h3>
-                <div class="footer-note" id="comparisonPreviousMeta">Upload a JSON export from the previous assessment period.</div>
+            <div class="panel-header"><div>
+              <h3>Previous Assessment</h3>
+              <div class="footer-note" id="comparisonPreviousMeta">Nothing loaded — select a snapshot or import a JSON file.</div>
+            </div></div>
+            <div class="field">
+              <label>Loaded</label>
+              <input id="comparisonPreviousName" type="text" value="Nothing loaded" readonly />
+            </div>
+            <div class="field" id="comparisonPreviousSnapshotRow">
+              <label>Saved Snapshots</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="comparisonPreviousSelect" style="flex:1;padding:8px 10px;border-radius:10px;border:1px solid var(--border-strong);background:var(--surface-strong);font-size:.875rem;color:var(--text);font-family:inherit;">
+                  <option value="">— Select a snapshot —</option>
+                </select>
+                <button class="secondary" id="comparisonPreviousLoadBtn" type="button">Load</button>
+                <button class="ghost" id="comparisonPreviousDeleteBtn" type="button" title="Delete selected snapshot">Delete</button>
               </div>
             </div>
-            <div class="field">
-              <label>Loaded File</label>
-              <input id="comparisonPreviousName" type="text" value="No file loaded" readonly />
-            </div>
             <div class="top-actions" style="margin-top:12px;">
-              <label class="button-like secondary" for="comparisonPreviousFile">Import Previous JSON</label>
+              <label class="button-like secondary" for="comparisonPreviousFile">Import JSON</label>
               <input id="comparisonPreviousFile" type="file" accept=".json,application/json" hidden />
-              <button class="ghost" id="comparisonExportPreviousBtn" type="button">Export Previous JSON</button>
+              <button class="ghost" id="comparisonExportPreviousBtn" type="button">Export JSON</button>
             </div>
           </section>
 
           <section class="dashboard-panel">
-            <div class="panel-header">
-              <div>
-                <h3>Current Assessment</h3>
-                <div class="footer-note" id="comparisonCurrentMeta">Upload a JSON export from the current assessment period or use the live assessment.</div>
+            <div class="panel-header"><div>
+              <h3>Current Assessment</h3>
+              <div class="footer-note" id="comparisonCurrentMeta">Nothing loaded — select a snapshot, use the live assessment, or import a JSON file.</div>
+            </div></div>
+            <div class="field">
+              <label>Loaded</label>
+              <input id="comparisonCurrentName" type="text" value="Nothing loaded" readonly />
+            </div>
+            <div class="field" id="comparisonCurrentSnapshotRow">
+              <label>Saved Snapshots</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="comparisonCurrentSelect" style="flex:1;padding:8px 10px;border-radius:10px;border:1px solid var(--border-strong);background:var(--surface-strong);font-size:.875rem;color:var(--text);font-family:inherit;">
+                  <option value="">— Select a snapshot —</option>
+                </select>
+                <button class="secondary" id="comparisonCurrentLoadBtn" type="button">Load</button>
+                <button class="ghost" id="comparisonCurrentDeleteBtn" type="button" title="Delete selected snapshot">Delete</button>
               </div>
             </div>
-            <div class="field">
-              <label>Loaded File</label>
-              <input id="comparisonCurrentName" type="text" value="No file loaded" readonly />
-            </div>
             <div class="top-actions" style="margin-top:12px;">
-              <label class="button-like secondary" for="comparisonCurrentFile">Import Current JSON</label>
+              <label class="button-like secondary" for="comparisonCurrentFile">Import JSON</label>
               <input id="comparisonCurrentFile" type="file" accept=".json,application/json" hidden />
               <button class="secondary" id="comparisonUseLiveBtn" type="button">Use Live Assessment</button>
-              <button class="ghost" id="comparisonExportCurrentBtn" type="button">Export Current JSON</button>
-              <button class="ghost" id="clearComparisonBtn" type="button">Clear Comparison</button>
+              <button class="ghost" id="comparisonExportCurrentBtn" type="button">Export JSON</button>
             </div>
           </section>
+
         </div>
       </section>
 
@@ -2848,13 +2867,17 @@ function buildPdfDomainRows(rows) {
 
     function updateComparisonMeta() {
       const previousName = document.getElementById("comparisonPreviousName");
-      const currentName = document.getElementById("comparisonCurrentName");
+      const currentName  = document.getElementById("comparisonCurrentName");
       const previousMeta = document.getElementById("comparisonPreviousMeta");
-      const currentMeta = document.getElementById("comparisonCurrentMeta");
-      if (previousName) previousName.value = comparisonState.previous?.fileName || "No file loaded";
-      if (currentName) currentName.value = comparisonState.current?.fileName || "No file loaded";
-      if (previousMeta) previousMeta.textContent = comparisonState.previous ? `Assessment label: ${comparisonState.previousLabel}` : "Upload a JSON export from the previous assessment period.";
-      if (currentMeta) currentMeta.textContent = comparisonState.current ? `Assessment label: ${comparisonState.currentLabel}` : "Upload a JSON export from the current assessment period or use the live assessment.";
+      const currentMeta  = document.getElementById("comparisonCurrentMeta");
+      if (previousName) previousName.value = comparisonState.previous ? comparisonState.previousLabel : "Nothing loaded";
+      if (currentName)  currentName.value  = comparisonState.current  ? comparisonState.currentLabel  : "Nothing loaded";
+      if (previousMeta) previousMeta.textContent = comparisonState.previous
+        ? `Loaded: ${comparisonState.previousLabel}`
+        : "Nothing loaded — select a snapshot or import a JSON file.";
+      if (currentMeta)  currentMeta.textContent  = comparisonState.current
+        ? `Loaded: ${comparisonState.currentLabel}`
+        : "Nothing loaded — select a snapshot, use the live assessment, or import a JSON file.";
     }
 
     function renderComparisonCharts(previousSnapshot, currentSnapshot) {
@@ -2939,6 +2962,7 @@ function buildPdfDomainRows(rows) {
     }
 
     function renderComparison() {
+      loadSnapshotList(); /* refresh snapshot dropdowns (no-op if not in API mode) */
       updateComparisonMeta();
       if (comparisonState.current?.isLive) {
         comparisonState.current = { ...getLiveComparisonSnapshot(), isLive: true };
@@ -3107,12 +3131,104 @@ function buildPdfDomainRows(rows) {
       comparisonState.currentLabel = "Live Assessment";
       renderComparison();
     });
-    const exportPrevBtn = document.getElementById("comparisonExportPreviousBtn");
-    if (exportPrevBtn) exportPrevBtn.addEventListener("click", () => exportComparisonSnapshot("previous"));
-    const exportCurrBtn = document.getElementById("comparisonExportCurrentBtn");
-    if (exportCurrBtn) exportCurrBtn.addEventListener("click", () => exportComparisonSnapshot("current"));
-    const clearCompBtn = document.getElementById("clearComparisonBtn");
-    if (clearCompBtn) clearCompBtn.addEventListener("click", clearComparisonState);
+    document.getElementById("comparisonExportPreviousBtn")?.addEventListener("click", () => exportComparisonSnapshot("previous"));
+    document.getElementById("comparisonExportCurrentBtn")?.addEventListener("click",  () => exportComparisonSnapshot("current"));
+    document.getElementById("clearComparisonBtn")?.addEventListener("click", clearComparisonState);
+    document.getElementById("comparisonPreviousLoadBtn")?.addEventListener("click",   () => loadSnapshotIntoComparison("previous"));
+    document.getElementById("comparisonCurrentLoadBtn")?.addEventListener("click",    () => loadSnapshotIntoComparison("current"));
+    document.getElementById("comparisonPreviousDeleteBtn")?.addEventListener("click", () => deleteSnapshotFromSelect("previous"));
+    document.getElementById("comparisonCurrentDeleteBtn")?.addEventListener("click",  () => deleteSnapshotFromSelect("current"));
+    document.getElementById("saveSnapshotBtn")?.addEventListener("click", saveCurrentSnapshot);
+
+    /* ── Snapshot helpers ───────────────────────────────────────────────────
+       Snapshots are named, timestamped copies of an assessment stored in the
+       database. They replace the need to manually export and re-import JSON
+       for year-on-year comparison.
+    ──────────────────────────────────────────────────────────────────────── */
+    let _snapshotCache = [];
+
+    function formatSnapshotDate(unixSecs) {
+      return new Date(unixSecs * 1000).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
+    }
+
+    async function loadSnapshotList() {
+      if (APP_CONFIG.storageMode !== "api") return;
+      try {
+        const resp = await adminFetch("/snapshots");
+        if (!resp.ok) return;
+        _snapshotCache = await resp.json();
+        const placeholder = '<option value="">— Select a snapshot —</option>';
+        const options = _snapshotCache.length
+          ? placeholder + _snapshotCache.map(s =>
+              `<option value="${s.id}">${escapeHtml(s.label)} — ${formatSnapshotDate(s.created_at)}</option>`
+            ).join("")
+          : '<option value="">No snapshots saved yet</option>';
+        ["comparisonPreviousSelect", "comparisonCurrentSelect"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.innerHTML = options;
+        });
+      } catch (err) {
+        console.warn("[AESCSF] Could not load snapshot list:", err);
+      }
+    }
+
+    async function loadSnapshotIntoComparison(side) {
+      const selectId = side === "previous" ? "comparisonPreviousSelect" : "comparisonCurrentSelect";
+      const select   = document.getElementById(selectId);
+      const id       = select?.value;
+      if (!id) return;
+      try {
+        const resp = await adminFetch(`/snapshots/${encodeURIComponent(id)}`);
+        if (!resp.ok) { alert(`Failed to load snapshot (${resp.status})`); return; }
+        const data  = await resp.json();
+        const label = data.label || _snapshotCache.find(s => s.id == id)?.label || "Snapshot";
+        comparisonState[side]            = buildSnapshotFromAssessments(data.assessments, label, label);
+        comparisonState[side + "Label"]  = label;
+        renderComparison();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function saveCurrentSnapshot() {
+      if (APP_CONFIG.storageMode !== "api") {
+        alert("Snapshots are stored on the server and require API storage mode.\n\nSwitch storageMode to \"api\" in your deployment config to use this feature.");
+        return;
+      }
+      const label = prompt("Enter a name for this snapshot\n(e.g. FY2024, Q1 2025, Pre-Audit 2025):");
+      if (!label || !label.trim()) return;
+      try {
+        const resp = await adminFetch("/snapshots", {
+          method: "POST",
+          body: JSON.stringify({ label: label.trim(), data: buildPersistableState(state) })
+        });
+        if (!resp.ok) { alert(`Failed to save snapshot (${resp.status})`); return; }
+        const saved = await resp.json();
+        await loadSnapshotList();
+        /* Pre-select the new snapshot in the current slot */
+        const currSelect = document.getElementById("comparisonCurrentSelect");
+        if (currSelect) currSelect.value = saved.id;
+      } catch (err) { alert(err.message); }
+    }
+
+    async function deleteSnapshotFromSelect(side) {
+      const selectId = side === "previous" ? "comparisonPreviousSelect" : "comparisonCurrentSelect";
+      const select   = document.getElementById(selectId);
+      const id       = select?.value;
+      if (!id) return;
+      const snap = _snapshotCache.find(s => s.id == id);
+      if (!snap || !confirm(`Delete snapshot "${snap.label}"?\n\nThis cannot be undone.`)) return;
+      try {
+        const resp = await adminFetch(`/snapshots/${encodeURIComponent(id)}`, { method: "DELETE" });
+        if (!resp.ok) { alert(`Failed to delete snapshot (${resp.status})`); return; }
+        /* Clear the comparison side if it was showing the deleted snapshot */
+        if (comparisonState[side]?.fileName === snap.label || comparisonState[side + "Label"] === snap.label) {
+          comparisonState[side] = null;
+          comparisonState[side + "Label"] = side === "previous" ? "Previous Assessment" : "Current Assessment";
+          updateComparisonMeta();
+          resetComparisonSummary();
+        }
+        await loadSnapshotList();
+      } catch (err) { alert(err.message); }
+    }
 
     /* ── API initialisation (called by MSAL bootstrap after auth) ──────── */
     async function initializeFromApi() {
@@ -3151,6 +3267,14 @@ function buildPdfDomainRows(rows) {
       /* Show/hide admin tab */
       const adminTab = document.getElementById("adminPageTab");
       if (adminTab) adminTab.style.display = me.role === "admin" ? "" : "none";
+
+      /* Show snapshot UI only in API mode */
+      const snapshotEls = [
+        document.getElementById("saveSnapshotBtn"),
+        document.getElementById("comparisonPreviousSnapshotRow"),
+        document.getElementById("comparisonCurrentSnapshotRow")
+      ];
+      snapshotEls.forEach(el => { if (el) el.style.display = APP_CONFIG.storageMode === "api" ? "" : "none"; });
 
       /* Update the user bar to show role badge */
       const roleBadge = document.getElementById("user-role-badge");

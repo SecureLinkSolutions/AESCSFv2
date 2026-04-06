@@ -71,6 +71,16 @@ db.exec(`
     PRIMARY KEY (user_oid, tenant_id)
   );
 
+  CREATE TABLE IF NOT EXISTS snapshots (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_oid    TEXT    NOT NULL,
+    tenant_id   TEXT    NOT NULL DEFAULT '',
+    label       TEXT    NOT NULL,
+    data        TEXT    NOT NULL,
+    created_at  INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+  CREATE INDEX IF NOT EXISTS idx_snapshots_user ON snapshots(user_oid, tenant_id);
+
   CREATE TABLE IF NOT EXISTS users (
     oid          TEXT    PRIMARY KEY,
     tenant_id    TEXT    NOT NULL DEFAULT '',
@@ -136,6 +146,19 @@ const stmtInsertAssignment = db.prepare(
 );
 const stmtGetAllAssessments = db.prepare(
   "SELECT a.user_oid, a.data FROM assessments a JOIN users u ON a.user_oid = u.oid AND a.tenant_id = u.tenant_id"
+);
+
+const stmtListSnapshots = db.prepare(
+  "SELECT id, label, created_at FROM snapshots WHERE user_oid = ? AND tenant_id = ? ORDER BY created_at DESC"
+);
+const stmtGetSnapshot = db.prepare(
+  "SELECT id, label, data, created_at FROM snapshots WHERE id = ? AND user_oid = ? AND tenant_id = ?"
+);
+const stmtInsertSnapshot = db.prepare(
+  "INSERT INTO snapshots (user_oid, tenant_id, label, data) VALUES (?, ?, ?, ?)"
+);
+const stmtDeleteSnapshot = db.prepare(
+  "DELETE FROM snapshots WHERE id = ? AND user_oid = ? AND tenant_id = ?"
 );
 
 /* ── JWKS client ─────────────────────────────────────────────────────────── */
@@ -428,6 +451,62 @@ app.get("/api/admin/assessment/merged", requireAuth, autoRegister, requireAdmin,
     console.error("[AESCSF API] Merge error:", err);
     res.status(500).json({ error: "Failed to build merged assessment" });
   }
+});
+
+/* ── Snapshot routes ─────────────────────────────────────────────────────── */
+
+/* List the current user's snapshots (metadata only) */
+app.get("/api/snapshots", requireAuth, autoRegister, (req, res) => {
+  res.json(stmtListSnapshots.all(req.user.oid, req.user.tenant));
+});
+
+/**
+ * Save a named snapshot of the current assessment.
+ * Body: { label: string, data?: object }
+ * If `data` is omitted the server uses the user's current DB assessment.
+ */
+app.post("/api/snapshots", requireAuth, autoRegister, (req, res) => {
+  const label = (req.body?.label || "").trim();
+  if (!label) return res.status(400).json({ error: "label is required" });
+
+  /* Use body data if provided, otherwise fall back to the stored assessment */
+  let payload = req.body?.data;
+  if (!payload || typeof payload !== "object") {
+    const row = stmtGetAssessment.get(req.user.oid, req.user.tenant);
+    if (!row) return res.status(404).json({ error: "No assessment to snapshot — save your assessment first" });
+    try { payload = JSON.parse(row.data); } catch { return res.status(500).json({ error: "Corrupt assessment data" }); }
+  }
+
+  try {
+    const result = stmtInsertSnapshot.run(req.user.oid, req.user.tenant, label, JSON.stringify(payload));
+    res.status(201).json({
+      id: result.lastInsertRowid,
+      label,
+      created_at: Math.floor(Date.now() / 1000)
+    });
+  } catch (err) {
+    console.error("[AESCSF API] Snapshot insert error:", err);
+    res.status(500).json({ error: "Failed to save snapshot" });
+  }
+});
+
+/* Load a specific snapshot (full assessment data) */
+app.get("/api/snapshots/:id", requireAuth, autoRegister, (req, res) => {
+  const row = stmtGetSnapshot.get(req.params.id, req.user.oid, req.user.tenant);
+  if (!row) return res.status(404).json({ error: "Snapshot not found" });
+  try {
+    const parsed = JSON.parse(row.data);
+    res.json({ id: row.id, label: row.label, created_at: row.created_at, ...parsed });
+  } catch {
+    res.status(500).json({ error: "Corrupt snapshot data" });
+  }
+});
+
+/* Delete a snapshot (must be owned by the requesting user) */
+app.delete("/api/snapshots/:id", requireAuth, autoRegister, (req, res) => {
+  const info = stmtDeleteSnapshot.run(req.params.id, req.user.oid, req.user.tenant);
+  if (info.changes === 0) return res.status(404).json({ error: "Snapshot not found" });
+  res.json({ deleted: true });
 });
 
 /* ── Start ───────────────────────────────────────────────────────────────── */

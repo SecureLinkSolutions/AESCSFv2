@@ -27,7 +27,7 @@ A web application for organisations implementing and assessing against the **Aus
 | Evidence management | Evidence text, attachment links, owner, target dates, last reviewed |
 | Dashboard | Executive summary, domain maturity radar chart, completion and gap metrics |
 | Remediation timeline | Chronological view of target dates with overdue indicators |
-| Year-on-year comparison | Load a previous assessment and compare domain scores side-by-side |
+| Year-on-year comparison | Save named snapshots to the database; select any two to compare domain scores, status distribution, gap delta, and a full practice change register |
 | PDF report | Full assessment report with radar charts, domain summary, and gap register |
 | AEMO CSV export | Practice status in the AEMO-required CSV template format |
 | Gap register export | Filtered CSV of open gaps and remediation actions |
@@ -224,6 +224,10 @@ The **Admin** tab provides:
 | `PUT` | `/api/admin/users/:oid/role` | Admin | Set a user's role (`admin` or `user`) |
 | `PUT` | `/api/admin/users/:oid/assignments` | Admin | Set a user's domain list |
 | `GET` | `/api/admin/assessment/merged` | Admin | Merged assessment from all users by domain ownership |
+| `GET` | `/api/snapshots` | User | List the current user's saved snapshots |
+| `POST` | `/api/snapshots` | User | Save a named snapshot of the current assessment |
+| `GET` | `/api/snapshots/:id` | User | Load full data for a specific snapshot |
+| `DELETE` | `/api/snapshots/:id` | User | Delete a snapshot (own snapshots only) |
 
 ---
 
