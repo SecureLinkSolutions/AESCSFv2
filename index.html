@@ -924,6 +924,50 @@
     .comparison-change.regressed { background:rgba(239,68,68,0.14); color:#991b1b; }
     .comparison-change.unchanged { background:rgba(59,130,246,0.12); color:#1d4ed8; }
 
+    /* ── Admin panel styles ─────────────────────────────────────────── */
+    .admin-user-card {
+      background: var(--surface-strong);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: 20px 22px;
+    }
+    .admin-user-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .admin-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, #155eef, #0f4fd6);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: .95rem; flex-shrink: 0;
+    }
+    .admin-user-info { flex: 1; min-width: 0; }
+    .admin-user-name { font-weight: 700; font-size: .95rem; color: var(--text); }
+    .admin-user-email { font-size: .8rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .role-badge { padding: 3px 12px; border-radius: 999px; font-size: .75rem; font-weight: 700; letter-spacing: .02em; }
+    .role-badge.admin { background: rgba(192,16,72,.1); color: #c01048; }
+    .role-badge.user  { background: rgba(6,118,71,.1);  color: #067647; }
+    .admin-role-toggle { display: flex; gap: 6px; }
+    .admin-role-toggle button {
+      padding: 5px 14px; border-radius: 8px; border: 1px solid var(--border-strong);
+      background: transparent; font-size: .8rem; font-weight: 600;
+      cursor: pointer; color: var(--text-soft); font-family: inherit;
+      transition: background .15s, color .15s;
+    }
+    .admin-role-toggle button.active-role { background: #155eef; color: #fff; border-color: #155eef; }
+    .admin-domains-section { margin-top: 16px; }
+    .admin-domains-label { font-size: .8rem; font-weight: 600; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .04em; }
+    .admin-domain-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .admin-domain-chip {
+      display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+      border-radius: 10px; border: 1px solid var(--border-strong);
+      background: var(--surface-muted); cursor: pointer; user-select: none;
+      font-size: .8rem; font-weight: 600; color: var(--text-soft);
+      transition: background .12s, border-color .12s;
+    }
+    .admin-domain-chip input[type=checkbox] { accent-color: #155eef; cursor: pointer; width: 14px; height: 14px; }
+    .admin-domain-chip.checked { background: rgba(21,94,239,.08); border-color: rgba(21,94,239,.3); color: #155eef; }
+    .admin-save-row { margin-top: 14px; display: flex; gap: 8px; align-items: center; }
+    .admin-save-status { font-size: .8rem; color: var(--muted); }
+
 </style>
 
 </head>
@@ -951,7 +995,9 @@
     <section class="header">
       <div id="user-info-bar" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:rgba(21,94,239,.06);border:1px solid rgba(21,94,239,.12);border-radius:12px;margin-bottom:16px;">
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" style="flex-shrink:0;"><path fill="#155eef" d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 12c5.33 0 8 2.67 8 4v2H4v-2c0-1.33 2.67-4 8-4z"/></svg>
-        <span id="user-display-name" style="font-size:.875rem;font-weight:600;color:#0f172a;flex:1;"></span>
+        <span id="user-display-name" style="font-size:.875rem;font-weight:600;color:#0f172a;"></span>
+        <span id="user-role-badge" style="display:none;padding:2px 10px;border-radius:999px;font-size:.75rem;font-weight:700;letter-spacing:.02em;"></span>
+        <span style="flex:1;"></span>
         <button onclick="msalSignOut()" style="padding:5px 12px;background:transparent;border:1px solid rgba(148,163,184,.4);border-radius:8px;font-size:.8rem;font-weight:500;color:#64748b;cursor:pointer;font-family:inherit;">Sign out</button>
       </div>
       <h1>AESCSF v2 Evidence Tracker</h1>
@@ -970,6 +1016,7 @@
         <button class="page-tab" data-page-tab="assessment">Assessment</button>
         <button class="page-tab" data-page-tab="timeline">Target Date Timeline</button>
         <button class="page-tab" data-page-tab="comparison">Comparison</button>
+        <button class="page-tab" data-page-tab="admin" id="adminPageTab" style="display:none;">Admin</button>
       </div>
     </section>
 
@@ -1293,6 +1340,32 @@
             </table>
           </div>
         </section>
+      </section>
+    </div>
+
+  </div>
+
+    <!-- ── Admin panel ─────────────────────────────────────────────── -->
+    <div id="adminPage" class="page">
+      <section class="summary" style="margin-bottom:24px;">
+        <div class="timeline-toolbar" style="flex-wrap:wrap;gap:12px;">
+          <div>
+            <h2 style="margin:0 0 6px 0;">Admin — User &amp; Access Management</h2>
+            <div class="footer-note" style="margin-top:0;">Manage roles and domain assignments for all registered users. Assign domains to users so they only see the practices relevant to their responsibilities.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="secondary" id="adminRefreshBtn">Refresh</button>
+            <button class="secondary" id="adminLoadMergedBtn">Load Merged View</button>
+          </div>
+        </div>
+        <div id="adminMergedBanner" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(181,71,8,.08);border:1px solid rgba(181,71,8,.2);border-radius:12px;font-size:.875rem;color:#b54708;display:flex;align-items:center;gap:10px;">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path fill="#b54708" d="M12 2a10 10 0 1 1 0 20A10 10 0 0 1 12 2zm0 5v6m0 2v2"/></svg>
+          Merged view loaded — showing combined data from all contributors. <button onclick="adminRestoreOwnView()" style="margin-left:auto;padding:4px 12px;background:transparent;border:1px solid rgba(181,71,8,.4);border-radius:8px;font-size:.8rem;font-weight:500;color:#b54708;cursor:pointer;">Restore my view</button>
+        </div>
+      </section>
+
+      <section id="adminUserList" style="display:flex;flex-direction:column;gap:16px;">
+        <div style="padding:32px;text-align:center;color:var(--muted);font-size:.9rem;">Loading users…</div>
       </section>
     </div>
 
@@ -1628,12 +1701,15 @@
       assessmentPage.classList.toggle("active", page === "assessment");
       timelinePage.classList.toggle("active", page === "timeline");
       if (comparisonPage) comparisonPage.classList.toggle("active", page === "comparison");
+      const adminPage = document.getElementById("adminPage");
+      if (adminPage) adminPage.classList.toggle("active", page === "admin");
       pageTabs.forEach(tab => {
         tab.classList.toggle("active", tab.dataset.pageTab === page);
       });
-      if (page === "timeline") renderTimeline();
-      if (page === "dashboard") renderDashboard();
+      if (page === "timeline")   renderTimeline();
+      if (page === "dashboard")  renderDashboard();
       if (page === "comparison") renderComparison();
+      if (page === "admin")      renderAdminPanel();
     }
 
     function formatDate(dateString) {
@@ -1662,7 +1738,11 @@
     }
 
     function populateDomains() {
-      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const rbac = window.__AESCSF_RBAC__;
+      const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const domains = (rbac && rbac.role !== "admin" && rbac.domains.length)
+        ? allDomains.filter(d => rbac.domains.includes(d))
+        : allDomains;
       domainFilter.innerHTML = `<option value="">All</option>${domains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("")}`;
     }
 
@@ -1746,7 +1826,9 @@
         const matchesMil = !milFilter.value || practice.mil === milFilter.value;
         const matchesSp = !spFilter.value || practice.securityProfile === spFilter.value;
         const matchesStatus = !statusFilter.value || assessment.status === statusFilter.value;
-        return matchesSearch && matchesDomain && matchesMil && matchesSp && matchesStatus;
+        const rbac = window.__AESCSF_RBAC__;
+        const matchesRbac = !rbac || rbac.role === "admin" || !rbac.domains.length || rbac.domains.includes(practice.domain);
+        return matchesSearch && matchesDomain && matchesMil && matchesSp && matchesStatus && matchesRbac;
       });
     }
 
@@ -1803,10 +1885,13 @@
     }
 
     function getAllRows() {
-      return PRACTICES.map(practice => ({
-        practice,
-        assessment: state.assessments[practice.practiceId] || defaultAssessment()
-      }));
+      const rbac = window.__AESCSF_RBAC__;
+      return PRACTICES
+        .filter(p => !rbac || rbac.role === "admin" || !rbac.domains.length || rbac.domains.includes(p.domain))
+        .map(practice => ({
+          practice,
+          assessment: state.assessments[practice.practiceId] || defaultAssessment()
+        }));
     }
 
     function getGapRows() {
@@ -3032,10 +3117,27 @@ function buildPdfDomainRows(rows) {
     /* ── API initialisation (called by MSAL bootstrap after auth) ──────── */
     async function initializeFromApi() {
       if (APP_CONFIG.storageMode !== "api") return;
+
+      /* Step 1: load user profile + RBAC */
+      try {
+        const token    = await (window.__AESCSF_AUTH__?.getToken?.() ?? Promise.resolve(null));
+        const headers  = { "Accept": "application/json", ...(token ? { "Authorization": "Bearer " + token } : {}) };
+        const meResp   = await fetch(`${APP_CONFIG.apiBaseUrl}/me`, { headers, credentials: "same-origin" });
+        if (meResp.ok) {
+          const me = await meResp.json();
+          window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [] };
+          applyRbacUI(me);
+        }
+      } catch (err) {
+        console.warn("[AESCSF] Could not load user profile:", err);
+      }
+
+      /* Step 2: load assessment data from API */
       try {
         const remoteState = await storageAdapter.loadRemote();
         if (remoteState) {
           state = remoteState;
+          populateDomains(); /* re-run now that RBAC is known */
           render();
           renderDashboard();
         }
@@ -3045,10 +3147,173 @@ function buildPdfDomainRows(rows) {
     }
     window.initializeFromApi = initializeFromApi;
 
+    function applyRbacUI(me) {
+      /* Show/hide admin tab */
+      const adminTab = document.getElementById("adminPageTab");
+      if (adminTab) adminTab.style.display = me.role === "admin" ? "" : "none";
+
+      /* Update the user bar to show role badge */
+      const roleBadge = document.getElementById("user-role-badge");
+      if (roleBadge) {
+        roleBadge.textContent = me.role === "admin" ? "Admin" : "User";
+        roleBadge.style.background = me.role === "admin" ? "rgba(192,16,72,.12)" : "rgba(6,118,71,.1)";
+        roleBadge.style.color      = me.role === "admin" ? "#c01048" : "#067647";
+        roleBadge.style.display    = "inline-block";
+      }
+    }
+
     populateDomains();
     render();
     renderDashboard();
     setActivePage("dashboard");
+
+    /* ── Admin panel ──────────────────────────────────────────────────────
+       All admin functions are gated behind requireAdmin on the server.
+       The admin tab is hidden from non-admin users by applyRbacUI().
+    ──────────────────────────────────────────────────────────────────── */
+    const ALL_DOMAINS = [...new Set(PRACTICES.map(p => p.domain))].sort();
+    let _adminUsers = [];
+    let _adminStateBeforeMerge = null;
+
+    async function adminFetch(path, options = {}) {
+      const token = await (window.__AESCSF_AUTH__?.getToken?.() ?? Promise.resolve(null));
+      return fetch(`${APP_CONFIG.apiBaseUrl}${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          ...(token ? { "Authorization": "Bearer " + token } : {}),
+          ...(options.headers || {})
+        },
+        credentials: "same-origin"
+      });
+    }
+
+    async function renderAdminPanel() {
+      const container = document.getElementById("adminUserList");
+      if (!container) return;
+      container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);">Loading users…</div>`;
+      try {
+        const resp = await adminFetch("/admin/users");
+        if (!resp.ok) { container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger);">Failed to load users (${resp.status})</div>`; return; }
+        _adminUsers = await resp.json();
+        container.innerHTML = _adminUsers.map(u => buildUserCard(u)).join("");
+      } catch (err) {
+        container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger);">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function buildUserCard(user) {
+      const initials = (user.display_name || user.username || "?")
+        .split(" ").slice(0, 2).map(s => s[0].toUpperCase()).join("");
+      const assignedSet = new Set(user.domains || []);
+      const domainChips = ALL_DOMAINS.map(d => {
+        const checked = assignedSet.has(d);
+        return `<label class="admin-domain-chip${checked ? " checked" : ""}" id="chip-${user.oid}-${d}">
+          <input type="checkbox" ${checked ? "checked" : ""}
+                 onchange="adminToggleDomainChip('${escapeHtml(user.oid)}','${escapeHtml(d)}',this)"
+                 style="pointer-events:none;">
+          ${escapeHtml(d)}
+        </label>`;
+      }).join("");
+      const isSelf = window.__AESCSF_AUTH__?.getUser?.()?.localAccountId === user.oid ||
+                     window.__AESCSF_AUTH__?.getUser?.()?.homeAccountId?.split(".")[0] === user.oid;
+      return `
+        <article class="admin-user-card" id="user-card-${escapeHtml(user.oid)}">
+          <div class="admin-user-head">
+            <div class="admin-avatar">${escapeHtml(initials)}</div>
+            <div class="admin-user-info">
+              <div class="admin-user-name">${escapeHtml(user.display_name || user.username)}${isSelf ? ' <span style="font-size:.75rem;color:var(--muted);font-weight:400;">(you)</span>' : ""}</div>
+              <div class="admin-user-email">${escapeHtml(user.username)}</div>
+            </div>
+            <span class="role-badge ${user.role}">${escapeHtml(user.role)}</span>
+            ${isSelf ? "" : `
+            <div class="admin-role-toggle">
+              <button class="${user.role === "admin" ? "active-role" : ""}"
+                      onclick="adminSetRole('${escapeHtml(user.oid)}','admin',this)">Admin</button>
+              <button class="${user.role === "user"  ? "active-role" : ""}"
+                      onclick="adminSetRole('${escapeHtml(user.oid)}','user',this)">User</button>
+            </div>`}
+          </div>
+          <div class="admin-domains-section">
+            <div class="admin-domains-label">Assigned Domains</div>
+            <div class="admin-domain-grid">${domainChips}</div>
+            <div class="admin-save-row">
+              <button onclick="adminSaveAssignments('${escapeHtml(user.oid)}')" class="secondary">Save assignments</button>
+              <span class="admin-save-status" id="save-status-${escapeHtml(user.oid)}"></span>
+            </div>
+          </div>
+        </article>`;
+    }
+
+    function adminToggleDomainChip(oid, domain, checkbox) {
+      const chip = document.getElementById(`chip-${oid}-${domain}`);
+      if (chip) chip.classList.toggle("checked", checkbox.checked);
+    }
+
+    async function adminSetRole(oid, role, btn) {
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/role`, {
+          method: "PUT", body: JSON.stringify({ role })
+        });
+        if (!resp.ok) { alert(`Failed to set role: ${resp.status}`); return; }
+        /* Update badge + toggle buttons */
+        const card = document.getElementById(`user-card-${oid}`);
+        if (card) {
+          card.querySelector(".role-badge").textContent = role;
+          card.querySelector(".role-badge").className = `role-badge ${role}`;
+          card.querySelectorAll(".admin-role-toggle button").forEach(b => {
+            b.classList.toggle("active-role", b.textContent.toLowerCase() === role);
+          });
+        }
+      } catch (err) { alert(err.message); }
+    }
+
+    async function adminSaveAssignments(oid) {
+      const card = document.getElementById(`user-card-${oid}`);
+      if (!card) return;
+      const domains = ALL_DOMAINS.filter(d => {
+        const chip = document.getElementById(`chip-${oid}-${d}`);
+        return chip && chip.querySelector("input")?.checked;
+      });
+      const statusEl = document.getElementById(`save-status-${oid}`);
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/assignments`, {
+          method: "PUT", body: JSON.stringify({ domains })
+        });
+        if (!resp.ok) { if (statusEl) statusEl.textContent = `Error ${resp.status}`; return; }
+        if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 3000); }
+      } catch (err) {
+        if (statusEl) statusEl.textContent = err.message;
+      }
+    }
+
+    async function adminLoadMergedView() {
+      const banner = document.getElementById("adminMergedBanner");
+      try {
+        const resp = await adminFetch("/admin/assessment/merged");
+        if (!resp.ok) { alert(`Failed to load merged view: ${resp.status}`); return; }
+        const merged = await resp.json();
+        _adminStateBeforeMerge = buildPersistableState(state);
+        replaceState(merged, { persist: false });
+        render(); renderDashboard();
+        if (banner) banner.style.display = "flex";
+        setActivePage("dashboard");
+      } catch (err) { alert(err.message); }
+    }
+
+    function adminRestoreOwnView() {
+      if (!_adminStateBeforeMerge) return;
+      replaceState(_adminStateBeforeMerge, { persist: false });
+      render(); renderDashboard();
+      const banner = document.getElementById("adminMergedBanner");
+      if (banner) banner.style.display = "none";
+      _adminStateBeforeMerge = null;
+      setActivePage("dashboard");
+    }
+
+    document.getElementById("adminRefreshBtn")?.addEventListener("click", renderAdminPanel);
+    document.getElementById("adminLoadMergedBtn")?.addEventListener("click", adminLoadMergedView);
   </script>
 </body>
 </html>
