@@ -1,0 +1,50 @@
+version: "3.9"
+
+# ── AESCSF v2 Evidence Tracker — on-prem stack ───────────────────────────────
+#
+# Usage:
+#   1. Copy .env.example to .env and fill in your EntraID values.
+#   2. docker compose up -d
+#   3. Browse to http://localhost  (or your server's IP/hostname).
+#
+# To enable HTTPS, place a reverse proxy (Traefik, Nginx, HAProxy) in front
+# and terminate TLS there. The app itself listens on HTTP port 80.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Frontend — Nginx serves index.html and proxies /api/* to the backend ──
+  frontend:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    ports:
+      - "${HOST_PORT:-80}:80"
+    environment:
+      AESCSF_CLIENT_ID:     "${AESCSF_CLIENT_ID}"
+      AESCSF_TENANT_ID:     "${AESCSF_TENANT_ID}"
+      AESCSF_STORAGE_MODE:  "${AESCSF_STORAGE_MODE:-api}"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ── Backend — Express API with SQLite persistence ──────────────────────────
+  api:
+    build:
+      context: server
+      dockerfile: Dockerfile
+    expose:
+      - "3000"
+    environment:
+      ENTRA_TENANT_ID:  "${AESCSF_TENANT_ID}"
+      ENTRA_CLIENT_ID:  "${AESCSF_CLIENT_ID}"
+      ALLOWED_ORIGIN:   "${ALLOWED_ORIGIN:-*}"
+      PORT:             "3000"
+      DATA_DIR:         "/data"
+    volumes:
+      - aescsf_data:/data
+    restart: unless-stopped
+
+volumes:
+  aescsf_data:
+    driver: local
