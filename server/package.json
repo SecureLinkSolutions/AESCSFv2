@@ -10,8 +10,6 @@
   "dependencies": {
     "better-sqlite3": "^9.4.3",
     "express": "^4.18.3",
-    "jwks-rsa": "^3.1.0",
-    "jsonwebtoken": "^9.0.2",
     "cors": "^2.8.5",
     "helmet": "^7.1.0"
   }

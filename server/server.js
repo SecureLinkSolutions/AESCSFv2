@@ -3,55 +3,49 @@
 /**
  * AESCSF v2 Evidence Tracker — on-prem API server
  *
- * Authentication: validates EntraID RS256 JWT Bearer tokens.
- * RBAC:
- *   admin — "assessment master"; can see/edit all domains, manage users,
- *           view the merged assessment across all contributors.
- *   user  — can only view and edit their assigned domains.
+ * Authentication: identity is established by oauth2-proxy, which validates
+ * the Entra ID session before forwarding requests. The proxy injects:
+ *   X-Auth-Request-Email        — user's email / UPN
+ *   X-Auth-Request-Access-Token — raw JWT (already verified by the proxy)
  *
- * Routes:
- *   GET  /api/health                        liveness probe (no auth)
- *   GET  /api/me                            current user profile + role + domains
- *   GET  /api/assessment                    load own assessment
- *   PUT  /api/assessment                    save own assessment (users: restricted to assigned domains)
- *   GET  /api/admin/users                   list all registered users  [admin]
- *   PUT  /api/admin/users/:oid/role         set a user's role          [admin]
- *   PUT  /api/admin/users/:oid/assignments  set a user's domain list   [admin]
- *   GET  /api/admin/assessment/merged       merged view from all users [admin]
+ * The API decodes (but does NOT re-verify) the access token to extract the
+ * user's stable OID. This is safe because:
+ *   • oauth2-proxy already verified the RS256 signature via Entra ID JWKS
+ *   • The API is only reachable from oauth2-proxy via the internal Docker network
+ *   • Nginx strips any X-Auth-Request-* headers from client requests before they
+ *     reach the API, so only proxy-injected values are trusted
+ *
+ * RBAC:
+ *   admin — "assessment master"; full access + user management + merged view
+ *   user  — restricted to their assigned domains
  *
  * Environment variables:
- *   ENTRA_TENANT_ID    Azure AD tenant GUID
- *   ENTRA_CLIENT_ID    App registration client/application GUID
- *   AESCSF_ADMIN_OIDS  Comma-separated EntraID OIDs that are always admins
- *                      (optional — if empty the first registered user becomes admin)
- *   PORT               Listening port (default: 3000)
- *   DATA_DIR           SQLite database directory (default: /data)
- *   ALLOWED_ORIGIN     CORS allowed origin
+ *   AESCSF_SSO_ENABLED  "true" (default) — enforce proxy-header auth
+ *                       "false"           — allow anonymous (local dev only)
+ *   AESCSF_ADMIN_OIDS   Comma-separated OIDs always treated as admin
+ *   PORT                Listening port (default 3000)
+ *   DATA_DIR            SQLite directory (default /data)
+ *   ALLOWED_ORIGIN      CORS allowed origin
  */
 
-const express    = require("express");
-const helmet     = require("helmet");
-const cors       = require("cors");
-const jwt        = require("jsonwebtoken");
-const jwksClient = require("jwks-rsa");
-const Database   = require("better-sqlite3");
-const path       = require("path");
-const fs         = require("fs");
+const express  = require("express");
+const helmet   = require("helmet");
+const cors     = require("cors");
+const Database = require("better-sqlite3");
+const path     = require("path");
+const fs       = require("fs");
 
 /* ── Config ─────────────────────────────────────────────────────────────── */
-const TENANT_ID   = process.env.ENTRA_TENANT_ID  || "";
-const CLIENT_ID   = process.env.ENTRA_CLIENT_ID  || "";
-const PORT        = parseInt(process.env.PORT     || "3000", 10);
-const DATA_DIR    = process.env.DATA_DIR          || "/data";
+const SSO_ENABLED = process.env.AESCSF_SSO_ENABLED !== "false"; // default true
+const PORT        = parseInt(process.env.PORT || "3000", 10);
+const DATA_DIR    = process.env.DATA_DIR       || "/data";
 const ADMIN_OIDS  = (process.env.AESCSF_ADMIN_OIDS || "")
                       .split(",").map(s => s.trim()).filter(Boolean);
 
-const SSO_ENABLED = !!(TENANT_ID && CLIENT_ID);
-
 if (!SSO_ENABLED) {
   console.warn(
-    "[AESCSF API] ENTRA_TENANT_ID / ENTRA_CLIENT_ID not set — " +
-    "running WITHOUT authentication. Do not expose this to untrusted networks!"
+    "[AESCSF API] AESCSF_SSO_ENABLED=false — running WITHOUT authentication. " +
+    "Do not expose this to untrusted networks!"
   );
 }
 
@@ -161,56 +155,44 @@ const stmtDeleteSnapshot = db.prepare(
   "DELETE FROM snapshots WHERE id = ? AND user_oid = ? AND tenant_id = ?"
 );
 
-/* ── JWKS client ─────────────────────────────────────────────────────────── */
-const jwks = SSO_ENABLED
-  ? jwksClient({
-      jwksUri: `https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys`,
-      cache: true, rateLimit: true, cacheMaxEntries: 10, cacheMaxAge: 3600000
-    })
-  : null;
-
-function getSigningKey(header, callback) {
-  jwks.getSigningKey(header.kid, (err, key) => {
-    if (err) return callback(err);
-    callback(null, key.getPublicKey());
-  });
+/* ── JWT claims decoder (no signature verification) ─────────────────────── */
+/* oauth2-proxy already verified the token; we only need to read the claims. */
+function decodeJwtClaims(token) {
+  try {
+    return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+  } catch { return null; }
 }
 
-/* ── Middleware: authenticate ────────────────────────────────────────────── */
+/* ── Middleware: authenticate via oauth2-proxy headers ──────────────────── */
 function requireAuth(req, res, next) {
   if (!SSO_ENABLED) {
     req.user = { oid: "anonymous", tenant: "", username: "anonymous", display_name: "Anonymous" };
     return next();
   }
-  const authHeader = req.headers["authorization"] || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Missing Bearer token" });
+
+  /* oauth2-proxy sets these after validating the Entra ID session */
+  const email = (req.headers["x-auth-request-email"] || "").trim();
+  if (!email) {
+    return res.status(401).json({ error: "Unauthenticated — no identity from proxy" });
   }
-  jwt.verify(
-    authHeader.slice(7),
-    getSigningKey,
-    {
-      algorithms: ["RS256"],
-      audience:   CLIENT_ID,
-      issuer: [
-        `https://login.microsoftonline.com/${TENANT_ID}/v2.0`,
-        `https://sts.windows.net/${TENANT_ID}/`
-      ]
-    },
-    (err, decoded) => {
-      if (err) {
-        console.error("[AESCSF API] Token verification failed:", err.message);
-        return res.status(401).json({ error: "Invalid or expired token" });
-      }
-      req.user = {
-        oid:          decoded.oid      || decoded.sub,
-        tenant:       decoded.tid      || TENANT_ID,
-        username:     decoded.preferred_username || decoded.upn || decoded.email || decoded.oid,
-        display_name: decoded.name     || decoded.preferred_username || decoded.oid
-      };
-      next();
+
+  /* Decode the forwarded access token to extract the stable OID */
+  const rawToken  = (req.headers["x-auth-request-access-token"] || "").trim();
+  let oid         = email; /* safe fallback */
+  let displayName = email;
+  let tenant      = "";
+
+  if (rawToken) {
+    const claims = decodeJwtClaims(rawToken);
+    if (claims) {
+      oid         = claims.oid  || claims.sub  || email;
+      displayName = claims.name || claims.preferred_username || email;
+      tenant      = claims.tid  || "";
     }
-  );
+  }
+
+  req.user = { oid, tenant, username: email, display_name: displayName };
+  next();
 }
 
 /* ── Middleware: auto-register user + determine role ─────────────────────── */
