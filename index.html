@@ -1464,6 +1464,10 @@
         </div>
       </section>
 
+      <div style="padding:14px 18px;background:rgba(21,94,239,.06);border:1px solid rgba(21,94,239,.14);border-radius:12px;margin-bottom:18px;font-size:.85rem;color:var(--text-soft);line-height:1.5;">
+        <strong>How domain assignment works:</strong> AESCSF v2 practices are organised into 11 domains (e.g. ACCESS, ARCHITECTURE, WORKFORCE). Tick the domains each user is responsible for and click <em>Save assignments</em>. That user will then only see the practices within those domains in the Assessment and Dashboard views. Admins always see all 11 domains.
+      </div>
+
       <section id="adminUserList" style="display:flex;flex-direction:column;gap:16px;">
         <div style="padding:32px;text-align:center;color:var(--muted);font-size:.9rem;">Loading users…</div>
       </section>
@@ -2016,7 +2020,6 @@
       bindAssessmentInputs();
       updateSummary();
       renderTimeline();
-      if (APP_CONFIG.storageMode === "api") loadVisibleFileLists();
     }
 
     function renderPracticeCard(practice) {
@@ -2743,9 +2746,19 @@ function buildPdfDomainRows(rows) {
           const objective = header.parentElement;
           const key = objective.dataset.objectiveKey;
           objective.classList.toggle("open");
+          const isOpen = objective.classList.contains("open");
           if (key) {
-            if (objective.classList.contains("open")) openObjectiveKeys.add(key);
+            if (isOpen) openObjectiveKeys.add(key);
             else openObjectiveKeys.delete(key);
+          }
+          /* Lazy-load file lists only when a section is first expanded */
+          if (isOpen && APP_CONFIG.storageMode === "api") {
+            objective.querySelectorAll(".uploaded-files-list[id^='files-']").forEach(el => {
+              if (!el.dataset.loaded) {
+                el.dataset.loaded = "1";
+                loadFilesForPractice(el.id.replace("files-", ""));
+              }
+            });
           }
         });
       });

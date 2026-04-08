@@ -260,7 +260,14 @@ function requireAuth(req, res, next) {
     return next();
   }
 
-  const email = (req.headers["x-auth-request-email"] || "").trim();
+  /* Azure/Entra ID work accounts may not populate the `email` OIDC claim —
+   * the address lives in `preferred_username` instead. Fall back through all
+   * three headers so either claim source works without any config change. */
+  const email = (
+    req.headers["x-auth-request-email"] ||
+    req.headers["x-auth-request-preferred-username"] ||
+    req.headers["x-auth-request-user"] || ""
+  ).trim();
   if (!email) {
     return res.status(401).json({ error: "Unauthenticated — no identity from proxy" });
   }

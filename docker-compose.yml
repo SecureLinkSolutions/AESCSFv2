@@ -47,6 +47,9 @@ services:
       # Inject user identity as request headers to the upstream
       OAUTH2_PROXY_SET_XAUTHREQUEST:     "true"
       OAUTH2_PROXY_PASS_ACCESS_TOKEN:    "true"
+      # Azure/Entra ID work accounts store the email in preferred_username,
+      # not the standard email claim. This ensures X-Auth-Request-Email is populated.
+      OAUTH2_PROXY_OIDC_EMAIL_CLAIM:     "preferred_username"
 
       # Restrict to your org's domain (e.g. yourcompany.com) or * for any
       OAUTH2_PROXY_EMAIL_DOMAINS:        "${OAUTH2_PROXY_EMAIL_DOMAINS:-*}"
