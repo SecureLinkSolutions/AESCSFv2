@@ -3305,8 +3305,37 @@ function buildPdfDomainRows(rows) {
     }
 
     /* ── API initialisation (called by MSAL bootstrap after auth) ──────── */
+    function showAuthErrorBar(status) {
+      const bar  = document.getElementById("user-info-bar");
+      const name = document.getElementById("user-display-name");
+      const btn  = bar ? bar.querySelector("button") : null;
+      if (bar) {
+        bar.style.background   = "rgba(239,68,68,.06)";
+        bar.style.borderColor  = "rgba(239,68,68,.2)";
+        bar.style.display      = "flex";
+      }
+      if (name) name.innerHTML =
+        (status === 401 || status === 403)
+          ? 'Session error \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">reload to sign in again</a>'
+          : 'Could not reach the server \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">retry</a>';
+      if (btn) btn.style.display = "none";
+    }
+
     async function initializeFromApi() {
-      if (APP_CONFIG.storageMode !== "api") return;
+      /* In local/offline mode show a minimal bar so the user knows storage mode */
+      if (APP_CONFIG.storageMode !== "api") {
+        const bar  = document.getElementById("user-info-bar");
+        const name = document.getElementById("user-display-name");
+        const btn  = bar ? bar.querySelector("button") : null;
+        if (name) name.textContent = "Offline mode — data stored in this browser only";
+        if (btn)  btn.style.display = "none";
+        if (bar) {
+          bar.style.background  = "rgba(100,116,139,.06)";
+          bar.style.borderColor = "rgba(100,116,139,.2)";
+          bar.style.display     = "flex";
+        }
+        return;
+      }
 
       /* Step 1: load user profile + RBAC */
       try {
@@ -3318,9 +3347,12 @@ function buildPdfDomainRows(rows) {
           const me = await meResp.json();
           window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], _oid: me.oid || "" };
           applyRbacUI(me);
+        } else {
+          showAuthErrorBar(meResp.status);
         }
       } catch (err) {
         console.warn("[AESCSF] Could not load user profile:", err);
+        showAuthErrorBar(0);
       }
 
       /* Step 2: load assessment data from API */
@@ -3351,14 +3383,18 @@ function buildPdfDomainRows(rows) {
       ];
       snapshotEls.forEach(el => { if (el) el.style.display = APP_CONFIG.storageMode === "api" ? "" : "none"; });
 
-      /* Update the user bar to show role badge */
+      /* Show the user bar with name and role badge */
+      const userBar  = document.getElementById("user-info-bar");
+      const nameSpan = document.getElementById("user-display-name");
       const roleBadge = document.getElementById("user-role-badge");
+      if (nameSpan) nameSpan.textContent = me.displayName || me.username || "";
       if (roleBadge) {
         roleBadge.textContent = me.role === "admin" ? "Admin" : "User";
         roleBadge.style.background = me.role === "admin" ? "rgba(192,16,72,.12)" : "rgba(6,118,71,.1)";
         roleBadge.style.color      = me.role === "admin" ? "#c01048" : "#067647";
         roleBadge.style.display    = "inline-block";
       }
+      if (userBar) userBar.style.display = "flex";
     }
 
     populateDomains();
@@ -3540,7 +3576,13 @@ function buildPdfDomainRows(rows) {
 
       try {
         const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/audit?${params}`, { credentials: "same-origin" });
-        if (!resp.ok) { container.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load audit log (${resp.status})</div>`; return; }
+        if (!resp.ok) {
+          const hint = (resp.status === 401 || resp.status === 403)
+            ? ` \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">reload to sign in again</a>`
+            : "";
+          container.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load audit log (${resp.status})${hint}</div>`;
+          return;
+        }
         const { rows, total, limit, offset } = await resp.json();
         _auditState.total = total;
 

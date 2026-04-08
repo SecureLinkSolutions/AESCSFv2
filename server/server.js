@@ -260,15 +260,21 @@ function requireAuth(req, res, next) {
     return next();
   }
 
-  /* Azure/Entra ID work accounts may not populate the `email` OIDC claim —
-   * the address lives in `preferred_username` instead. Fall back through all
-   * three headers so either claim source works without any config change. */
+  /* X-Auth-Request-User is the most reliably populated header for the Azure
+   * provider — oauth2-proxy always sets it from preferred_username/UPN.
+   * X-Auth-Request-Email may be empty when the tenant's ID token lacks an
+   * `email` claim (common for Entra ID work accounts). Try user first. */
   const email = (
+    req.headers["x-auth-request-user"] ||
     req.headers["x-auth-request-email"] ||
-    req.headers["x-auth-request-preferred-username"] ||
-    req.headers["x-auth-request-user"] || ""
+    req.headers["x-auth-request-preferred-username"] || ""
   ).trim();
   if (!email) {
+    console.warn("[AESCSF] requireAuth: no identity header received. " +
+      "Present headers: user=%s email=%s preferred-username=%s",
+      !!req.headers["x-auth-request-user"],
+      !!req.headers["x-auth-request-email"],
+      !!req.headers["x-auth-request-preferred-username"]);
     return res.status(401).json({ error: "Unauthenticated — no identity from proxy" });
   }
 
