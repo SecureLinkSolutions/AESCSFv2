@@ -79,6 +79,11 @@ services:
       # Restrict to your org's domain (e.g. yourcompany.com) or * for any
       OAUTH2_PROXY_EMAIL_DOMAINS:        "${OAUTH2_PROXY_EMAIL_DOMAINS:-*}"
 
+      # Allow post-auth redirects to this host (oauth2-proxy rejects absolute
+      # rd= URLs unless the domain is listed here).
+      # Set OAUTH2_PROXY_WHITELIST_DOMAINS in .env for non-localhost deploys.
+      OAUTH2_PROXY_WHITELIST_DOMAINS:    "${OAUTH2_PROXY_WHITELIST_DOMAINS:-localhost}"
+
       # UX / network
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
       OAUTH2_PROXY_HTTP_ADDRESS:         "0.0.0.0:4180"
