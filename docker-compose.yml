@@ -32,6 +32,7 @@ services:
       - "${HOST_BIND:-127.0.0.1}:${HOST_PORT:-80}:80"
     environment:
       AESCSF_STORAGE_MODE: "${AESCSF_STORAGE_MODE:-api}"
+      AESCSF_TENANT_ID:    "${AESCSF_TENANT_ID}"
     depends_on:
       - api
       - oauth2-proxy
@@ -79,10 +80,9 @@ services:
       # Restrict to your org's domain (e.g. yourcompany.com) or * for any
       OAUTH2_PROXY_EMAIL_DOMAINS:        "${OAUTH2_PROXY_EMAIL_DOMAINS:-*}"
 
-      # Allow post-auth redirects to this host (oauth2-proxy rejects absolute
-      # rd= URLs unless the domain is listed here).
-      # Set OAUTH2_PROXY_WHITELIST_DOMAINS in .env for non-localhost deploys.
-      OAUTH2_PROXY_WHITELIST_DOMAINS:    "${OAUTH2_PROXY_WHITELIST_DOMAINS:-localhost}"
+      # Allow post-auth redirects to this host and the Azure logout endpoint.
+      # Add your production domain to OAUTH2_PROXY_WHITELIST_DOMAINS in .env.
+      OAUTH2_PROXY_WHITELIST_DOMAINS:    "${OAUTH2_PROXY_WHITELIST_DOMAINS:-localhost,login.microsoftonline.com}"
 
       # UX / network
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
