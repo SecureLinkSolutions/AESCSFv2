@@ -2,12 +2,15 @@ version: "3.9"
 
 # ── AESCSF v2 Evidence Tracker — on-prem stack ───────────────────────────────
 #
-# Authentication is handled entirely by oauth2-proxy BEFORE any request
-# reaches the application. index.html and /api/* are never served to
-# unauthenticated users — the proxy enforces this at the network level.
+# Authentication is handled by oauth2-proxy in auth_request mode.
 #
 # Request flow:
-#   Browser → oauth2-proxy (port 80) → nginx (internal) → app / API
+#   Browser → nginx (port 80) ─► auth_request ► oauth2-proxy (internal)
+#                              │  (nginx injects X-Auth-Request-* from response)
+#                              └► API / static files
+#
+# oauth2-proxy is NOT the reverse proxy — it only validates sessions.
+# nginx is the sole internet-facing entry point.
 #
 # Usage:
 #   1. cp .env.example .env  and fill in all values
@@ -17,14 +20,32 @@ version: "3.9"
 
 services:
 
-  # ── oauth2-proxy — sole internet-facing entry point ───────────────────────
-  # Validates the Entra ID session before forwarding any request to Nginx.
-  # Injects X-Auth-Request-Email and X-Auth-Request-Access-Token headers.
-  oauth2-proxy:
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+  # ── Nginx — sole internet-facing entry point ──────────────────────────────
+  # Serves the static app, protects every route via auth_request to
+  # oauth2-proxy, and proxies /api/* to the backend.
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
     ports:
       # Bind only to the internal NIC — never exposed on 0.0.0.0
-      - "${HOST_BIND:-127.0.0.1}:${HOST_PORT:-80}:4180"
+      - "${HOST_BIND:-127.0.0.1}:${HOST_PORT:-80}:80"
+    environment:
+      AESCSF_STORAGE_MODE: "${AESCSF_STORAGE_MODE:-api}"
+    depends_on:
+      - api
+      - oauth2-proxy
+    restart: unless-stopped
+
+  # ── oauth2-proxy — internal auth validator only ───────────────────────────
+  # Handles the Azure/Entra ID OAuth flow (/oauth2/*) and validates session
+  # cookies for nginx's auth_request subrequests.
+  # It is NOT the reverse proxy — UPSTREAMS is set to "static://200" so it
+  # returns 202 Accepted once a user is authenticated (nginx ignores the body).
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    expose:
+      - "4180"
     environment:
       # Entra ID provider
       OAUTH2_PROXY_PROVIDER:             "azure"
@@ -34,8 +55,10 @@ services:
       OAUTH2_PROXY_OIDC_ISSUER_URL:      "${OAUTH2_PROXY_OIDC_ISSUER_URL}"
       OAUTH2_PROXY_REDIRECT_URL:         "${OAUTH2_PROXY_REDIRECT_URL}"
 
-      # Forward all authenticated traffic to Nginx
-      OAUTH2_PROXY_UPSTREAMS:            "http://nginx/"
+      # In auth_request mode oauth2-proxy doesn't proxy to an app upstream.
+      # "static://200" returns a 200 OK body after authentication succeeds,
+      # which nginx discards — only the X-Auth-Request-* headers matter.
+      OAUTH2_PROXY_UPSTREAMS:            "static://200"
 
       # Session cookie — HTTP-only, never readable by browser JS
       OAUTH2_PROXY_COOKIE_SECRET:        "${OAUTH2_PROXY_COOKIE_SECRET}"
@@ -44,11 +67,13 @@ services:
       OAUTH2_PROXY_COOKIE_SAMESITE:      "lax"
       OAUTH2_PROXY_COOKIE_NAME:          "_aescsf_session"
 
-      # Inject user identity as request headers to the upstream
+      # Inject user identity as response headers on /oauth2/auth
+      # nginx captures these via auth_request_set and injects them
+      # as request headers to the API.
       OAUTH2_PROXY_SET_XAUTHREQUEST:     "true"
       OAUTH2_PROXY_PASS_ACCESS_TOKEN:    "true"
       # Azure/Entra ID work accounts store the email in preferred_username,
-      # not the standard email claim. This ensures X-Auth-Request-Email is populated.
+      # not the standard email claim.
       OAUTH2_PROXY_OIDC_EMAIL_CLAIM:     "preferred_username"
 
       # Restrict to your org's domain (e.g. yourcompany.com) or * for any
@@ -60,22 +85,6 @@ services:
       OAUTH2_PROXY_REVERSE_PROXY:        "true"
       OAUTH2_PROXY_SCOPE:                "openid email profile"
 
-    depends_on:
-      - nginx
-    restart: unless-stopped
-
-  # ── Nginx — serves static app, proxies /api/* to backend ─────────────────
-  # Not exposed on the host — only reachable from oauth2-proxy.
-  nginx:
-    build:
-      context: .
-      dockerfile: nginx/Dockerfile
-    expose:
-      - "80"
-    environment:
-      AESCSF_STORAGE_MODE: "${AESCSF_STORAGE_MODE:-api}"
-    depends_on:
-      - api
     restart: unless-stopped
 
   # ── API — Express + SQLite, identity via proxy headers ────────────────────
