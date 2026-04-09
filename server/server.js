@@ -352,6 +352,8 @@ function buildMergedAssessment() {
   }
 
   const merged = {};
+
+  /* Pass 1 — domain-assigned users take priority for their domain's practices */
   for (const [domain, ownerOids] of Object.entries(domainOwners)) {
     for (const ownerOid of ownerOids) {
       const ownerData = assessmentsByOid[ownerOid]?.assessments || {};
@@ -362,6 +364,20 @@ function buildMergedAssessment() {
         const oldScore = existing ? scoreAssessment(existing) : -1;
         if (newScore > oldScore) merged[practiceId] = assessment;
       }
+    }
+  }
+
+  /* Pass 2 — include ALL users' data (e.g. the admin's own assessments).
+   * Users without a domain assignment (including the admin if unassigned)
+   * were silently excluded in pass 1.  This pass fills in any practice that
+   * has a higher-scoring entry from any contributor, regardless of assignment. */
+  for (const userAssessments of Object.values(assessmentsByOid)) {
+    const assessments = userAssessments?.assessments || {};
+    for (const [practiceId, assessment] of Object.entries(assessments)) {
+      const existing = merged[practiceId];
+      const newScore = scoreAssessment(assessment);
+      const oldScore = existing ? scoreAssessment(existing) : -1;
+      if (newScore > oldScore) merged[practiceId] = assessment;
     }
   }
 
