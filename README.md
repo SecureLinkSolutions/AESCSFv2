@@ -13,6 +13,7 @@ A web application for organisations implementing and assessing against the **Aus
 - [Deployment](#deployment)
 - [EntraID SSO Registration](#entraid-sso-registration)
 - [RBAC — Roles and Access Control](#rbac--roles-and-access-control)
+- [Database Schema](#database-schema)
 - [Security Implementation](#security-implementation)
 - [Local Development (no Docker)](#local-development-no-docker)
 - [Disclaimer](#disclaimer)
@@ -24,83 +25,88 @@ A web application for organisations implementing and assessing against the **Aus
 | Feature | Description |
 |---|---|
 | Assessment tracking | 150+ AESCSF v2 practices across 11 domains with MIL-1/2/3 and anti-practice statuses |
+| Save button per practice | Changes to evidence, notes, and owner fields are buffered locally and written to the database only on explicit Save — preventing audit log spam from every keystroke |
 | Evidence management | Evidence text, attachment links, owner, target dates, last reviewed |
+| File attachments | Upload files (up to 25 MB each) against individual practices; stored in the SQLite-backed volume |
 | Dashboard | Executive summary, domain maturity radar chart, completion and gap metrics |
 | Remediation timeline | Chronological view of target dates with overdue indicators |
 | Year-on-year comparison | Save named snapshots to the database; select any two to compare domain scores, status distribution, gap delta, and a full practice change register |
+| Audit log | Immutable per-field change log — who changed what value on which practice and when; exportable as CSV |
 | PDF report | Full assessment report with radar charts, domain summary, and gap register |
 | AEMO CSV export | Practice status in the AEMO-required CSV template format |
 | Gap register export | Filtered CSV of open gaps and remediation actions |
 | JSON backup / restore | Full assessment import and export for backup or transfer |
 | EntraID SSO | Microsoft Entra ID (Azure AD) authentication via oauth2-proxy — no JS auth libraries |
 | RBAC | Admin (assessment master) and User (assigned domains only) roles |
-| On-prem deployment | Docker Compose stack — oauth2-proxy + Nginx + Node.js API + SQLite |
+| Branded login page | Custom `/login` landing page with Microsoft sign-in button; first thing unauthenticated users see |
+| On-prem deployment | Docker Compose stack — Nginx + oauth2-proxy + Node.js API + SQLite |
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                        Internal Network                       │
-│                                                              │
-│  Browser                                                     │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │  index.html  (SPA — vanilla JS, Chart.js)            │    │
-│  │                                                      │    │
-│  │  • No auth libraries — session cookie is HTTP-only   │    │
-│  │  • All /api/* requests sent with same-origin cookie  │    │
-│  │  • Identity decoded from access token claims         │    │
-│  └──────────────────────────┬───────────────────────────┘    │
-│                             │ HTTP (HOST_BIND:HOST_PORT)      │
-│  ┌──────────────────────────▼───────────────────────────┐    │
-│  │          oauth2-proxy  (sole public entry point)      │    │
-│  │                                                      │    │
-│  │  • Enforces Entra ID login before serving anything   │    │
-│  │  • Validates OIDC session; issues HTTP-only cookie   │    │
-│  │  • Injects X-Auth-Request-Email and                  │    │
-│  │    X-Auth-Request-Access-Token headers upstream      │    │
-│  │  • Handles /oauth2/* routes (login, callback,        │    │
-│  │    sign_out)                                         │    │
-│  └──────────────────────────┬───────────────────────────┘    │
-│                             │ internal Docker network         │
-│  ┌──────────────────────────▼───────────────────────────┐    │
-│  │               Nginx  (nginx container)                │    │
-│  │                                                      │    │
-│  │  • Serves index.html and static assets               │    │
-│  │  • Serves /config.js (generated at container start)  │    │
-│  │  • Strips client-supplied identity headers           │    │
-│  │  • Forwards oauth2-proxy identity headers to /api/*  │    │
-│  │  • No host port exposed — internal only              │    │
-│  └──────────────────────────┬───────────────────────────┘    │
-│                             │ internal Docker network         │
-│  ┌──────────────────────────▼───────────────────────────┐    │
-│  │        Node.js / Express  (api container)             │    │
-│  │                                                      │    │
-│  │  • Reads identity from X-Auth-Request-* headers      │    │
-│  │  • Decodes (does not verify) access token for OID    │    │
-│  │    and display name — signature already verified     │    │
-│  │    by oauth2-proxy                                   │    │
-│  │  • RBAC: admin / user roles + domain assignments     │    │
-│  │  • GET/PUT /api/assessment (per-user, scoped)        │    │
-│  │  • GET /api/me                                       │    │
-│  │  • Admin endpoints: users, roles, assignments,       │    │
-│  │    merged assessment view, snapshots                 │    │
-│  └──────────────────────────┬───────────────────────────┘    │
-│                             │                                 │
-│  ┌──────────────────────────▼───────────────────────────┐    │
-│  │            SQLite  (named Docker volume)              │    │
-│  │  tables: assessments, users, assignments, snapshots  │    │
-│  └──────────────────────────────────────────────────────┘    │
-└──────────────────────────────────────────────────────────────┘
-                             │
-             ┌───────────────▼───────────────┐
-             │      Microsoft Entra ID        │
-             │  (OIDC token issuance only;    │
-             │   signature verification done  │
-             │   inside oauth2-proxy)         │
-             └───────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         Internal Network                          │
+│                                                                   │
+│  Browser                                                          │
+│  ┌────────────────────────────────────────────────────────────┐   │
+│  │  index.html  (SPA — vanilla JS, Chart.js)                  │   │
+│  │                                                            │   │
+│  │  • No auth libraries — session cookie is HTTP-only         │   │
+│  │  • All /api/* requests sent with same-origin cookie        │   │
+│  └────────────────────────────┬───────────────────────────────┘   │
+│                               │ HTTP (HOST_BIND:HOST_PORT)         │
+│  ┌────────────────────────────▼───────────────────────────────┐   │
+│  │              Nginx  (sole public entry point)               │   │
+│  │                                                            │   │
+│  │  • Serves /login (branded login page — no auth required)   │   │
+│  │  • Validates every protected request via auth_request      │   │
+│  │    subrequest to oauth2-proxy                              │   │
+│  │  • Unauthenticated requests → redirect to /login           │   │
+│  │  • Serves index.html, static assets, /config.js            │   │
+│  │  • Strips any client-supplied X-Auth-Request-* headers,    │   │
+│  │    then re-injects proxy-validated identity headers         │   │
+│  │  • Proxies /api/* to the Node.js backend                   │   │
+│  │  • Proxies /oauth2/* to oauth2-proxy (OIDC flow)           │   │
+│  └────────┬───────────────────────────────────────────────────┘   │
+│           │ auth_request subrequest          │ /api/* proxy        │
+│  ┌────────▼──────────────────┐   ┌───────────▼───────────────┐   │
+│  │  oauth2-proxy  (internal) │   │  Node.js / Express  (api) │   │
+│  │                           │   │                           │   │
+│  │  • Handles /oauth2/* OIDC │   │  • Reads identity from    │   │
+│  │    flow (sign_in,         │   │    X-Auth-Request-*       │   │
+│  │    callback, sign_out)    │   │    headers set by nginx    │   │
+│  │  • /oauth2/auth returns   │   │  • Decodes access token   │   │
+│  │    202 (authenticated) or │   │    for OID + display name │   │
+│  │    401 (not authenticated)│   │  • RBAC: admin / user     │   │
+│  │  • Sets X-Auth-Request-*  │   │  • Assessment, snapshot,  │   │
+│  │    response headers       │   │    audit, file endpoints  │   │
+│  │  • No host port exposed   │   │  • No host port exposed   │   │
+│  └───────────────────────────┘   └───────────┬───────────────┘   │
+│                                               │                    │
+│  ┌────────────────────────────────────────────▼───────────────┐   │
+│  │                 SQLite  (named Docker volume)               │   │
+│  │  tables: assessments, users, assignments, snapshots,       │   │
+│  │          audit_log, files                                  │   │
+│  └────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
+                               │
+               ┌───────────────▼───────────────┐
+               │      Microsoft Entra ID        │
+               │  (OIDC token issuance only;    │
+               │   signature verification done  │
+               │   inside oauth2-proxy)         │
+               └───────────────────────────────┘
 ```
+
+### Request flow
+
+1. **Unauthenticated user** hits nginx → nginx sends auth_request to oauth2-proxy `/oauth2/auth` → oauth2-proxy returns 401 → nginx redirects to `/login`
+2. **Login page** (`/login`) is served by nginx without an auth check — the user sees the branded page
+3. **Sign in** — user clicks "Sign in with Microsoft" → `/oauth2/sign_in` → oauth2-proxy → Microsoft Entra ID OIDC → `/oauth2/callback` → oauth2-proxy sets HTTP-only session cookie → redirects to original URL
+4. **Authenticated request** — nginx sends auth_request → oauth2-proxy returns 202 with `X-Auth-Request-*` headers → nginx captures headers via `auth_request_set`, strips any client-supplied values, injects proxy-validated identity into the API request
+5. **Sign out** — user clicks Sign out → `/oauth2/sign_out` → oauth2-proxy clears the session cookie → redirects to `/login`
 
 ### File structure
 
@@ -109,17 +115,18 @@ AESCSFv2/
 ├── index.html              Single-page application (HTML + CSS + JS)
 ├── config.js               Local dev config; overwritten at container start
 │                           by nginx/entrypoint.sh
-├── docker-compose.yml      On-prem stack: oauth2-proxy + nginx + api
+├── docker-compose.yml      On-prem stack: nginx + oauth2-proxy + api
 ├── .env.example            Configuration reference (copy to .env)
 │
 ├── nginx/
 │   ├── Dockerfile          nginx:alpine image
-│   ├── nginx.conf          Identity-header stripping, SPA routing, /api proxy
+│   ├── nginx.conf          auth_request wiring, SPA routing, /api proxy
+│   ├── login.html          Branded sign-in landing page
 │   └── entrypoint.sh       Generates /config.js from env vars at startup
 │
 └── server/
-    ├── server.js           Express API — auth, RBAC, assessment CRUD, snapshots
-    ├── package.json        Dependencies: express, better-sqlite3, helmet, cors
+    ├── server.js           Express API — auth, RBAC, assessment CRUD, audit, files
+    ├── package.json        Dependencies: express, better-sqlite3, helmet, cors, multer
     └── Dockerfile          node:20-alpine image
 ```
 
@@ -164,6 +171,10 @@ OAUTH2_PROXY_COOKIE_SECRET=replace-with-generated-secret
 OAUTH2_PROXY_COOKIE_SECURE=false     # set to true when using HTTPS
 OAUTH2_PROXY_EMAIL_DOMAINS=*         # or restrict to yourcompany.com
 
+# Allowed redirect hosts after sign-in / sign-out.
+# Add your server's IP or hostname here (comma-separated, no protocol).
+OAUTH2_PROXY_WHITELIST_DOMAINS=192.168.1.10
+
 # ── RBAC ─────────────────────────────────────────────────────
 # Optional: pin admins by Entra ID Object ID (comma-separated).
 # If blank, the first user to sign in becomes admin automatically.
@@ -191,7 +202,7 @@ curl http://192.168.1.10/api/health
 # → {"status":"ok","sso":true,...}
 ```
 
-Browse to `http://192.168.1.10` — oauth2-proxy will immediately redirect to the Microsoft sign-in page. After successful authentication you are returned to the app.
+Browse to `http://192.168.1.10` — you will land on the branded **AESCSF v2 Sign In** page. Click **Sign in with Microsoft** to complete the Entra ID OIDC flow and be redirected into the application.
 
 **4. First sign-in = first admin**
 
@@ -228,12 +239,12 @@ The first user to sign in is automatically assigned the **Admin** role. They can
 
 ### How it works
 
-1. Every user who passes the oauth2-proxy login is automatically registered in the database.
+1. Every user who completes the Microsoft sign-in is automatically registered in the database.
 2. The **first** user to sign in is made Admin (or you can pin admins via `AESCSF_ADMIN_OIDS`).
 3. The Admin opens the **Admin** tab and assigns domains to each user — e.g. the network team gets `ARCHITECTURE` and `ACCESS`, the risk team gets `RISK` and `THREAT`.
-4. Users log in and see only their assigned domains in the Assessment and Dashboard views. The domain filter dropdown is also restricted to their scope.
-5. Users fill in evidence, status, owners, and remediation notes for their practices.
-6. The Admin can click **Load Merged View** to overlay a consolidated assessment that combines all users' contributions, merged by domain ownership.
+4. Users log in and see only their assigned domains in the Assessment and Dashboard views.
+5. Users fill in evidence, status, owners, and remediation notes for their practices and click **Save** on each practice card to persist changes.
+6. The Admin can click **Load Merged View** to overlay a consolidated assessment that combines every user's contributions. All users are included regardless of whether they have domain assignments.
 
 ### Admin panel
 
@@ -241,7 +252,7 @@ The **Admin** tab provides:
 
 - **User cards** — name, email, role badge, role toggle (promote/demote), domain assignment checkboxes
 - **Save assignments** — updates the user's domain scope immediately
-- **Load Merged View** — loads a read-only combined assessment from all users across all assigned domains; a banner indicates merged mode with a **Restore my view** button
+- **Load Merged View** — loads a read-only combined assessment from all users; a banner indicates merged mode with a **Restore my view** button
 
 ### API endpoints
 
@@ -254,11 +265,33 @@ The **Admin** tab provides:
 | `GET` | `/api/admin/users` | Admin | List all registered users with roles and assignments |
 | `PUT` | `/api/admin/users/:oid/role` | Admin | Set a user's role (`admin` or `user`) |
 | `PUT` | `/api/admin/users/:oid/assignments` | Admin | Set a user's domain list |
-| `GET` | `/api/admin/assessment/merged` | Admin | Merged assessment from all users by domain ownership |
+| `GET` | `/api/admin/assessment/merged` | Admin | Merged assessment from all users |
 | `GET` | `/api/snapshots` | User | List the current user's saved snapshots |
 | `POST` | `/api/snapshots` | User | Save a named snapshot of the current assessment |
 | `GET` | `/api/snapshots/:id` | User | Load full data for a specific snapshot |
 | `DELETE` | `/api/snapshots/:id` | User | Delete a snapshot (own snapshots only) |
+| `GET` | `/api/audit` | User | Paginated audit log (admins see all users; users see own) |
+| `GET` | `/api/audit/export` | User | Full audit log as CSV download |
+| `GET` | `/api/audit/practice/:id` | User | Audit history for a specific practice |
+| `POST` | `/api/files/:practiceId` | User | Upload a file attachment for a practice |
+| `GET` | `/api/files/:practiceId` | User | List file attachments for a practice |
+| `GET` | `/api/files/:id/download` | User | Download a specific file |
+| `DELETE` | `/api/files/:id` | User | Delete a file (own files only; admins can delete any) |
+
+---
+
+## Database Schema
+
+All data is stored in a single SQLite file (`aescsf.db`) inside the `aescsf_data` Docker named volume. SQLite WAL mode and foreign-key constraints are enabled. All SQL uses prepared statements — no string interpolation.
+
+| Table | Purpose |
+|---|---|
+| `assessments` | One row per user — full assessment data stored as a JSON blob (`data` column). Keyed by `(user_oid, tenant_id)`. Updated on every explicit Save. |
+| `users` | One row per authenticated user — OID, tenant, username, display name, role (`admin`/`user`), created and last-seen timestamps. |
+| `assignments` | Many-to-many mapping of users to AESCSF domains. Controls which domains each User role can view and edit. |
+| `snapshots` | Named point-in-time copies of a user's assessment JSON. Used for year-on-year comparison. |
+| `audit_log` | One row per field change — records who (`user_oid`, `username`, `display_name`), what practice (`practice_id`), which field, the old value, the new value, and when. Written on every explicit Save. There is no automatic retention or purge policy; rows accumulate indefinitely. |
+| `files` | Metadata for uploaded file attachments — filename, stored name, MIME type, size, upload time. File content is stored on disk in `DATA_DIR`. |
 
 ---
 
@@ -267,21 +300,27 @@ The **Admin** tab provides:
 ### Network layer
 
 - **Docker port binding** — the host port is bound to `HOST_BIND` (your internal NIC IP), not `0.0.0.0`. The application socket is never opened on internet-facing interfaces.
-- **oauth2-proxy as sole entry point** — Nginx and the API container have no host ports exposed. All traffic enters through oauth2-proxy only.
+- **Nginx as sole public entry point** — oauth2-proxy and the API container have no host ports exposed (`expose:` not `ports:`). All external traffic enters through nginx only.
 - **CORS** — `ALLOWED_ORIGIN` must be explicitly set; there is no wildcard `*` default in production.
 
 ### Authentication
 
-- **oauth2-proxy** (`quay.io/oauth2-proxy/oauth2-proxy:v7.6.0`) sits in front of Nginx and acts as the infrastructure-level authentication gate. No HTML, JavaScript, or API response is served to unauthenticated clients — the OIDC handshake is completed entirely server-side before any application content is returned.
-- The session is maintained via an **HTTP-only, SameSite=Lax** cookie (`_aescsf_session`). The cookie is inaccessible to browser JavaScript and is forwarded automatically on same-origin requests.
-- After authentication, oauth2-proxy injects `X-Auth-Request-Email` and `X-Auth-Request-Access-Token` headers into requests forwarded to Nginx and the API.
-- Nginx **strips any client-supplied** `X-Auth-Request-*` headers before forwarding to the API, then re-injects the proxy-validated values. This prevents identity spoofing even on the internal Docker network.
-- The API decodes (but does not re-verify) the access token payload to extract the Entra ID Object ID (`oid`) and display name. The token signature was already validated by oauth2-proxy; re-verifying would require the API to hold tenant JWKS credentials, adding unnecessary complexity.
-- No auth libraries (MSAL.js, jsonwebtoken, jwks-rsa) are present in the browser or API code.
+The stack uses the **nginx `auth_request` module** to enforce authentication:
+
+1. nginx receives every request and issues an internal subrequest to `oauth2-proxy /oauth2/auth`.
+2. oauth2-proxy validates the session cookie and returns **202** (authenticated) or **401** (not authenticated). It also sets `X-Auth-Request-User`, `X-Auth-Request-Email`, and `X-Auth-Request-Access-Token` response headers on 202.
+3. On **401**, nginx redirects the browser to `/login` (the branded sign-in page) — no application content is ever served to unauthenticated clients.
+4. On **202**, nginx captures the identity headers via `auth_request_set`, **strips any client-supplied** `X-Auth-Request-*` headers (preventing identity spoofing), and re-injects the proxy-validated values into the upstream API request.
+
+The session is maintained via an **HTTP-only, SameSite=Lax** cookie (`_aescsf_session`). The cookie is inaccessible to browser JavaScript and is forwarded automatically on same-origin requests.
+
+The API reads identity exclusively from the nginx-injected `X-Auth-Request-*` headers — it decodes (but does not re-verify) the access token to extract the Entra ID Object ID (`oid`) and display name. Token signature validation is performed by oauth2-proxy; no auth libraries (MSAL.js, jsonwebtoken, jwks-rsa) are present in the browser or API code.
+
+> **Entra ID note:** Work accounts in most Entra ID tenants store the user's email address in `preferred_username`, not the standard OIDC `email` claim. oauth2-proxy is configured with `OAUTH2_PROXY_OIDC_EMAIL_CLAIM=preferred_username` to handle this. The API reads `X-Auth-Request-User` (always set by the Azure provider) as the primary identity, with `X-Auth-Request-Email` and `X-Auth-Request-Preferred-Username` as fallbacks.
 
 ### Sign-out
 
-Clicking **Sign out** in the application navigates to `/oauth2/sign_out`, which clears the oauth2-proxy session cookie and redirects to the Entra ID logout endpoint.
+Clicking **Sign out** navigates to `/oauth2/sign_out`, which clears the `_aescsf_session` cookie and redirects to `/login`. The user is returned to the branded sign-in page. The underlying Azure SSO session is not terminated — this matches standard SaaS behaviour (clearing the application session without forcing a global Microsoft logout).
 
 ### Authorisation (RBAC)
 
@@ -300,15 +339,15 @@ Clicking **Sign out** in the application navigates to `/oauth2/sign_out`, which 
 ### Backend hardening (Express / Helmet)
 
 - `helmet` is applied with default protections.
-- `express.json` body size is capped at `4 MB`.
+- `express.json` body size is capped at `4 MB`; file uploads are capped at `25 MB` per file via `multer`.
 - SQLite WAL mode and foreign-key constraints are enabled.
 - All SQL interactions use prepared statements — no string interpolation.
-- The API container is not exposed on the host network; it is only reachable through Nginx on the internal Docker network.
+- The API container is not exposed on the host network; it is only reachable through nginx on the internal Docker network.
 
 ### Runtime configuration
 
 - No secrets are baked into container images. `AESCSF_CLIENT_SECRET` and `OAUTH2_PROXY_COOKIE_SECRET` live only in the `.env` file and are injected at runtime via Docker Compose environment variables.
-- Nginx generates `/config.js` from environment variables at container start via `nginx/entrypoint.sh`. The file contains only non-sensitive runtime settings (storage mode, API path).
+- Nginx generates `/config.js` from environment variables at container start via `nginx/entrypoint.sh`. The file contains only non-sensitive runtime settings (storage mode, API path, tenant ID).
 
 ---
 
