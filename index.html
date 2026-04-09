@@ -3354,26 +3354,16 @@ function buildPdfDomainRows(rows) {
       } catch (err) { alert(err.message); }
     }
 
-    /* ── Sign-out: clear oauth2-proxy session AND Azure SSO session ─────── */
+    /* ── Sign-out ────────────────────────────────────────────────────────── */
     function signOut() {
-      const tenantId = (window.__AESCSF_CONFIG__ || {}).tenantId || "";
-      if (!tenantId) {
-        /* No tenant ID available — only clear the proxy session */
-        window.location.href = "/oauth2/sign_out";
-        return;
-      }
-      /* Redirect oauth2-proxy sign_out to Azure's end_session_endpoint.
-       * This clears BOTH the local proxy cookie AND the Azure SSO session,
-       * so the user is prompted to sign in again on next visit.
-       *
-       * NOTE: If you want to be redirected back to the app automatically after
-       * sign-out, add your app's root URL as a "Front-channel logout URL" in
-       * the Entra ID app registration and change post_logout_redirect_uri below. */
-      const postLogout = encodeURIComponent(window.location.origin + "/login");
-      const azureLogout =
-        "https://login.microsoftonline.com/" + encodeURIComponent(tenantId) +
-        "/oauth2/v2.0/logout?post_logout_redirect_uri=" + postLogout;
-      window.location.href = "/oauth2/sign_out?rd=" + encodeURIComponent(azureLogout);
+      /* Clear the oauth2-proxy session cookie and land on the login page.
+       * rd=/login is a relative path so oauth2-proxy accepts it without any
+       * whitelist configuration.  This is the standard SaaS pattern: the user
+       * is signed out of this app but their Azure SSO session stays active —
+       * clicking "Sign in" again will re-authenticate them via SSO (silently
+       * if the Azure session is still valid, or with a prompt if it has
+       * expired). */
+      window.location.href = "/oauth2/sign_out?rd=/login";
     }
 
     /* ── API initialisation (called by MSAL bootstrap after auth) ──────── */
