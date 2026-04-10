@@ -28,14 +28,15 @@
  *   ALLOWED_ORIGIN      CORS allowed origin
  */
 
-const express  = require("express");
-const helmet   = require("helmet");
-const cors     = require("cors");
-const Database = require("better-sqlite3");
-const multer   = require("multer");
-const path     = require("path");
-const fs       = require("fs");
-const crypto   = require("crypto");
+const express   = require("express");
+const helmet    = require("helmet");
+const cors      = require("cors");
+const rateLimit = require("express-rate-limit");
+const Database  = require("better-sqlite3");
+const multer    = require("multer");
+const path      = require("path");
+const fs        = require("fs");
+const crypto    = require("crypto");
 
 /* ── Config ─────────────────────────────────────────────────────────────── */
 const SSO_ENABLED   = process.env.AESCSF_SSO_ENABLED !== "false"; // default true
@@ -44,7 +45,11 @@ const DATA_DIR      = process.env.DATA_DIR || "/data";
 const UPLOAD_DIR    = path.join(DATA_DIR, "files");
 const ADMIN_OIDS    = (process.env.AESCSF_ADMIN_OIDS || "")
                         .split(",").map(s => s.trim()).filter(Boolean);
-const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB per file
+const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB per file (multer limit)
+// JSON body limit for assessment data (express.json). File uploads bypass this
+// and are gated by MAX_FILE_BYTES above. nginx's client_max_body_size (25m) is
+// the outermost gate — see docker-compose.yml api service comment for details.
+const MAX_JSON_BYTES = "4mb";
 const MAX_AUDIT_VALUE_LEN = 4000; // truncate long field values in audit log
 
 /** Fields recorded in the audit log whenever an assessment is saved. */
@@ -478,18 +483,49 @@ function listFilesForPractice(practiceId, userOid, isAdmin) {
 /* ── Express app ─────────────────────────────────────────────────────────── */
 const app = express();
 
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({ contentSecurityPolicy: false })); // CSP set by nginx instead
 app.use(cors({
   origin:  process.env.ALLOWED_ORIGIN || false,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
-app.use(express.json({ limit: "4mb" }));
+app.use(express.json({ limit: MAX_JSON_BYTES }));
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// The API is only reachable from nginx (internal Docker network), so the
+// X-Forwarded-For header from nginx is trustworthy for per-IP limiting.
+app.set("trust proxy", 1);
+
+// General limit: 300 requests per 15 minutes per IP
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests — please try again later." }
+});
+
+// Tighter limit for bulk-export endpoints (10 per 15 minutes per IP)
+const exportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Export rate limit exceeded — please try again later." }
+});
+
+app.use(generalLimiter);
 
 /* ── Routes ─────────────────────────────────────────────────────────────── */
 
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", sso: SSO_ENABLED, ts: Date.now() });
+  try {
+    db.prepare("SELECT 1").get();
+    res.json({ status: "ok", db: "ok", sso: SSO_ENABLED, ts: Date.now() });
+  } catch (err) {
+    console.error("[AESCSF API] Health check — DB error:", err.message);
+    res.status(503).json({ status: "error", db: "unavailable", sso: SSO_ENABLED });
+  }
 });
 
 app.get("/api/me", requireAuth, autoRegister, (req, res) => {
@@ -694,7 +730,7 @@ app.get("/api/audit", requireAuth, autoRegister, (req, res) => {
  * Downloads the full audit log as a CSV file.
  * Admin: all entries. User: only their own entries.
  */
-app.get("/api/audit/export", requireAuth, autoRegister, (req, res) => {
+app.get("/api/audit/export", exportLimiter, requireAuth, autoRegister, (req, res) => {
   const isAdmin = req.dbUser.role === "admin";
   const filters = {
     userOid:    isAdmin ? null : req.user.oid,
@@ -849,10 +885,28 @@ app.delete("/api/files/:id", requireAuth, autoRegister, (req, res) => {
 });
 
 /* ── Start ───────────────────────────────────────────────────────────────── */
-app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`[AESCSF API] Listening on port ${PORT}`);
   console.log(`[AESCSF API] SSO: ${SSO_ENABLED ? "EntraID (oauth2-proxy)" : "DISABLED"}`);
   console.log(`[AESCSF API] Admin OIDs: ${ADMIN_OIDS.length ? ADMIN_OIDS.join(", ") : "(first user will become admin)"}`);
   console.log(`[AESCSF API] DB:      ${path.join(DATA_DIR, "aescsf.db")}`);
   console.log(`[AESCSF API] Uploads: ${UPLOAD_DIR}`);
 });
+
+/* ── Graceful shutdown ───────────────────────────────────────────────────── */
+function shutdown(signal) {
+  console.log(`[AESCSF API] ${signal} received — shutting down gracefully`);
+  server.close(() => {
+    db.close();
+    console.log("[AESCSF API] DB closed. Exiting.");
+    process.exit(0);
+  });
+  // Force exit if connections don't drain within 10 s
+  setTimeout(() => {
+    console.warn("[AESCSF API] Forced exit after 10 s shutdown timeout");
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT",  () => shutdown("SIGINT"));

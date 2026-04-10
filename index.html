@@ -243,6 +243,21 @@
       transform: translateY(0);
     }
 
+    button:focus-visible,
+    .button-like:focus-visible,
+    a:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    button:disabled,
+    button[disabled] {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
     button,
     .button-like:not(.secondary):not(.ghost):not(.page-tab) {
       color: #fff;
@@ -2076,22 +2091,22 @@
           <div class="grid-2">
             <div class="field">
               <label>Evidence</label>
-              <textarea data-field="evidence" placeholder="Record the evidence demonstrating implementation, such as policy names, screenshots, ticket references, system settings, reports, or interview notes.">${escapeHtml(a.evidence)}</textarea>
+              <textarea data-field="evidence" maxlength="4000" placeholder="Record the evidence demonstrating implementation, such as policy names, screenshots, ticket references, system settings, reports, or interview notes.">${escapeHtml(a.evidence)}</textarea>
             </div>
             <div class="field">
               <label>Gap / Remediation</label>
-              <textarea data-field="gap" placeholder="Describe any implementation gap, control weakness, or remediation action.">${escapeHtml(a.gap)}</textarea>
+              <textarea data-field="gap" maxlength="4000" placeholder="Describe any implementation gap, control weakness, or remediation action.">${escapeHtml(a.gap)}</textarea>
             </div>
           </div>
 
           <div class="grid-2">
             <div class="field">
               <label>Notes</label>
-              <textarea data-field="notes" placeholder="Add assessment notes, assumptions, caveats, or references.">${escapeHtml(a.notes)}</textarea>
+              <textarea data-field="notes" maxlength="4000" placeholder="Add assessment notes, assumptions, caveats, or references.">${escapeHtml(a.notes)}</textarea>
             </div>
             <div class="field">
               <label>Evidence Attachment Links</label>
-              <textarea data-field="attachments" placeholder="Enter one URL, file path, SharePoint link, ticket reference, or document reference per line.">${escapeHtml(a.attachments)}</textarea>
+              <textarea data-field="attachments" maxlength="4000" placeholder="Enter one URL, file path, SharePoint link, ticket reference, or document reference per line.">${escapeHtml(a.attachments)}</textarea>
               <div class="attachment-preview">${renderAttachmentPreview(a.attachments)}</div>
             </div>
           </div>
@@ -3786,6 +3801,13 @@ function buildPdfDomainRows(rows) {
       });
     }
 
+    function showFileError(practiceId, message) {
+      const container = document.getElementById(`files-${practiceId}`);
+      if (container) {
+        container.innerHTML = `<div style="color:var(--danger);font-size:.78rem;padding:4px 0;">${escapeHtml(message)}</div>`;
+      }
+    }
+
     async function uploadFile(practiceId, file) {
       const container = document.getElementById(`files-${practiceId}`);
       const dropZone  = document.querySelector(`.file-drop-zone[data-practice-id="${CSS.escape(practiceId)}"]`);
@@ -3802,12 +3824,12 @@ function buildPdfDomainRows(rows) {
         });
         const json = await resp.json();
         if (!resp.ok) {
-          alert(`Upload failed: ${json.error || resp.status}`);
+          showFileError(practiceId, `Upload failed: ${json.error || resp.status}`);
           return;
         }
         await loadFilesForPractice(practiceId);
       } catch (err) {
-        alert(`Upload error: ${err.message}`);
+        showFileError(practiceId, `Upload error: ${err.message}`);
       } finally {
         if (dropZone) dropZone.innerHTML = `<input type="file" id="fileInput-${escapeHtml(practiceId)}" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.docx,.xlsx,.pptx,.doc,.xls" onchange="handleFileInputChange(event,'${escapeHtml(practiceId)}')">Click to upload or drag &amp; drop — PDF, images, Word, Excel, CSV (max 20 MB)`;
       }
@@ -3835,10 +3857,14 @@ function buildPdfDomainRows(rows) {
         const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/files/${fileId}`, {
           method: "DELETE", credentials: "same-origin"
         });
-        if (!resp.ok) { const j = await resp.json(); alert(`Delete failed: ${j.error || resp.status}`); return; }
+        if (!resp.ok) {
+          const j = await resp.json();
+          showFileError(practiceId, `Delete failed: ${j.error || resp.status}`);
+          return;
+        }
         await loadFilesForPractice(practiceId);
       } catch (err) {
-        alert(`Delete error: ${err.message}`);
+        showFileError(practiceId, `Delete error: ${err.message}`);
       }
     }
   </script>

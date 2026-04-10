@@ -4,7 +4,10 @@ FROM nginx:1.27-alpine
 RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy our config (build context is the repo root)
-COPY nginx/nginx.conf /etc/nginx/conf.d/app.conf
+COPY nginx/nginx.conf      /etc/nginx/conf.d/app.conf
+# Rate-limit zones must be at the http context level; conf.d/ files are
+# auto-included inside nginx's http block by the default nginx.conf.
+COPY nginx/rate-limit.conf /etc/nginx/conf.d/rate-limit.conf
 
 # Copy the static app and login page
 COPY index.html               /usr/share/nginx/html/index.html

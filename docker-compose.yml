@@ -34,9 +34,22 @@ services:
       AESCSF_STORAGE_MODE: "${AESCSF_STORAGE_MODE:-api}"
       AESCSF_TENANT_ID:    "${AESCSF_TENANT_ID}"
     depends_on:
-      - api
-      - oauth2-proxy
+      api:
+        condition: service_healthy
+      oauth2-proxy:
+        condition: service_started
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/login || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
 
   # ── oauth2-proxy — internal auth validator only ───────────────────────────
   # Handles the Azure/Entra ID OAuth flow (/oauth2/*) and validates session
@@ -91,8 +104,17 @@ services:
       OAUTH2_PROXY_SCOPE:                "openid email profile"
 
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
 
   # ── API — Express + SQLite, identity via proxy headers ────────────────────
+  # Body size limits (three-tier):
+  #   nginx:   client_max_body_size 25m  (outer gate — allows file uploads up to 25 MB)
+  #   multer:  MAX_FILE_BYTES = 20 MB    (per-file limit enforced in server.js)
+  #   express: json limit = 4 MB         (assessment JSON; much smaller than file uploads)
   api:
     build:
       context: server
@@ -108,6 +130,17 @@ services:
     volumes:
       - aescsf_data:/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
 
 volumes:
   aescsf_data:
