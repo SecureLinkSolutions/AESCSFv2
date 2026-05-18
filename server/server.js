@@ -32,6 +32,7 @@ const express   = require("express");
 const helmet    = require("helmet");
 const cors      = require("cors");
 const rateLimit = require("express-rate-limit");
+const morgan    = require("morgan");
 const Database  = require("better-sqlite3");
 const multer    = require("multer");
 const path      = require("path");
@@ -483,6 +484,7 @@ function listFilesForPractice(practiceId, userOid, isAdmin) {
 /* ── Express app ─────────────────────────────────────────────────────────── */
 const app = express();
 
+app.use(morgan("combined"));
 app.use(helmet({ contentSecurityPolicy: false })); // CSP set by nginx instead
 app.use(cors({
   origin:  process.env.ALLOWED_ORIGIN || false,

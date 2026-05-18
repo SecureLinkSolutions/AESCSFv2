@@ -2043,8 +2043,6 @@
         `;
       }).join("");
 
-      bindObjectiveToggles();
-      bindAssessmentInputs();
       updateSummary();
       renderTimeline();
     }
@@ -2769,9 +2767,18 @@ function buildPdfDomainRows(rows) {
 
 
 
-    function bindObjectiveToggles() {
-      document.querySelectorAll("[data-toggle-objective]").forEach(header => {
-        header.addEventListener("click", () => {
+    function setupDelegatedListeners() {
+      const app = document.getElementById("app");
+      if (!app) return;
+
+      const isTextLike = el =>
+        el.tagName === "TEXTAREA" ||
+        (el.tagName === "INPUT" && (el.type === "text" || el.type === ""));
+
+      app.addEventListener("click", e => {
+        /* Objective section toggle */
+        const header = e.target.closest("[data-toggle-objective]");
+        if (header) {
           const objective = header.parentElement;
           const key = objective.dataset.objectiveKey;
           objective.classList.toggle("open");
@@ -2789,82 +2796,80 @@ function buildPdfDomainRows(rows) {
               }
             });
           }
-        });
-      });
-    }
+          return;
+        }
 
-    function bindAssessmentInputs() {
-      document.querySelectorAll(".practice-card").forEach(card => {
+        /* Save button — commits all buffered text-field changes at once */
+        const saveBtn = e.target.closest(".practice-save-btn");
+        if (saveBtn) {
+          saveState();
+          renderDashboard();
+          renderTimeline();
+          saveBtn.textContent = "Saved \u2713";
+          saveBtn.className = "practice-save-btn saved";
+          setTimeout(() => { saveBtn.style.display = "none"; saveBtn.textContent = "Save changes"; saveBtn.className = "practice-save-btn"; }, 1600);
+        }
+      });
+
+      app.addEventListener("input", e => {
+        const input = e.target.closest("[data-field]");
+        if (!input) return;
+        const card = input.closest(".practice-card");
+        if (!card) return;
         const practiceId = card.dataset.practiceId;
         const saveBtn = card.querySelector(".practice-save-btn");
-
-        /* Text-like inputs buffer changes locally; Save button commits them. */
-        const isTextLike = el =>
-          el.tagName === "TEXTAREA" ||
-          (el.tagName === "INPUT" && (el.type === "text" || el.type === ""));
+        const field = input.dataset.field;
+        if (!state.assessments[practiceId]) return;
+        state.assessments[practiceId][field] = input.value;
 
         function markDirty() {
           if (saveBtn) { saveBtn.style.display = "inline-flex"; saveBtn.textContent = "Save changes"; saveBtn.className = "practice-save-btn"; }
         }
 
-        card.querySelectorAll("[data-field]").forEach(input => {
-          input.addEventListener("input", () => {
-            const field = input.dataset.field;
-            state.assessments[practiceId][field] = input.value;
-
-            if (field === "status") {
-              /* Status is a deliberate click — save immediately */
-              input.className = `status-select ${statusClass(input.value)}`;
-              card.className = `practice-card ${statusClass(input.value)}`;
-              updateSummary();
-              saveState();
-              renderDashboard();
-            } else if (field === "attachments") {
-              /* Update attachment preview live, but wait for Save */
-              const preview = input.parentElement.querySelector(".attachment-preview");
-              if (preview) preview.innerHTML = renderAttachmentPreview(input.value);
-              markDirty();
-            } else if (isTextLike(input)) {
-              /* All other text / textarea fields: mark dirty, defer save */
-              markDirty();
-            } else {
-              /* Date pickers and other non-text inputs: save immediately */
-              saveState();
-              renderDashboard();
-            }
-          });
-
-          input.addEventListener("change", () => {
-            const field = input.dataset.field;
-            state.assessments[practiceId][field] = input.value;
-            if (field === "status") {
-              input.className = `status-select ${statusClass(input.value)}`;
-              card.className = `practice-card ${statusClass(input.value)}`;
-              render(); /* full re-render updates card colour */
-            } else if (!isTextLike(input)) {
-              /* Date or other non-text fields: save on change */
-              saveState();
-              renderDashboard();
-              renderTimeline();
-            }
-            /* Text fields: handled by input event above */
-          });
-        });
-
-        /* Save button — commits all buffered text-field changes at once */
-        if (saveBtn) {
-          saveBtn.addEventListener("click", () => {
-            saveState();
-            renderDashboard();
-            renderTimeline();
-            saveBtn.textContent = "Saved \u2713";
-            saveBtn.className = "practice-save-btn saved";
-            setTimeout(() => { saveBtn.style.display = "none"; saveBtn.textContent = "Save changes"; saveBtn.className = "practice-save-btn"; }, 1600);
-          });
+        if (field === "status") {
+          /* Status is a deliberate click — save immediately */
+          input.className = `status-select ${statusClass(input.value)}`;
+          card.className = `practice-card ${statusClass(input.value)}`;
+          updateSummary();
+          saveState();
+          renderDashboard();
+        } else if (field === "attachments") {
+          /* Update attachment preview live, but wait for Save */
+          const preview = input.parentElement.querySelector(".attachment-preview");
+          if (preview) preview.innerHTML = renderAttachmentPreview(input.value);
+          markDirty();
+        } else if (isTextLike(input)) {
+          /* All other text / textarea fields: mark dirty, defer save */
+          markDirty();
+        } else {
+          /* Date pickers and other non-text inputs: save immediately */
+          saveState();
+          renderDashboard();
         }
       });
-    }
 
+      app.addEventListener("change", e => {
+        const input = e.target.closest("[data-field]");
+        if (!input) return;
+        const card = input.closest(".practice-card");
+        if (!card) return;
+        const practiceId = card.dataset.practiceId;
+        const field = input.dataset.field;
+        if (!state.assessments[practiceId]) return;
+        state.assessments[practiceId][field] = input.value;
+
+        if (field === "status") {
+          input.className = `status-select ${statusClass(input.value)}`;
+          card.className = `practice-card ${statusClass(input.value)}`;
+        } else if (!isTextLike(input)) {
+          /* Date or other non-text fields: save on change */
+          saveState();
+          renderDashboard();
+          renderTimeline();
+        }
+        /* Text fields: handled by input event above */
+      });
+    }
     function downloadBlob(blob, filename) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -3475,6 +3480,7 @@ function buildPdfDomainRows(rows) {
     }
 
     populateDomains();
+    setupDelegatedListeners();
     render();
     renderDashboard();
     setActivePage("dashboard");
