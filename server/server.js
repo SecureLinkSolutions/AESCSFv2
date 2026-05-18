@@ -51,7 +51,9 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB per file (multer limit)
 // and are gated by MAX_FILE_BYTES above. nginx's client_max_body_size (25m) is
 // the outermost gate — see docker-compose.yml api service comment for details.
 const MAX_JSON_BYTES = "4mb";
-const MAX_AUDIT_VALUE_LEN = 4000; // truncate long field values in audit log
+const MAX_AUDIT_VALUE_LEN    = 4000; // truncate long field values in audit log
+// Set to 0 to keep audit logs forever.
+const AUDIT_RETENTION_DAYS   = parseInt(process.env.AESCSF_AUDIT_RETENTION_DAYS || "365", 10);
 
 /** Fields recorded in the audit log whenever an assessment is saved. */
 const AUDITED_FIELDS = [
@@ -481,6 +483,25 @@ function listFilesForPractice(practiceId, userOid, isAdmin) {
     : db.prepare(sql).all(practiceId, userOid);
 }
 
+/* ── Audit log retention ─────────────────────────────────────────────────── */
+const stmtPurgeAudit = AUDIT_RETENTION_DAYS > 0
+  ? db.prepare("DELETE FROM audit_log WHERE created_at < unixepoch() - ?")
+  : null;
+
+function purgeAuditLog() {
+  if (!stmtPurgeAudit) return { deleted: 0, retentionDays: 0 };
+  const cutoffSeconds = AUDIT_RETENTION_DAYS * 86400;
+  const { changes } = stmtPurgeAudit.run(cutoffSeconds);
+  if (changes > 0) {
+    console.log(`[AESCSF] Audit log purge: removed ${changes} entr${changes === 1 ? "y" : "ies"} older than ${AUDIT_RETENTION_DAYS} days`);
+  }
+  return { deleted: changes, retentionDays: AUDIT_RETENTION_DAYS };
+}
+
+// Purge on startup, then once every 24 hours.
+purgeAuditLog();
+setInterval(purgeAuditLog, 24 * 60 * 60 * 1000).unref();
+
 /* ── Express app ─────────────────────────────────────────────────────────── */
 const app = express();
 
@@ -811,6 +832,24 @@ app.get("/api/audit/practice/:id", requireAuth, autoRegister, (req, res) => {
   } catch (err) {
     console.error("[AESCSF API] Audit practice query error:", err);
     res.status(500).json({ error: "Failed to query practice history" });
+  }
+});
+
+/**
+ * DELETE /api/audit/purge
+ * Admin-only: immediately purge audit entries older than AUDIT_RETENTION_DAYS.
+ * Returns { deleted, retentionDays }.
+ */
+app.delete("/api/audit/purge", requireAuth, requireAdmin, (req, res) => {
+  if (!stmtPurgeAudit) {
+    return res.json({ deleted: 0, retentionDays: 0, message: "Retention is disabled (AESCSF_AUDIT_RETENTION_DAYS=0)" });
+  }
+  try {
+    const result = purgeAuditLog();
+    res.json(result);
+  } catch (err) {
+    console.error("[AESCSF API] Audit purge error:", err);
+    res.status(500).json({ error: "Purge failed" });
   }
 });
 

@@ -1514,6 +1514,7 @@
               Export CSV
             </a>
             <button class="secondary" id="auditRefreshBtn">Refresh</button>
+            <button class="secondary" id="auditPurgeBtn" style="display:none;color:var(--danger);border-color:var(--danger);">Purge old entries</button>
           </div>
         </div>
 
@@ -3457,6 +3458,10 @@ function buildPdfDomainRows(rows) {
       const adminTab = document.getElementById("adminPageTab");
       if (adminTab) adminTab.style.display = me.role === "admin" ? "" : "none";
 
+      /* Show audit purge button for admins in API mode */
+      const purgeBtn = document.getElementById("auditPurgeBtn");
+      if (purgeBtn) purgeBtn.style.display = (me.role === "admin" && APP_CONFIG.storageMode === "api") ? "" : "none";
+
       /* Show snapshot UI only in API mode */
       const snapshotEls = [
         document.getElementById("saveSnapshotBtn"),
@@ -3715,6 +3720,27 @@ function buildPdfDomainRows(rows) {
 
     document.getElementById("auditRefreshBtn")?.addEventListener("click", renderAuditLog);
     document.getElementById("auditSearchBtn")?.addEventListener("click", renderAuditLog);
+    document.getElementById("auditPurgeBtn")?.addEventListener("click", async () => {
+      const btn = document.getElementById("auditPurgeBtn");
+      if (!confirm("Purge audit log entries older than the configured retention period?\n\nThis cannot be undone.")) return;
+      btn.disabled = true;
+      btn.textContent = "Purging…";
+      try {
+        const resp = await adminFetch("/audit/purge", { method: "DELETE" });
+        const data = await resp.json();
+        if (!resp.ok) { alert(`Purge failed: ${data.error || resp.status}`); return; }
+        const msg = data.retentionDays === 0
+          ? data.message
+          : `Purged ${data.deleted} entr${data.deleted === 1 ? "y" : "ies"} older than ${data.retentionDays} days.`;
+        alert(msg);
+        renderAuditLog();
+      } catch (err) {
+        alert(`Purge error: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Purge old entries";
+      }
+    });
 
     /* ═══════════════════════════════════════════════════════════════════
        PRACTICE CHANGE HISTORY MODAL

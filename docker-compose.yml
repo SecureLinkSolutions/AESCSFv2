@@ -120,11 +120,12 @@ services:
     expose:
       - "3000"
     environment:
-      AESCSF_SSO_ENABLED: "true"
-      AESCSF_ADMIN_OIDS:  "${AESCSF_ADMIN_OIDS}"
-      ALLOWED_ORIGIN:     "${ALLOWED_ORIGIN}"
-      PORT:               "3000"
-      DATA_DIR:           "/data"
+      AESCSF_SSO_ENABLED:          "true"
+      AESCSF_ADMIN_OIDS:           "${AESCSF_ADMIN_OIDS}"
+      AESCSF_AUDIT_RETENTION_DAYS: "${AESCSF_AUDIT_RETENTION_DAYS:-365}"
+      ALLOWED_ORIGIN:              "${ALLOWED_ORIGIN}"
+      PORT:                        "3000"
+      DATA_DIR:                    "/data"
     volumes:
       - aescsf_data:/data
     restart: unless-stopped
