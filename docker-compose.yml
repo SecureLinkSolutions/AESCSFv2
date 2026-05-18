@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ── AESCSF v2 Evidence Tracker — on-prem stack ───────────────────────────────
 #
 # Authentication is handled by oauth2-proxy in auth_request mode.
