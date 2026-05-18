@@ -3686,7 +3686,7 @@ function buildPdfDomainRows(rows) {
                   <tr>
                     <td style="white-space:nowrap;">${new Date(r.created_at * 1000).toLocaleString("en-AU")}</td>
                     <td style="white-space:nowrap;" title="${escapeHtml(r.username)}">${escapeHtml(r.display_name || r.username)}</td>
-                    <td style="white-space:nowrap;font-weight:600;">${escapeHtml(r.practice_id)}</td>
+                    <td style="white-space:nowrap;font-weight:600;">${r.practice_id.startsWith("USER:") ? `<span style="background:rgba(239,68,68,.08);color:#b91c1c;border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:1px 7px;font-size:.75rem;font-weight:700;">Admin</span> ${escapeHtml(r.practice_id.slice(5))}` : escapeHtml(r.practice_id)}</td>
                     <td><span class="audit-field-badge">${escapeHtml(r.field)}</span></td>
                     <td class="wrap audit-value-old">${escapeHtml(r.old_value || "—")}</td>
                     <td class="wrap audit-value-new">${escapeHtml(r.new_value || "—")}</td>

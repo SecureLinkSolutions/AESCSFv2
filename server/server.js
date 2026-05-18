@@ -619,7 +619,23 @@ app.put("/api/admin/users/:oid/role", requireAuth, autoRegister, requireAdmin, (
   const target = stmtGetUser.get(req.params.oid);
   if (!target) return res.status(404).json({ error: "User not found" });
 
+  const oldRole = target.role;
   stmtSetRole.run(role, req.params.oid);
+
+  try {
+    stmtInsertAudit.run(
+      req.user.oid,
+      req.user.username,
+      req.dbUser.display_name,
+      `USER:${target.username || target.oid}`,
+      "role",
+      oldRole,
+      role
+    );
+  } catch (auditErr) {
+    console.error("[AESCSF API] Admin audit log error (non-fatal):", auditErr);
+  }
+
   res.json({ updated: true, oid: req.params.oid, role });
 });
 
@@ -631,6 +647,8 @@ app.put("/api/admin/users/:oid/assignments", requireAuth, autoRegister, requireA
   const target = stmtGetUser.get(req.params.oid);
   if (!target) return res.status(404).json({ error: "User not found" });
 
+  const oldDomains = getUserAssignments(req.params.oid);
+
   const setAssignments = db.transaction((oid, domainList, byOid) => {
     stmtDeleteAssignments.run(oid);
     for (const domain of domainList) {
@@ -640,6 +658,25 @@ app.put("/api/admin/users/:oid/assignments", requireAuth, autoRegister, requireA
 
   try {
     setAssignments(req.params.oid, domains, req.user.oid);
+
+    const oldVal = oldDomains.slice().sort().join(", ") || "(none)";
+    const newVal = domains.map(d => d.toUpperCase()).sort().join(", ") || "(none)";
+    if (oldVal !== newVal) {
+      try {
+        stmtInsertAudit.run(
+          req.user.oid,
+          req.user.username,
+          req.dbUser.display_name,
+          `USER:${target.username || target.oid}`,
+          "domain_assignments",
+          oldVal,
+          newVal
+        );
+      } catch (auditErr) {
+        console.error("[AESCSF API] Admin audit log error (non-fatal):", auditErr);
+      }
+    }
+
     res.json({ updated: true, oid: req.params.oid, domains });
   } catch (err) {
     console.error("[AESCSF API] Assignment update error:", err);
