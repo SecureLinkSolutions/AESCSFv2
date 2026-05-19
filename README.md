@@ -27,11 +27,11 @@ A web application for organisations implementing and assessing against the **Aus
 | Assessment tracking | 150+ AESCSF v2 practices across 11 domains with MIL-1/2/3 and anti-practice statuses |
 | Save button per practice | Changes to evidence, notes, and owner fields are buffered locally and written to the database only on explicit Save — preventing audit log spam from every keystroke |
 | Evidence management | Evidence text, attachment links, owner, target dates, last reviewed |
-| File attachments | Upload files (up to 25 MB each) against individual practices; stored in the SQLite-backed volume |
+| File attachments | Upload files (up to 20 MB each) against individual practices; stored in the SQLite-backed volume |
 | Dashboard | Executive summary, domain maturity radar chart, completion and gap metrics |
 | Remediation timeline | Chronological view of target dates with overdue indicators |
 | Year-on-year comparison | Save named snapshots to the database; select any two to compare domain scores, status distribution, gap delta, and a full practice change register |
-| Audit log | Immutable per-field change log — who changed what value on which practice and when; exportable as CSV |
+| Audit log | Immutable per-field change log — who changed what value on which practice and when; exportable as CSV; configurable automatic retention and admin purge |
 | PDF report | Full assessment report with radar charts, domain summary, and gap register |
 | AEMO CSV export | Practice status in the AEMO-required CSV template format |
 | Gap register export | Filtered CSV of open gaps and remediation actions |
@@ -117,17 +117,22 @@ AESCSFv2/
 │                           by nginx/entrypoint.sh
 ├── docker-compose.yml      On-prem stack: nginx + oauth2-proxy + api
 ├── .env.example            Configuration reference (copy to .env)
+├── .gitignore              Excludes node_modules, .env, data/, *.db
+├── .dockerignore           Excludes .env, .git, data/, node_modules from images
 │
 ├── nginx/
 │   ├── Dockerfile          nginx:alpine image
-│   ├── nginx.conf          auth_request wiring, SPA routing, /api proxy
+│   ├── nginx.conf          auth_request wiring, SPA routing, /api proxy, CSP headers
+│   ├── rate-limit.conf     nginx rate-limit zones (included in http context)
 │   ├── login.html          Branded sign-in landing page
 │   └── entrypoint.sh       Generates /config.js from env vars at startup
 │
 └── server/
-    ├── server.js           Express API — auth, RBAC, assessment CRUD, audit, files
-    ├── package.json        Dependencies: express, better-sqlite3, helmet, cors, multer
-    └── Dockerfile          node:20-alpine image
+    ├── server.js           Express API — auth, RBAC, assessment CRUD, audit,
+    │                       files, rate limiting, HTTP logging, graceful shutdown
+    ├── package.json        Dependencies: express, better-sqlite3, helmet, cors,
+    │                       multer, morgan, express-rate-limit
+    └── Dockerfile          node:20-alpine image, non-root user (aescsf)
 ```
 
 ---
@@ -180,6 +185,10 @@ OAUTH2_PROXY_WHITELIST_DOMAINS=192.168.1.10
 # If blank, the first user to sign in becomes admin automatically.
 # AESCSF_ADMIN_OIDS=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
+# ── Audit log retention ───────────────────────────────────────
+# Days to keep audit log entries (0 = keep forever). Default: 365.
+AESCSF_AUDIT_RETENTION_DAYS=365
+
 # ── Storage and network ───────────────────────────────────────
 AESCSF_STORAGE_MODE=api
 HOST_BIND=192.168.1.10               # your server's internal NIC IP
@@ -199,7 +208,7 @@ docker compose up -d --build
 
 ```bash
 curl http://192.168.1.10/api/health
-# → {"status":"ok","sso":true,...}
+# → {"status":"ok","db":"ok"}
 ```
 
 Browse to `http://192.168.1.10` — you will land on the branded **AESCSF v2 Sign In** page. Click **Sign in with Microsoft** to complete the Entra ID OIDC flow and be redirected into the application.
@@ -207,6 +216,24 @@ Browse to `http://192.168.1.10` — you will land on the branded **AESCSF v2 Sig
 **4. First sign-in = first admin**
 
 The first user to sign in is automatically assigned the **Admin** role. They can then assign roles and domains to subsequent users via the **Admin** tab.
+
+### Rebuilding after updates
+
+After pulling changes or editing server-side code, rebuild all images and restart:
+
+```bash
+docker compose up -d --build
+```
+
+The SQLite data volume (`aescsf_data`) is not touched by a rebuild.
+
+### Viewing logs
+
+```bash
+docker compose logs -f api      # API access log (morgan) + app messages
+docker compose logs -f nginx    # nginx access and error log
+docker compose logs -f          # all services
+```
 
 ---
 
@@ -254,11 +281,13 @@ The **Admin** tab provides:
 - **Save assignments** — updates the user's domain scope immediately
 - **Load Merged View** — loads a read-only combined assessment from all users; a banner indicates merged mode with a **Restore my view** button
 
+All role and domain assignment changes are written to the audit log so they can be reviewed later.
+
 ### API endpoints
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/health` | None | Liveness probe |
+| `GET` | `/api/health` | None | Liveness probe — returns `{"status":"ok","db":"ok"}` |
 | `GET` | `/api/me` | User | Current user's profile, role, assigned domains |
 | `GET` | `/api/assessment` | User | Load own assessment data |
 | `PUT` | `/api/assessment` | User | Save own assessment (restricted to assigned domains for non-admins) |
@@ -271,8 +300,9 @@ The **Admin** tab provides:
 | `GET` | `/api/snapshots/:id` | User | Load full data for a specific snapshot |
 | `DELETE` | `/api/snapshots/:id` | User | Delete a snapshot (own snapshots only) |
 | `GET` | `/api/audit` | User | Paginated audit log (admins see all users; users see own) |
-| `GET` | `/api/audit/export` | User | Full audit log as CSV download |
+| `GET` | `/api/audit/export` | User | Full audit log as CSV download (rate-limited: 10/15 min) |
 | `GET` | `/api/audit/practice/:id` | User | Audit history for a specific practice |
+| `DELETE` | `/api/audit/purge` | Admin | Immediately purge entries older than `AESCSF_AUDIT_RETENTION_DAYS` |
 | `POST` | `/api/files/:practiceId` | User | Upload a file attachment for a practice |
 | `GET` | `/api/files/:practiceId` | User | List file attachments for a practice |
 | `GET` | `/api/files/:id/download` | User | Download a specific file |
@@ -290,8 +320,8 @@ All data is stored in a single SQLite file (`aescsf.db`) inside the `aescsf_data
 | `users` | One row per authenticated user — OID, tenant, username, display name, role (`admin`/`user`), created and last-seen timestamps. |
 | `assignments` | Many-to-many mapping of users to AESCSF domains. Controls which domains each User role can view and edit. |
 | `snapshots` | Named point-in-time copies of a user's assessment JSON. Used for year-on-year comparison. |
-| `audit_log` | One row per field change — records who (`user_oid`, `username`, `display_name`), what practice (`practice_id`), which field, the old value, the new value, and when. Written on every explicit Save. There is no automatic retention or purge policy; rows accumulate indefinitely. |
-| `files` | Metadata for uploaded file attachments — filename, stored name, MIME type, size, upload time. File content is stored on disk in `DATA_DIR`. |
+| `audit_log` | One row per field change — records who (`user_oid`, `username`, `display_name`), what practice (`practice_id`), which field, the old value, the new value, and when. Entries older than `AESCSF_AUDIT_RETENTION_DAYS` are purged automatically on startup and every 24 hours. Admins can also trigger an immediate purge from the Audit Log page. |
+| `files` | Metadata for uploaded file attachments — filename, stored name, MIME type, size, upload time. File content is stored on disk in `DATA_DIR/files/`. |
 
 ---
 
@@ -326,23 +356,39 @@ Clicking **Sign out** navigates to `/oauth2/sign_out`, which clears the `_aescsf
 
 - Role (`admin` / `user`) is stored server-side in SQLite and checked on every request — it cannot be elevated by the client.
 - Non-admin users who attempt to save practices outside their assigned domains have those entries **silently stripped** by the backend before persistence.
-- Admin-only endpoints (`/api/admin/*`) return `403` for any non-admin session regardless of what the client sends.
+- Admin-only endpoints (`/api/admin/*`, `DELETE /api/audit/purge`) return `403` for any non-admin session regardless of what the client sends.
+- All role and domain assignment changes made by admins are written to the audit log.
+
+### Rate limiting
+
+Two layers of rate limiting protect the stack:
+
+**Nginx** (`nginx/rate-limit.conf`) — applied at the OAuth2 login/callback flow:
+- `oauth2_login` zone: 10 requests/minute per IP with a burst of 5 (prevents automated login attempts against the Entra ID OIDC flow)
+
+**Express** (`express-rate-limit`) — applied to the API:
+- General: 300 requests per 15 minutes per IP (all endpoints)
+- Export: 10 requests per 15 minutes per IP (`GET /api/audit/export`)
 
 ### HTTP security headers (Nginx)
 
 | Header | Value |
 |---|---|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'` |
 | `X-Frame-Options` | `SAMEORIGIN` |
 | `X-Content-Type-Options` | `nosniff` |
 | `Referrer-Policy` | `strict-origin` |
 
-### Backend hardening (Express / Helmet)
+### Backend hardening (Express)
 
-- `helmet` is applied with default protections.
-- `express.json` body size is capped at `4 MB`; file uploads are capped at `25 MB` per file via `multer`.
+- `helmet` is applied with default protections (CSP is set by nginx instead).
+- Body size limits are enforced in three tiers: nginx caps the outer request at 25 MB (allows file uploads); multer caps individual file uploads at 20 MB; `express.json` caps JSON assessment payloads at 4 MB.
 - SQLite WAL mode and foreign-key constraints are enabled.
 - All SQL interactions use prepared statements — no string interpolation.
+- The API container runs as a non-root user (`aescsf`) inside the container.
 - The API container is not exposed on the host network; it is only reachable through nginx on the internal Docker network.
+- HTTP access logging is enabled via `morgan` (`combined` format) — all requests are written to stdout and captured by `docker compose logs`.
+- Graceful shutdown on `SIGTERM`/`SIGINT`: the server stops accepting new connections, drains in-flight requests, closes the SQLite database cleanly, then exits. A 10-second forced timeout ensures the container always terminates.
 
 ### Runtime configuration
 
