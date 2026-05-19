@@ -153,6 +153,15 @@ db.exec(`
     uploaded_at  INTEGER NOT NULL DEFAULT (unixepoch())
   );
   CREATE INDEX IF NOT EXISTS idx_files_practice ON files(user_oid, practice_id);
+  CREATE TABLE IF NOT EXISTS confidence_ratings (
+    practice_id  TEXT    NOT NULL,
+    tenant_id    TEXT    NOT NULL DEFAULT '',
+    rating       INTEGER NOT NULL DEFAULT 0,
+    notes        TEXT    NOT NULL DEFAULT '',
+    set_by_oid   TEXT    NOT NULL DEFAULT '',
+    updated_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+    PRIMARY KEY (practice_id, tenant_id)
+  );
 `);
 
 /* ── Prepared statements ─────────────────────────────────────────────────── */
@@ -235,6 +244,18 @@ const stmtGetFileById = db.prepare(
   "SELECT id, user_oid, practice_id, filename, stored_name, mime_type, size_bytes, uploaded_at FROM files WHERE id = ?"
 );
 const stmtDeleteFileRecord = db.prepare("DELETE FROM files WHERE id = ?");
+const stmtGetAllConfidence = db.prepare(
+  "SELECT practice_id, rating, notes, updated_at FROM confidence_ratings WHERE tenant_id = ?"
+);
+const stmtUpsertConfidence = db.prepare(`
+  INSERT INTO confidence_ratings (practice_id, tenant_id, rating, notes, set_by_oid, updated_at)
+  VALUES (?, ?, ?, ?, ?, unixepoch())
+  ON CONFLICT(practice_id, tenant_id) DO UPDATE SET
+    rating     = excluded.rating,
+    notes      = excluded.notes,
+    set_by_oid = excluded.set_by_oid,
+    updated_at = unixepoch()
+`);
 
 /* ── Multer — evidence file upload ──────────────────────────────────────── */
 const multerStorage = multer.diskStorage({
@@ -850,6 +871,73 @@ app.delete("/api/audit/purge", requireAuth, requireAdmin, (req, res) => {
   } catch (err) {
     console.error("[AESCSF API] Audit purge error:", err);
     res.status(500).json({ error: "Purge failed" });
+  }
+});
+
+/* ── Confidence rating routes ──────────────────────────────────────────────── */
+
+/**
+ * GET /api/admin/confidence
+ * Returns all confidence ratings for this tenant as { [practiceId]: { rating, notes, updatedAt } }.
+ * Admin only.
+ */
+app.get("/api/admin/confidence", requireAuth, autoRegister, requireAdmin, (req, res) => {
+  try {
+    const rows = stmtGetAllConfidence.all(req.user.tenant);
+    const result = {};
+    for (const row of rows) {
+      result[row.practice_id] = { rating: row.rating, notes: row.notes, updatedAt: row.updated_at };
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[AESCSF API] Confidence get error:", err);
+    res.status(500).json({ error: "Failed to load confidence ratings" });
+  }
+});
+
+/**
+ * PUT /api/admin/confidence/:practiceId
+ * Body: { rating: 0–5, notes?: string }
+ * Admin only. Writes to audit_log using the practice_id as the record key.
+ */
+app.put("/api/admin/confidence/:practiceId", requireAuth, autoRegister, requireAdmin, (req, res) => {
+  const { rating, notes = "" } = req.body;
+  if (typeof rating !== "number" || !Number.isInteger(rating) || rating < 0 || rating > 5) {
+    return res.status(400).json({ error: "rating must be an integer 0–5" });
+  }
+  if (typeof notes !== "string") {
+    return res.status(400).json({ error: "notes must be a string" });
+  }
+  const practiceId = req.params.practiceId;
+  try {
+    const existing = db.prepare(
+      "SELECT rating, notes FROM confidence_ratings WHERE practice_id = ? AND tenant_id = ?"
+    ).get(practiceId, req.user.tenant);
+
+    stmtUpsertConfidence.run(practiceId, req.user.tenant, rating, notes.slice(0, 2000), req.user.oid);
+
+    const oldRating = existing?.rating ?? null;
+    const oldNotes  = existing?.notes  ?? "";
+    if (oldRating !== rating) {
+      stmtInsertAudit.run(
+        req.user.oid, req.user.username, req.dbUser.display_name,
+        practiceId, "confidence_rating",
+        oldRating === null ? "" : String(oldRating),
+        String(rating)
+      );
+    }
+    if (notes !== oldNotes) {
+      stmtInsertAudit.run(
+        req.user.oid, req.user.username, req.dbUser.display_name,
+        practiceId, "confidence_notes",
+        oldNotes.slice(0, MAX_AUDIT_VALUE_LEN),
+        notes.slice(0, MAX_AUDIT_VALUE_LEN)
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[AESCSF API] Confidence set error:", err);
+    res.status(500).json({ error: "Failed to save confidence rating" });
   }
 });
 
