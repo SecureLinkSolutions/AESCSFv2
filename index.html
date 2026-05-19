@@ -1103,6 +1103,31 @@
     }
     .conf-notes-input:focus { outline: 2px solid #6d28d9; outline-offset: 1px; }
 
+    /* ── SP breakdown table (admin only) ──────────────────────────────────── */
+    .sp-breakdown-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .85rem;
+    }
+    .sp-breakdown-table th, .sp-breakdown-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .sp-breakdown-table th {
+      font-size: .78rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      background: var(--surface-muted);
+    }
+    .sp-breakdown-table tr:last-child td { border-bottom: none; }
+    .sp-breakdown-table tr:hover td { background: var(--surface-muted); }
+    .sp-score-pct { font-weight: 700; font-size: .92rem; }
+    .sp-score-detail { font-size: .73rem; color: var(--muted); margin-top: 1px; }
+
     /* ── History modal ──────────────────────────────────────────────── */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(15,23,42,.52);
@@ -1303,6 +1328,28 @@
             </div>
           </div>
           <div id="dashboardGapTable"></div>
+        </section>
+      </section>
+
+      <!-- Admin-only Security Profile breakdown -->
+      <section id="spBreakdownSection" class="dashboard-grid" style="display:none;">
+        <section class="dashboard-panel dashboard-panel-span">
+          <div class="panel-header">
+            <div>
+              <h3>Security Profile Maturity <span class="confidence-admin-badge" style="vertical-align:middle;margin-left:6px;">Admin Only</span></h3>
+              <div class="footer-note">Average maturity score by domain for each Security Profile — SP-1 (Foundational), SP-2 (Intermediate), SP-3 (Advanced) — overlaid on a single radar for direct comparison.</div>
+            </div>
+          </div>
+          <div class="chart-wrap" style="height:360px;"><canvas id="spBreakdownRadarChart"></canvas></div>
+        </section>
+        <section class="dashboard-panel dashboard-panel-span">
+          <div class="panel-header">
+            <div>
+              <h3>Domain × Security Profile Detail</h3>
+              <div class="footer-note">Completion rate (fully / total) and average score per domain at each Security Profile level.</div>
+            </div>
+          </div>
+          <div id="spBreakdownTable"></div>
         </section>
       </section>
     </div>
@@ -1847,6 +1894,7 @@
     const importFile = document.getElementById("importFile");
     let domainRadarChart = null;
     let milRadarChart = null;
+    let spBreakdownChart = null;
     let comparisonRadarChart = null;
     let comparisonStatusChart = null;
     let comparisonGapChart = null;
@@ -2454,6 +2502,77 @@
       return Number((totalScore / rows.length).toFixed(2));
     }
 
+    function renderSpBreakdown(Presentrics) {
+      const section = document.getElementById("spBreakdownSection");
+      if (!section || window.__AESCSF_RBAC__?.role !== "admin") return;
+
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const SPS = ["SP-1", "SP-2", "SP-3"];
+      const SP_COLORS = {
+        "SP-1": { bg: "rgba(21,94,239,.15)",  border: "rgba(21,94,239,.95)",  point: "rgba(21,94,239,1)"   },
+        "SP-2": { bg: "rgba(6,118,71,.13)",   border: "rgba(6,118,71,.9)",    point: "rgba(6,118,71,1)"    },
+        "SP-3": { bg: "rgba(109,40,217,.13)", border: "rgba(109,40,217,.85)", point: "rgba(109,40,217,1)"  }
+      };
+
+      if (window.Chart) {
+        if (spBreakdownChart) spBreakdownChart.destroy();
+        spBreakdownChart = new Chart(document.getElementById("spBreakdownRadarChart"), {
+          type: "radar",
+          data: {
+            labels: domains,
+            datasets: SPS.map(sp => ({
+              label: sp,
+              data: domains.map(domain => {
+                const rows = Presentrics.rows.filter(r => r.practice.domain === domain && r.practice.securityProfile === sp);
+                return rows.length ? averageScoreForGroup(rows) : 0;
+              }),
+              fill: true,
+              backgroundColor:    SP_COLORS[sp].bg,
+              borderColor:        SP_COLORS[sp].border,
+              pointBackgroundColor: SP_COLORS[sp].point,
+              borderWidth: 2
+            }))
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { r: { min: 0, max: 3, ticks: { stepSize: 1 } } },
+            plugins: { legend: { display: true, position: "bottom" } }
+          }
+        });
+      }
+
+      document.getElementById("spBreakdownTable").innerHTML = `
+        <table class="sp-breakdown-table">
+          <thead>
+            <tr>
+              <th>Domain</th>
+              <th>SP-1 &mdash; Foundational</th>
+              <th>SP-2 &mdash; Intermediate</th>
+              <th>SP-3 &mdash; Advanced</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${domains.map(domain => {
+              const cells = SPS.map(sp => {
+                const rows = Presentrics.rows.filter(r => r.practice.domain === domain && r.practice.securityProfile === sp);
+                if (!rows.length) return `<td><span style="color:var(--muted)">\u2014</span></td>`;
+                const fully = rows.filter(r => isCompletedStatus(r.assessment.status)).length;
+                const pct   = Math.round((fully / rows.length) * 100);
+                const score = averageScoreForGroup(rows);
+                const color = pct >= 80 ? "#16a34a" : pct >= 50 ? "#ca8a04" : "#dc2626";
+                return `<td>
+                  <div class="sp-score-pct" style="color:${color};">${pct}%</div>
+                  <div class="sp-score-detail">${fully} / ${rows.length} complete &middot; avg ${score} / 3</div>
+                  <div class="mini-bar" style="margin-top:4px;"><span style="width:${pct}%;background:${color};opacity:.8;"></span></div>
+                </td>`;
+              }).join("");
+              return `<tr><td><strong>${escapeHtml(domain)}</strong></td>${cells}</tr>`;
+            }).join("")}
+          </tbody>
+        </table>`;
+    }
+
     function renderDashboard() {
       const Presentrics = buildDashboardPresentrics();
       document.getElementById("dashTotal").textContent = Presentrics.total;
@@ -2590,6 +2709,7 @@
           }
         });
       }
+      renderSpBreakdown(Presentrics);
     }
 
     function exportGapRegister() {
@@ -3683,6 +3803,10 @@ function buildPdfDomainRows(rows) {
       /* Show audit purge button for admins in API mode */
       const purgeBtn = document.getElementById("auditPurgeBtn");
       if (purgeBtn) purgeBtn.style.display = (me.role === "admin" && APP_CONFIG.storageMode === "api") ? "" : "none";
+
+      /* Show admin-only SP breakdown section */
+      const spSection = document.getElementById("spBreakdownSection");
+      if (spSection) spSection.style.display = me.role === "admin" ? "" : "none";
 
       /* Show snapshot UI only in API mode */
       const snapshotEls = [
