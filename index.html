@@ -1015,6 +1015,94 @@
     .audit-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: .85rem; color: var(--muted); }
     .audit-empty { padding: 36px; text-align: center; color: var(--muted); font-size: .9rem; }
 
+    /* ── Confidence widget (admin only) ─────────────────────────────────────── */
+    .confidence-widget {
+      margin-top: 14px;
+      padding: 10px 14px 12px;
+      background: rgba(109,40,217,.05);
+      border: 1px solid rgba(109,40,217,.18);
+      border-radius: 10px;
+    }
+    .confidence-widget-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .confidence-admin-badge {
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: #6d28d9;
+      background: rgba(109,40,217,.12);
+      padding: 2px 7px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .confidence-widget-title {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--text-soft);
+      margin-right: 4px;
+    }
+    .conf-stars-row { display: flex; gap: 1px; }
+    .conf-star {
+      background: none;
+      border: none;
+      font-size: 1.25rem;
+      cursor: pointer;
+      padding: 1px 3px;
+      color: #d1d5db;
+      line-height: 1;
+      transition: color .12s, transform .1s;
+      border-radius: 4px;
+    }
+    .conf-star:hover { transform: scale(1.15); }
+    .conf-star.filled { color: #f59e0b; }
+    .conf-stars-row.conf-rating-1 .conf-star.filled { color: #ef4444; }
+    .conf-stars-row.conf-rating-2 .conf-star.filled { color: #f97316; }
+    .conf-stars-row.conf-rating-3 .conf-star.filled { color: #eab308; }
+    .conf-stars-row.conf-rating-4 .conf-star.filled { color: #84cc16; }
+    .conf-stars-row.conf-rating-5 .conf-star.filled { color: #22c55e; }
+    .confidence-level-badge {
+      font-size: .72rem;
+      font-weight: 600;
+      padding: 2px 9px;
+      border-radius: 20px;
+    }
+    .conf-rating-1.confidence-level-badge { background: rgba(239,68,68,.1);  color: #dc2626; }
+    .conf-rating-2.confidence-level-badge { background: rgba(249,115,22,.1); color: #ea580c; }
+    .conf-rating-3.confidence-level-badge { background: rgba(234,179,8,.1);  color: #ca8a04; }
+    .conf-rating-4.confidence-level-badge { background: rgba(132,204,22,.1); color: #65a30d; }
+    .conf-rating-5.confidence-level-badge { background: rgba(34,197,94,.1);  color: #16a34a; }
+    .conf-clear-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: .8rem;
+      padding: 2px 4px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    .conf-clear-btn:hover { color: var(--danger); }
+    .conf-notes-input {
+      margin-top: 8px;
+      width: 100%;
+      min-height: 48px;
+      font-size: .8rem;
+      resize: vertical;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+    }
+    .conf-notes-input:focus { outline: 2px solid #6d28d9; outline-offset: 1px; }
+
     /* ── History modal ──────────────────────────────────────────────── */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(15,23,42,.52);
@@ -2048,6 +2136,99 @@
       renderTimeline();
     }
 
+    /* ── Confidence rating helpers ──────────────────────────────────────────── */
+    function confidenceLabel(r) {
+      return ["", "Very Low", "Low", "Medium", "High", "Very High"][r] || "";
+    }
+    function confidenceRatingClass(r) {
+      return r > 0 ? `conf-rating-${r}` : "";
+    }
+    function renderConfidenceWidget(practiceId) {
+      const conf = (window.__AESCSF_CONFIDENCE__ || {})[practiceId] || { rating: 0, notes: "" };
+      const r = conf.rating || 0;
+      const pid = escapeHtml(practiceId);
+      const stars = [1,2,3,4,5].map(n =>
+        `<button type="button" class="conf-star${r >= n ? " filled" : ""}" data-confidence-star="${n}" data-pid="${pid}">${r >= n ? "★" : "☆"}</button>`
+      ).join("");
+      return `
+        <div class="confidence-widget">
+          <div class="confidence-widget-header">
+            <span class="confidence-admin-badge">Admin Only</span>
+            <span class="confidence-widget-title">Compliance Confidence</span>
+            <div class="conf-stars-row ${confidenceRatingClass(r)}" data-pid="${pid}">${stars}</div>
+            ${r > 0 ? `<span class="confidence-level-badge ${confidenceRatingClass(r)}">${confidenceLabel(r)}</span>` : ""}
+            ${r > 0 ? `<button type="button" class="conf-clear-btn" data-pid="${pid}" title="Clear rating">✕</button>` : ""}
+          </div>
+          <textarea class="conf-notes-input" data-pid="${pid}" placeholder="Confidence rationale (admin only, optional)…" maxlength="2000">${escapeHtml(conf.notes || "")}</textarea>
+        </div>`;
+    }
+    function updateConfidenceWidget(widget, rating, notes) {
+      const pid = widget.querySelector("[data-pid]")?.dataset.pid;
+      if (!window.__AESCSF_CONFIDENCE__) window.__AESCSF_CONFIDENCE__ = {};
+      if (pid) window.__AESCSF_CONFIDENCE__[pid] = { rating, notes };
+      const starsRow = widget.querySelector(".conf-stars-row");
+      if (starsRow) {
+        starsRow.className = `conf-stars-row ${confidenceRatingClass(rating)}`.trim();
+        starsRow.querySelectorAll("[data-confidence-star]").forEach(btn => {
+          const n = parseInt(btn.dataset.confidenceStar);
+          btn.className = `conf-star${rating >= n ? " filled" : ""}`;
+          btn.textContent = rating >= n ? "★" : "☆";
+        });
+      }
+      const header = widget.querySelector(".confidence-widget-header");
+      let badge    = widget.querySelector(".confidence-level-badge");
+      let clearBtn = widget.querySelector(".conf-clear-btn");
+      if (rating > 0) {
+        if (!badge) { badge = document.createElement("span"); header.appendChild(badge); }
+        badge.className   = `confidence-level-badge ${confidenceRatingClass(rating)}`;
+        badge.textContent = confidenceLabel(rating);
+        if (!clearBtn) {
+          clearBtn = document.createElement("button");
+          clearBtn.type = "button";
+          clearBtn.className = "conf-clear-btn";
+          if (pid) clearBtn.dataset.pid = pid;
+          clearBtn.title = "Clear rating";
+          clearBtn.textContent = "✕";
+          header.appendChild(clearBtn);
+        }
+      } else {
+        badge?.remove();
+        clearBtn?.remove();
+      }
+      const notesEl = widget.querySelector(".conf-notes-input");
+      if (notesEl && document.activeElement !== notesEl && notesEl.value !== (notes || "")) {
+        notesEl.value = notes || "";
+      }
+    }
+    async function saveConfidence(practiceId, rating, notes) {
+      if (!window.__AESCSF_CONFIDENCE__) window.__AESCSF_CONFIDENCE__ = {};
+      window.__AESCSF_CONFIDENCE__[practiceId] = { rating, notes };
+      try {
+        await adminFetch(`/admin/confidence/${encodeURIComponent(practiceId)}`, {
+          method: "PUT",
+          body: JSON.stringify({ rating, notes })
+        });
+      } catch (err) {
+        console.error("[AESCSF] Confidence save error:", err);
+      }
+    }
+    async function loadConfidenceRatings() {
+      if (window.__AESCSF_RBAC__?.role !== "admin" || APP_CONFIG.storageMode !== "api") return;
+      try {
+        const resp = await adminFetch("/admin/confidence");
+        if (!resp.ok) return;
+        window.__AESCSF_CONFIDENCE__ = await resp.json();
+        document.querySelectorAll(".confidence-widget").forEach(widget => {
+          const pid = widget.querySelector("[data-pid]")?.dataset.pid;
+          if (!pid) return;
+          const conf = (window.__AESCSF_CONFIDENCE__ || {})[pid] || { rating: 0, notes: "" };
+          updateConfidenceWidget(widget, conf.rating, conf.notes);
+        });
+      } catch (err) {
+        console.warn("[AESCSF] Could not load confidence ratings:", err);
+      }
+    }
+
     function renderPracticeCard(practice) {
       const a = state.assessments[practice.practiceId] || defaultAssessment();
       return `
@@ -2136,6 +2317,7 @@
             <button class="practice-save-btn">Save changes</button>
             <button class="file-history-btn" onclick="openHistoryModal('${escapeHtml(practice.practiceId)}')">&#128337; Change History</button>
           </div>`}
+          ${window.__AESCSF_RBAC__?.role === "admin" && APP_CONFIG.storageMode === "api" ? renderConfidenceWidget(practice.practiceId) : ""}
         </article>
       `;
     }
@@ -2810,6 +2992,31 @@ function buildPdfDomainRows(rows) {
           saveBtn.className = "practice-save-btn saved";
           setTimeout(() => { saveBtn.style.display = "none"; saveBtn.textContent = "Save changes"; saveBtn.className = "practice-save-btn"; }, 1600);
         }
+
+        /* Confidence star */
+        const confStar = e.target.closest("[data-confidence-star]");
+        if (confStar) {
+          const rating = parseInt(confStar.dataset.confidenceStar);
+          const pid    = confStar.dataset.pid;
+          const widget = confStar.closest(".confidence-widget");
+          const notes  = widget?.querySelector(".conf-notes-input")?.value || "";
+          const current = (window.__AESCSF_CONFIDENCE__ || {})[pid];
+          const newRating = current?.rating === rating ? 0 : rating;
+          updateConfidenceWidget(widget, newRating, notes);
+          saveConfidence(pid, newRating, notes);
+          return;
+        }
+
+        /* Confidence clear */
+        const confClear = e.target.closest(".conf-clear-btn");
+        if (confClear) {
+          const pid    = confClear.dataset.pid;
+          const widget = confClear.closest(".confidence-widget");
+          const notes  = widget?.querySelector(".conf-notes-input")?.value || "";
+          updateConfidenceWidget(widget, 0, notes);
+          saveConfidence(pid, 0, notes);
+          return;
+        }
       });
 
       app.addEventListener("input", e => {
@@ -2869,6 +3076,16 @@ function buildPdfDomainRows(rows) {
           renderTimeline();
         }
         /* Text fields: handled by input event above */
+      });
+
+      app.addEventListener("focusout", e => {
+        const notesEl = e.target.closest(".conf-notes-input");
+        if (!notesEl) return;
+        const pid  = notesEl.dataset.pid;
+        const conf = (window.__AESCSF_CONFIDENCE__ || {})[pid] || {};
+        if (notesEl.value !== (conf.notes || "")) {
+          saveConfidence(pid, conf.rating || 0, notesEl.value);
+        }
       });
     }
     function downloadBlob(blob, filename) {
@@ -3438,14 +3655,19 @@ function buildPdfDomainRows(rows) {
         showAuthErrorBar(0);
       }
 
-      /* Step 2: load assessment data from API */
+      /* Step 2: load assessment data and confidence ratings from API in parallel */
       try {
-        const remoteState = await storageAdapter.loadRemote();
+        const [remoteState] = await Promise.all([
+          storageAdapter.loadRemote(),
+          loadConfidenceRatings()
+        ]);
         if (remoteState) {
           state = remoteState;
           populateDomains(); /* re-run now that RBAC is known */
           render();
           renderDashboard();
+          /* Re-apply confidence data now that cards are rendered */
+          if (window.__AESCSF_RBAC__?.role === "admin") await loadConfidenceRatings();
         }
       } catch (err) {
         console.warn("[AESCSF] Could not load from API, using cached local state:", err);
