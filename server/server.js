@@ -861,7 +861,7 @@ app.get("/api/audit/practice/:id", requireAuth, autoRegister, (req, res) => {
  * Admin-only: immediately purge audit entries older than AUDIT_RETENTION_DAYS.
  * Returns { deleted, retentionDays }.
  */
-app.delete("/api/audit/purge", requireAuth, requireAdmin, (req, res) => {
+app.delete("/api/audit/purge", requireAuth, autoRegister, requireAdmin, (req, res) => {
   if (!stmtPurgeAudit) {
     return res.json({ deleted: 0, retentionDays: 0, message: "Retention is disabled (AESCSF_AUDIT_RETENTION_DAYS=0)" });
   }
