@@ -1245,12 +1245,12 @@
         <button class="ghost" id="resetBtn">Reset Assessment Data</button>
       </div>
       <div class="page-nav">
-        <button class="page-tab active" data-page-tab="dashboard">Dashboard</button>
-        <button class="page-tab" data-page-tab="assessment">Assessment</button>
+        <button class="page-tab" data-page-tab="dashboard" id="dashboardPageTab" style="display:none;">Dashboard</button>
+        <button class="page-tab active" data-page-tab="assessment">Assessment</button>
         <button class="page-tab" data-page-tab="timeline">Target Date Timeline</button>
-        <button class="page-tab" data-page-tab="comparison">Comparison</button>
+        <button class="page-tab" data-page-tab="comparison" id="comparisonPageTab" style="display:none;">Comparison</button>
         <button class="page-tab" data-page-tab="admin" id="adminPageTab" style="display:none;">Admin</button>
-        <button class="page-tab" data-page-tab="audit" id="auditPageTab">Audit Log</button>
+        <button class="page-tab" data-page-tab="audit" id="auditPageTab" style="display:none;">Audit Log</button>
       </div>
     </section>
 
@@ -1947,6 +1947,10 @@
     }
 
     function setActivePage(page) {
+      const ADMIN_ONLY_PAGES = new Set(["dashboard", "comparison", "admin", "audit"]);
+      if (ADMIN_ONLY_PAGES.has(page) && window.__AESCSF_RBAC__?.role !== "admin") {
+        page = "assessment";
+      }
       dashboardPage.classList.toggle("active", page === "dashboard");
       assessmentPage.classList.toggle("active", page === "assessment");
       timelinePage.classList.toggle("active", page === "timeline");
@@ -3831,9 +3835,21 @@ function buildPdfDomainRows(rows) {
     window.initializeFromApi = initializeFromApi;
 
     function applyRbacUI(me) {
-      /* Show/hide admin tab */
-      const adminTab = document.getElementById("adminPageTab");
-      if (adminTab) adminTab.style.display = me.role === "admin" ? "" : "none";
+      const isAdmin = me.role === "admin";
+      /* Show/hide admin-only tabs */
+      const adminOnlyTabs = ["dashboardPageTab", "comparisonPageTab", "adminPageTab", "auditPageTab"];
+      adminOnlyTabs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isAdmin ? "" : "none";
+      });
+      /* If a non-admin somehow lands on a restricted page, send them to assessment */
+      if (!isAdmin) {
+        const restricted = new Set(["dashboard", "comparison", "admin", "audit"]);
+        const activeTab = document.querySelector(".page-tab.active");
+        if (activeTab && restricted.has(activeTab.dataset.pageTab)) {
+          setActivePage("assessment");
+        }
+      }
 
       /* Show audit purge button for admins in API mode */
       const purgeBtn = document.getElementById("auditPurgeBtn");
@@ -3868,8 +3884,7 @@ function buildPdfDomainRows(rows) {
     populateDomains();
     setupDelegatedListeners();
     render();
-    renderDashboard();
-    setActivePage("dashboard");
+    setActivePage("assessment");
     initializeFromApi(); /* load user profile + remote state (oauth2-proxy session already established) */
 
     /* ── Admin panel ──────────────────────────────────────────────────────
