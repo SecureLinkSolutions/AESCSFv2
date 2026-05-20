@@ -153,6 +153,15 @@ db.exec(`
     uploaded_at  INTEGER NOT NULL DEFAULT (unixepoch())
   );
   CREATE INDEX IF NOT EXISTS idx_files_practice ON files(user_oid, practice_id);
+
+  CREATE TABLE IF NOT EXISTS objective_assignments (
+    user_oid     TEXT    NOT NULL REFERENCES users(oid) ON DELETE CASCADE,
+    objective_id TEXT    NOT NULL,
+    assigned_by  TEXT    NOT NULL DEFAULT '',
+    assigned_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    PRIMARY KEY (user_oid, objective_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_obj_assign_user ON objective_assignments(user_oid);
   CREATE TABLE IF NOT EXISTS confidence_ratings (
     practice_id  TEXT    NOT NULL,
     tenant_id    TEXT    NOT NULL DEFAULT '',
@@ -244,6 +253,18 @@ const stmtGetFileById = db.prepare(
   "SELECT id, user_oid, practice_id, filename, stored_name, mime_type, size_bytes, uploaded_at FROM files WHERE id = ?"
 );
 const stmtDeleteFileRecord = db.prepare("DELETE FROM files WHERE id = ?");
+const stmtGetObjectiveAssignments = db.prepare(
+  "SELECT objective_id FROM objective_assignments WHERE user_oid = ? ORDER BY objective_id"
+);
+const stmtGetAllObjectiveAssignments = db.prepare(
+  "SELECT user_oid, objective_id FROM objective_assignments ORDER BY user_oid, objective_id"
+);
+const stmtDeleteObjectiveAssignments = db.prepare(
+  "DELETE FROM objective_assignments WHERE user_oid = ?"
+);
+const stmtInsertObjectiveAssignment = db.prepare(
+  "INSERT OR REPLACE INTO objective_assignments (user_oid, objective_id, assigned_by, assigned_at) VALUES (?, ?, ?, unixepoch())"
+);
 const stmtGetAllConfidence = db.prepare(
   "SELECT practice_id, rating, notes, updated_at FROM confidence_ratings WHERE tenant_id = ?"
 );
@@ -362,6 +383,16 @@ function requireAdmin(req, res, next) {
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
+function practiceObjectiveId(practiceId) {
+  return practiceId
+    .replace(/-\d+$/, '')
+    .replace(/[a-z]$/, '');
+}
+
+function getUserObjectiveAssignments(oid) {
+  return stmtGetObjectiveAssignments.all(oid).map(r => r.objective_id);
+}
+
 function getUserAssignments(oid) {
   return stmtGetAssignments.all(oid).map(r => r.domain);
 }
@@ -573,13 +604,15 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/me", requireAuth, autoRegister, (req, res) => {
-  const domains = getUserAssignments(req.user.oid);
+  const domains    = getUserAssignments(req.user.oid);
+  const objectives = getUserObjectiveAssignments(req.user.oid);
   res.json({
     oid:         req.dbUser.oid,
     username:    req.dbUser.username,
     displayName: req.dbUser.display_name,
     role:        req.dbUser.role,
-    domains
+    domains,
+    objectives
   });
 });
 
@@ -602,12 +635,15 @@ app.put("/api/assessment", requireAuth, autoRegister, (req, res) => {
   let payload   = req.body;
 
   if (!isAdmin) {
-    const allowedDomains = new Set(getUserAssignments(req.user.oid));
-    if (allowedDomains.size > 0 && payload.assessments) {
+    const allowedDomains    = new Set(getUserAssignments(req.user.oid));
+    const allowedObjectives = new Set(getUserObjectiveAssignments(req.user.oid));
+    if ((allowedDomains.size > 0 || allowedObjectives.size > 0) && payload.assessments) {
       const filtered = {};
       for (const [practiceId, data] of Object.entries(payload.assessments)) {
-        const domain = practiceId.split("-")[0];
-        if (allowedDomains.has(domain)) filtered[practiceId] = data;
+        const pDomain    = practiceId.split("-")[0].toUpperCase();
+        const pObjective = practiceObjectiveId(practiceId);
+        if (!allowedDomains.has(pDomain) && !allowedObjectives.has(pObjective)) continue;
+        filtered[practiceId] = data;
       }
       payload = { ...payload, assessments: filtered };
     }
@@ -652,7 +688,17 @@ app.get("/api/admin/users", requireAuth, autoRegister, requireAdmin, (_req, res)
     assignmentsByOid[user_oid].push(domain);
   }
 
-  res.json(users.map(u => ({ ...u, domains: assignmentsByOid[u.oid] || [] })));
+  const allObjAssignments = stmtGetAllObjectiveAssignments.all();
+  const objectivesByOid = {};
+  for (const { user_oid, objective_id } of allObjAssignments) {
+    if (!objectivesByOid[user_oid]) objectivesByOid[user_oid] = [];
+    objectivesByOid[user_oid].push(objective_id);
+  }
+  res.json(users.map(u => ({
+    ...u,
+    domains:    assignmentsByOid[u.oid]  || [],
+    objectives: objectivesByOid[u.oid]   || []
+  })));
 });
 
 app.put("/api/admin/users/:oid/role", requireAuth, autoRegister, requireAdmin, (req, res) => {
@@ -871,6 +917,85 @@ app.delete("/api/audit/purge", requireAuth, autoRegister, requireAdmin, (req, re
   } catch (err) {
     console.error("[AESCSF API] Audit purge error:", err);
     res.status(500).json({ error: "Purge failed" });
+  }
+});
+
+/* ── Objective assignment routes ────────────────────────────────────────────────── */
+
+/**
+ * PUT /api/admin/users/:oid/objective-assignments
+ * Body: { objectives: ["ACCESS-1", "ARCHITECTURE-2", ...] }
+ * Admin only. Replaces the user's objective assignments atomically.
+ */
+app.put("/api/admin/users/:oid/objective-assignments", requireAuth, autoRegister, requireAdmin, (req, res) => {
+  const { objectives } = req.body || {};
+  if (!Array.isArray(objectives)) return res.status(400).json({ error: "objectives must be an array" });
+  const target = stmtGetUser.get(req.params.oid);
+  if (!target) return res.status(404).json({ error: "User not found" });
+
+  const oldObjectives = getUserObjectiveAssignments(req.params.oid).sort().join(",");
+  const setObjectives = db.transaction((oid, list, byOid) => {
+    stmtDeleteObjectiveAssignments.run(oid);
+    for (const obj of list) stmtInsertObjectiveAssignment.run(oid, obj, byOid);
+  });
+  setObjectives(req.params.oid, objectives, req.user.oid);
+
+  const newObjectives = objectives.slice().sort().join(",");
+  if (oldObjectives !== newObjectives) {
+    stmtInsertAudit.run(
+      req.user.oid, req.user.username, req.dbUser.display_name,
+      `USER:${target.username || target.oid}`, "objective_assignments",
+      oldObjectives, newObjectives
+    );
+  }
+  res.json({ updated: true, oid: req.params.oid, objectives });
+});
+
+/**
+ * GET /api/admin/responses
+ * Returns per-practice responses from all objective-assigned users.
+ * Shape: { [practiceId]: [{ user_oid, display_name, username, objective_id, assessment }] }
+ * Admin only.
+ */
+app.get("/api/admin/responses", requireAuth, autoRegister, requireAdmin, (req, res) => {
+  try {
+    const allObjAssignments = stmtGetAllObjectiveAssignments.all();
+    const objToUsers = {};
+    for (const { user_oid, objective_id } of allObjAssignments) {
+      if (!objToUsers[objective_id]) objToUsers[objective_id] = [];
+      objToUsers[objective_id].push(user_oid);
+    }
+
+    const allRows = stmtGetAllAssessments.all();
+    const assessmentsByOid = {};
+    for (const row of allRows) {
+      try { assessmentsByOid[row.user_oid] = JSON.parse(row.data)?.assessments || {}; } catch {}
+    }
+    const usersByOid = {};
+    for (const u of stmtGetAllUsers.all()) usersByOid[u.oid] = u;
+
+    const responses = {};
+    for (const [objectiveId, userOids] of Object.entries(objToUsers)) {
+      for (const userOid of userOids) {
+        const userAssessments = assessmentsByOid[userOid] || {};
+        const user = usersByOid[userOid];
+        for (const [practiceId, assessment] of Object.entries(userAssessments)) {
+          if (practiceObjectiveId(practiceId) !== objectiveId) continue;
+          if (!responses[practiceId]) responses[practiceId] = [];
+          responses[practiceId].push({
+            user_oid:     userOid,
+            display_name: user?.display_name || userOid,
+            username:     user?.username     || userOid,
+            objective_id: objectiveId,
+            assessment
+          });
+        }
+      }
+    }
+    res.json(responses);
+  } catch (err) {
+    console.error("[AESCSF API] Responses error:", err);
+    res.status(500).json({ error: "Failed to load responses" });
   }
 });
 

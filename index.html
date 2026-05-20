@@ -1103,6 +1103,18 @@
     }
     .conf-notes-input:focus { outline: 2px solid #6d28d9; outline-offset: 1px; }
 
+    /* ── Objective assignment accordion (admin) ──────────────────────────────── */
+    .obj-accordion { margin-top: 6px; }
+    .obj-domain-group { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
+    .obj-domain-summary {
+      padding: 7px 12px; cursor: pointer; font-weight: 600;
+      font-size: .83rem; list-style: none; user-select: none;
+      color: var(--text);
+    }
+    .obj-domain-summary::-webkit-details-marker { display: none; }
+    .obj-domain-group[open] .obj-domain-summary { border-bottom: 1px solid var(--border); }
+    .obj-domain-group .admin-domain-grid { padding: 8px 10px; }
+
     /* ── SP breakdown table (admin only) ──────────────────────────────────── */
     .sp-breakdown-table {
       width: 100%;
@@ -1624,6 +1636,10 @@
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path fill="#b54708" d="M12 2a10 10 0 1 1 0 20A10 10 0 0 1 12 2zm0 5v6m0 2v2"/></svg>
           Merged view loaded — showing combined data from all contributors. <button onclick="adminRestoreOwnView()" style="margin-left:auto;padding:4px 12px;background:transparent;border:1px solid rgba(181,71,8,.4);border-radius:8px;font-size:.8rem;font-weight:500;color:#b54708;cursor:pointer;">Restore my view</button>
         </div>
+      <div id="assignmentIncompleteBanner" class="merged-banner" style="display:none;background:rgba(234,179,8,.12);border-color:rgba(234,179,8,.4);">
+        <span id="assignmentIncompleteBannerMsg"></span>
+        <button class="secondary" onclick="document.getElementById('assignmentIncompleteBanner').style.display='none'" style="margin-left:auto;">Dismiss</button>
+      </div>
       </section>
 
       <div style="padding:14px 18px;background:rgba(21,94,239,.06);border:1px solid rgba(21,94,239,.14);border-radius:12px;margin-bottom:18px;font-size:.85rem;color:var(--text-soft);line-height:1.5;">
@@ -1633,6 +1649,21 @@
       <section id="adminUserList" style="display:flex;flex-direction:column;gap:16px;">
         <div style="padding:32px;text-align:center;color:var(--muted);font-size:.9rem;">Loading users…</div>
       </section>
+
+        <section class="summary" style="margin-top:22px;">
+          <div class="timeline-toolbar">
+            <div>
+              <h2 style="margin:0 0 6px 0;">Multi-Respondent Responses</h2>
+              <div class="footer-note" style="margin-top:0;">Side-by-side view of all assigned users' independent responses per practice.</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <select id="responseDomainFilter" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.85rem;"><option value="">All domains</option></select>
+              <select id="responseObjectiveFilter" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.85rem;"><option value="">All objectives</option></select>
+              <button class="secondary" id="responseLoadBtn">Load responses</button>
+            </div>
+          </div>
+          <div id="responsesContainer"><div class="audit-empty">Select filters and click Load to view multi-respondent responses.</div></div>
+        </section>
     </div>
 
     <!-- ── Audit Log page ────────────────────────────────────────────── -->
@@ -2049,7 +2080,10 @@
         const matchesSp = !spFilter.value || practice.securityProfile === spFilter.value;
         const matchesStatus = !statusFilter.value || assessment.status === statusFilter.value;
         const rbac = window.__AESCSF_RBAC__;
-        const matchesRbac = !rbac || rbac.role === "admin" || !rbac.domains.length || rbac.domains.includes(practice.domain);
+        const matchesRbac = !rbac || rbac.role === "admin"
+          || (!rbac.domains.length && !rbac.objectives.length)
+          || rbac.domains.includes(practice.domain)
+          || (rbac.objectives || []).includes(practice.objectiveId);
         return matchesSearch && matchesDomain && matchesMil && matchesSp && matchesStatus && matchesRbac;
       });
     }
@@ -3765,8 +3799,9 @@ function buildPdfDomainRows(rows) {
         });
         if (meResp.ok) {
           const me = await meResp.json();
-          window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], _oid: me.oid || "" };
+          window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], objectives: me.objectives || [], _oid: me.oid || "" };
           applyRbacUI(me);
+          if (me.objectives && me.objectives.length) checkAssignmentCompletion(me.objectives);
         } else {
           showAuthErrorBar(meResp.status);
         }
@@ -3845,7 +3880,141 @@ function buildPdfDomainRows(rows) {
     let _adminUsers = [];
     let _adminStateBeforeMerge = null;
 
-    async function adminFetch(path, options = {}) {
+    /* ── Assignment completion banner ────────────────────────────────────────── */
+    function checkAssignmentCompletion(objectives) {
+      if (!objectives.length || APP_CONFIG.storageMode !== "api") return;
+      const assigned = PRACTICES.filter(p => objectives.includes(p.objectiveId));
+      const incomplete = assigned.filter(p => {
+        const a = state.assessments[p.practiceId];
+        return !a || !a.status || a.status === "Not Assessed";
+      });
+      if (!incomplete.length) return;
+      const banner = document.getElementById("assignmentIncompleteBanner");
+      const msg    = document.getElementById("assignmentIncompleteBannerMsg");
+      if (banner) banner.style.display = "flex";
+      if (msg) msg.textContent =
+        `You have ${incomplete.length} assigned practice${incomplete.length === 1 ? "" : "s"} not yet assessed. Switch to Assessment to complete them.`;
+    }
+
+    /* ── Objective assignment admin functions ────────────────────────────────── */
+    function adminToggleObjectiveChip(oid, objectiveId, checkbox) {
+      const chip = document.getElementById(`objchip-${oid}-${objectiveId}`);
+      if (chip) chip.classList.toggle("checked", checkbox.checked);
+    }
+
+    async function adminSaveObjectiveAssignments(oid) {
+      const objectives = [];
+      document.querySelectorAll(`[id^="objchip-${oid}-"]`).forEach(label => {
+        const cb = label.querySelector("input");
+        if (cb?.checked) objectives.push(label.id.replace(`objchip-${oid}-`, ""));
+      });
+      const statusEl = document.getElementById(`obj-save-status-${oid}`);
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/objective-assignments`, {
+          method: "PUT", body: JSON.stringify({ objectives })
+        });
+        if (!resp.ok) { if (statusEl) statusEl.textContent = `Error ${resp.status}`; return; }
+        if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 3000); }
+        /* Update local _adminUsers cache */
+        const u = _adminUsers.find(u => u.oid === oid);
+        if (u) u.objectives = objectives;
+      } catch (err) {
+        if (statusEl) statusEl.textContent = err.message;
+      }
+    }
+
+    /* ── Multi-respondent responses view ─────────────────────────────────────── */
+    function initResponseFilters() {
+      const domainSel = document.getElementById("responseDomainFilter");
+      const objSel    = document.getElementById("responseObjectiveFilter");
+      if (!domainSel || !objSel) return;
+
+      const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      domainSel.innerHTML = `<option value="">All domains</option>` +
+        allDomains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+
+      function repopulateObjectives() {
+        const selectedDomain = domainSel.value;
+        const objectives = [...new Map(
+          PRACTICES
+            .filter(p => !selectedDomain || p.domain === selectedDomain)
+            .map(p => [p.objectiveId, p.objective])
+        ).entries()].sort(([a],[b]) => a.localeCompare(b));
+        objSel.innerHTML = `<option value="">All objectives</option>` +
+          objectives.map(([id, label]) =>
+            `<option value="${escapeHtml(id)}">${escapeHtml(id)} — ${escapeHtml(label.slice(0,50))}</option>`
+          ).join("");
+      }
+      repopulateObjectives();
+      domainSel.addEventListener("change", repopulateObjectives);
+    }
+
+    async function loadAndRenderResponses() {
+      const container = document.getElementById("responsesContainer");
+      if (!container) return;
+      container.innerHTML = `<div class="audit-empty">Loading…</div>`;
+      try {
+        const resp = await adminFetch("/admin/responses");
+        if (!resp.ok) { container.innerHTML = `<div class="audit-empty">Failed to load responses (${resp.status})</div>`; return; }
+        const data = await resp.json();
+        renderResponses(data);
+      } catch (err) {
+        container.innerHTML = `<div class="audit-empty">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderResponses(data) {
+      const domainF    = document.getElementById("responseDomainFilter")?.value    || "";
+      const objectiveF = document.getElementById("responseObjectiveFilter")?.value || "";
+      const container  = document.getElementById("responsesContainer");
+      if (!container) return;
+
+      const practiceMap = Object.fromEntries(PRACTICES.map(p => [p.practiceId, p]));
+      const entries = Object.entries(data)
+        .filter(([pid]) => {
+          const p = practiceMap[pid];
+          if (!p) return false;
+          if (domainF    && p.domain      !== domainF)    return false;
+          if (objectiveF && p.objectiveId !== objectiveF) return false;
+          return true;
+        })
+        .sort(([a], [b]) => a.localeCompare(b));
+
+      if (!entries.length) {
+        container.innerHTML = `<div class="audit-empty">No responses found. Assign objectives to users and ask them to complete their assessment.</div>`;
+        return;
+      }
+
+      container.innerHTML = entries.map(([practiceId, respondents]) => {
+        const p = practiceMap[practiceId];
+        const rows = respondents.map(r => {
+          const sc = statusClass(r.assessment?.status || "");
+          return `<tr>
+            <td><strong>${escapeHtml(r.display_name)}</strong><br><span style="color:var(--muted);font-size:.75rem;">${escapeHtml(r.username)}</span></td>
+            <td><span class="status-select ${sc}" style="padding:3px 8px;border-radius:6px;font-size:.8rem;">${escapeHtml(r.assessment?.status || "Not Assessed")}</span></td>
+            <td class="wrap">${escapeHtml(r.assessment?.evidence || "—")}</td>
+            <td class="wrap">${escapeHtml(r.assessment?.gap      || "—")}</td>
+            <td class="wrap">${escapeHtml(r.assessment?.notes    || "—")}</td>
+            <td>${escapeHtml(r.assessment?.owner || "—")}</td>
+          </tr>`;
+        }).join("");
+        return `<div class="dashboard-panel" style="margin-bottom:14px;">
+          <div style="margin-bottom:10px;">
+            <strong>${escapeHtml(practiceId)}</strong>
+            <span class="badge" style="margin-left:6px;">${escapeHtml(p?.objectiveId || "")}</span>
+            <div style="font-size:.83rem;color:var(--text-soft);margin-top:3px;">${escapeHtml(p?.practice || "")}</div>
+          </div>
+          <div class="audit-table-wrap">
+            <table class="audit-table">
+              <thead><tr><th>Respondent</th><th>Status</th><th>Evidence</th><th>Gap / Remediation</th><th>Notes</th><th>Owner</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+        async function adminFetch(path, options = {}) {
       return fetch(`${APP_CONFIG.apiBaseUrl}${path}`, {
         ...options,
         headers: {
@@ -3866,6 +4035,7 @@ function buildPdfDomainRows(rows) {
         if (!resp.ok) { container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger);">Failed to load users (${resp.status})</div>`; return; }
         _adminUsers = await resp.json();
         container.innerHTML = _adminUsers.map(u => buildUserCard(u)).join("");
+        initResponseFilters();
       } catch (err) {
         container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger);">${escapeHtml(err.message)}</div>`;
       }
@@ -3911,6 +4081,41 @@ function buildPdfDomainRows(rows) {
               <span class="admin-save-status" id="save-status-${escapeHtml(user.oid)}"></span>
             </div>
           </div>
+        <div class="admin-domains-section" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+          <label style="font-size:.8rem;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.04em;">
+            Objective Assignments
+            <span class="footer-note" style="text-transform:none;letter-spacing:0;font-weight:400;">&nbsp;— assign specific objectives to this user (finer than domain)</span>
+          </label>
+          <div class="obj-accordion">
+            ${(() => {
+              const objAssignedSet = new Set(user.objectives || []);
+              const objectivesByDomain = new Map();
+              for (const p of PRACTICES) {
+                if (!objectivesByDomain.has(p.domain)) objectivesByDomain.set(p.domain, new Map());
+                objectivesByDomain.get(p.domain).set(p.objectiveId, p.objective);
+              }
+              return [...objectivesByDomain.entries()].map(([domain, objMap]) => {
+                const domainHasAssigned = [...objMap.keys()].some(oid => objAssignedSet.has(oid));
+                const chips = [...objMap.entries()].map(([objId, objLabel]) =>
+                  `<label class="admin-domain-chip${objAssignedSet.has(objId) ? " checked" : ""}" id="objchip-${escapeHtml(user.oid)}-${escapeHtml(objId)}" title="${escapeHtml(objLabel)}">
+                    <input type="checkbox" ${objAssignedSet.has(objId) ? "checked" : ""}
+                           onchange="adminToggleObjectiveChip('${escapeHtml(user.oid)}','${escapeHtml(objId)}',this)"
+                           style="pointer-events:none;">
+                    ${escapeHtml(objId)}
+                  </label>`
+                ).join("");
+                return `<details class="obj-domain-group"${domainHasAssigned ? " open" : ""}>
+                  <summary class="obj-domain-summary">${escapeHtml(domain)}</summary>
+                  <div class="admin-domain-grid">${chips}</div>
+                </details>`;
+              }).join("");
+            })()}
+          </div>
+          <div class="save-row">
+            <button class="secondary" onclick="adminSaveObjectiveAssignments('${escapeHtml(user.oid)}')">Save objectives</button>
+            <span id="obj-save-status-${escapeHtml(user.oid)}" class="save-status"></span>
+          </div>
+        </div>
         </article>`;
     }
 
@@ -3982,6 +4187,10 @@ function buildPdfDomainRows(rows) {
 
     document.getElementById("adminRefreshBtn")?.addEventListener("click", renderAdminPanel);
     document.getElementById("adminLoadMergedBtn")?.addEventListener("click", adminLoadMergedView);
+    document.getElementById("responseLoadBtn")?.addEventListener("click", loadAndRenderResponses);
+    document.getElementById("responseDomainFilter")?.addEventListener("change", () => {
+      document.getElementById("responsesContainer").innerHTML = `<div class="audit-empty">Click Load to view responses.</div>`;
+    });
 
     /* ═══════════════════════════════════════════════════════════════════
        AUDIT LOG
