@@ -3832,6 +3832,22 @@ function buildPdfDomainRows(rows) {
           renderDashboard();
           /* Re-apply confidence data now that cards are rendered */
           if (window.__AESCSF_RBAC__?.role === "admin") await loadConfidenceRatings();
+
+          /* Re-enter merged mode if it was active when the page was last refreshed */
+          if (window.__AESCSF_RBAC__?.role === "admin" && sessionStorage.getItem("aescsf_merged_mode")) {
+            const ownStr = sessionStorage.getItem("aescsf_own_state");
+            try { _adminStateBeforeMerge = ownStr ? JSON.parse(ownStr) : buildPersistableState(state); } catch {}
+            try {
+              const mResp = await adminFetch("/admin/assessment/merged");
+              if (mResp.ok) {
+                const merged = await mResp.json();
+                replaceState(merged, { persist: false });
+                render(); renderDashboard();
+                const banner = document.getElementById("adminMergedBanner");
+                if (banner) banner.style.display = "flex";
+              }
+            } catch {}
+          }
         }
       } catch (err) {
         console.warn("[AESCSF] Could not load from API, using cached local state:", err);
@@ -4212,6 +4228,8 @@ function buildPdfDomainRows(rows) {
         if (!resp.ok) { alert(`Failed to load merged view: ${resp.status}`); return; }
         const merged = await resp.json();
         _adminStateBeforeMerge = buildPersistableState(state);
+        sessionStorage.setItem("aescsf_merged_mode", "1");
+        sessionStorage.setItem("aescsf_own_state", JSON.stringify(_adminStateBeforeMerge));
         replaceState(merged, { persist: false });
         render(); renderDashboard();
         if (banner) banner.style.display = "flex";
@@ -4220,12 +4238,14 @@ function buildPdfDomainRows(rows) {
     }
 
     function adminRestoreOwnView() {
-      if (!_adminStateBeforeMerge) return;
-      replaceState(_adminStateBeforeMerge, { persist: false });
+      sessionStorage.removeItem("aescsf_merged_mode");
+      sessionStorage.removeItem("aescsf_own_state");
+      const ownState = _adminStateBeforeMerge;
+      _adminStateBeforeMerge = null;
+      if (ownState) replaceState(ownState, { persist: false });
       render(); renderDashboard();
       const banner = document.getElementById("adminMergedBanner");
       if (banner) banner.style.display = "none";
-      _adminStateBeforeMerge = null;
       setActivePage("dashboard");
     }
 
