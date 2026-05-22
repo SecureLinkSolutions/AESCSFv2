@@ -1,4 +1,7 @@
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
+
+# Upgrade all OS packages to pick up Alpine security patches
+RUN apk upgrade --no-cache
 
 # Remove default config
 RUN rm /etc/nginx/conf.d/default.conf
