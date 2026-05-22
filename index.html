@@ -1234,7 +1234,7 @@
       </div>
       <h1>AESCSF v2 Evidence Tracker</h1>
       <p>Capture implementation status, evidence, owners, dates, and notes against each AESCSF v2 practice. Your work is stored locally in the browser and can also be exported to or imported from JSON.</p>
-      <div class="top-actions">
+      <div class="top-actions" id="topActionsBar">
         <button id="exportBtn">Export JSON</button>
         <button class="secondary" id="exportTemplateCsvBtn">AEMO Export</button>
         <button class="secondary" id="exportGapBtn">Export Gap Register</button>
@@ -3850,6 +3850,10 @@ function buildPdfDomainRows(rows) {
           setActivePage("assessment");
         }
       }
+
+      /* Show action toolbar (export/import/reset) for admins only */
+      const topActions = document.getElementById("topActionsBar");
+      if (topActions) topActions.style.display = isAdmin ? "" : "none";
 
       /* Show audit purge button for admins in API mode */
       const purgeBtn = document.getElementById("auditPurgeBtn");
