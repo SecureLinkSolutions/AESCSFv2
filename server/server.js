@@ -401,6 +401,16 @@ function requireAdmin(req, res, next) {
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
+// Domains whose name contains a hyphen — split("-")[0] would give the wrong result
+const HYPHENATED_DOMAINS = ["THIRD-PARTIES"];
+function practiceDomain(practiceId) {
+  const upper = practiceId.toUpperCase();
+  for (const d of HYPHENATED_DOMAINS) {
+    if (upper.startsWith(d + "-")) return d;
+  }
+  return upper.split("-")[0];
+}
+
 function practiceObjectiveId(practiceId) {
   return practiceId
     .replace(/-\d+$/, '')
@@ -459,7 +469,27 @@ function buildMergedAssessment() {
     }
   }
 
-  return { assessments: merged, _mergedView: true };
+  // Build contributors map: { [practiceId]: [{ user_oid, display_name, username, assessment }] }
+  const usersByOid = {};
+  for (const u of stmtGetAllUsers.all()) usersByOid[u.oid] = u;
+  const contributors = {};
+  for (const row of allRows) {
+    const assessments = assessmentsByOid[row.user_oid]?.assessments || {};
+    const u = usersByOid[row.user_oid] || {};
+    for (const [practiceId, assessment] of Object.entries(assessments)) {
+      const s = assessment?.status || "";
+      const hasData = s && s !== "Not Assessed" || assessment?.evidence || assessment?.gap || assessment?.notes;
+      if (!hasData) continue;
+      if (!contributors[practiceId]) contributors[practiceId] = [];
+      contributors[practiceId].push({
+        user_oid:     row.user_oid,
+        display_name: u.display_name || row.user_oid,
+        username:     u.username     || row.user_oid,
+        assessment
+      });
+    }
+  }
+  return { assessments: merged, _mergedView: true, _contributors: contributors };
 }
 
 function scoreAssessment(a) {
@@ -658,7 +688,7 @@ app.put("/api/assessment", requireAuth, autoRegister, (req, res) => {
     if ((allowedDomains.size > 0 || allowedObjectives.size > 0) && payload.assessments) {
       const filtered = {};
       for (const [practiceId, data] of Object.entries(payload.assessments)) {
-        const pDomain    = practiceId.split("-")[0].toUpperCase();
+        const pDomain    = practiceDomain(practiceId);
         const pObjective = practiceObjectiveId(practiceId);
         if (!allowedDomains.has(pDomain) && !allowedObjectives.has(pObjective)) continue;
         filtered[practiceId] = data;
@@ -833,7 +863,7 @@ app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegiste
     toApprove = new Set(
       Object.keys(targetAssessments).filter(pid => {
         if (!userDomains.size && !userObjectives.size) return true;
-        const pDomain    = pid.split("-")[0].toUpperCase();
+        const pDomain    = practiceDomain(pid);
         const pObjective = practiceObjectiveId(pid);
         return userDomains.has(pDomain) || userObjectives.has(pObjective);
       })
