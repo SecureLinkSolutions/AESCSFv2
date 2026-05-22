@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AESCSF v2 — Sign In</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1e3a5f 0%, #1565c0 40%, #1976d2 70%, #1e88e5 100%);
+      padding: 24px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 48px 40px 40px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.28);
+      text-align: center;
+    }
+    .shield {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, #1565c0, #1e88e5);
+      border-radius: 16px;
+      margin: 0 auto 24px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 20px rgba(21,94,239,.35);
+    }
+    .shield svg { width: 32px; height: 32px; fill: #fff; }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+      letter-spacing: -.01em;
+    }
+    .sub {
+      font-size: .875rem;
+      color: #64748b;
+      line-height: 1.55;
+      margin-bottom: 32px;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 13px 20px;
+      background: #155eef;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: .92rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      font-family: inherit;
+      transition: background .15s, transform .1s, box-shadow .15s;
+      box-shadow: 0 4px 12px rgba(21,94,239,.3);
+    }
+    .btn:hover { background: #1241c0; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(21,94,239,.35); }
+    .btn:active { transform: translateY(0); }
+    .ms-logo { width: 20px; height: 20px; flex-shrink: 0; }
+    .divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 24px 0 0;
+      color: #cbd5e1; font-size: .78rem;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: #e2e8f0;
+    }
+    .footer {
+      margin-top: 32px;
+      font-size: .73rem;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+    .footer strong { color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <!-- Shield icon -->
+    <div class="shield">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 1L3 5v6c0 5.25 3.75 10.15 9 11.35C17.25 21.15 21 16.25 21 11V5L12 1zm-1 14l-3-3 1.41-1.41L11 12.17l4.59-4.58L17 9l-6 6z"/>
+      </svg>
+    </div>
+
+    <h1>AESCSF v2 Evidence Tracker</h1>
+    <p class="sub">Sign in with your organisation's Microsoft account to access your assessment workspace.</p>
+
+    <a id="signInBtn" class="btn" href="/oauth2/sign_in">
+      <!-- Microsoft "flag" logo -->
+      <svg class="ms-logo" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+        <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+        <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>
+      Sign in with Microsoft
+    </a>
+
+    <p class="footer">
+      <strong>Secure Link Solutions</strong><br>
+      Access is restricted to authorised accounts only.<br>
+      Contact your administrator if you need access.
+    </p>
+  </div>
+
+  <script>
+    // Forward the rd (redirect-after-login) parameter from the URL
+    const rd = new URLSearchParams(window.location.search).get("rd") || "/";
+    document.getElementById("signInBtn").href = "/oauth2/sign_in?rd=" + encodeURIComponent(rd);
+  </script>
+</body>
+</html>

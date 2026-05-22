@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AESCSF v2 Evidence Tracker</title>
   
+  <script>document.documentElement.dataset.theme=localStorage.getItem('aescsf_theme')||'light'</script>
   <style>
     :root {
       --bg: #f3f6fb;
@@ -35,6 +36,515 @@
       --radius-lg: 24px;
       --radius-pill: 999px;
       --grid-gap: 16px;
+      --sidebar-w: 220px;
+      --topbar-h: 60px;
+      --nav-icon-size: 18px;
+    }
+
+    /* -- Dark theme -------------------------------------------------------- */
+    html[data-theme="dark"] {
+      --bg: #0d1117; --bg-2: #0a0e1a;
+      --surface: rgba(22,30,50,0.94); --surface-strong: #161e32; --surface-muted: #0f1626;
+      --text: #e2e8f0; --text-soft: #94a3b8; --muted: #64748b;
+      --border: rgba(148,163,184,0.12); --border-strong: rgba(148,163,184,0.22);
+      --primary: #3b82f6; --primary-2: #2563eb; --primary-soft: rgba(59,130,246,0.14);
+      --success: #22c55e; --success-soft: rgba(34,197,94,0.14);
+      --warning: #f97316; --warning-soft: rgba(249,115,22,0.14);
+      --danger: #f43f5e; --danger-soft: rgba(244,63,94,0.14);
+      --neutral-soft: rgba(100,116,139,0.14);
+      --shadow-sm: 0 6px 18px rgba(0,0,0,0.35);
+      --shadow-md: 0 16px 42px rgba(0,0,0,0.45);
+      --shadow-lg: 0 24px 60px rgba(0,0,0,0.55);
+    }
+    html[data-theme="dark"] .app-sidebar { background: #090d16; border-right-color: rgba(148,163,184,0.08); }
+    html[data-theme="dark"] .app-topbar  { background: #0a0e1a; border-bottom-color: rgba(148,163,184,0.10); }
+    html[data-theme="dark"] .cmd-palette,
+    html[data-theme="dark"] .actions-menu { background: #111827; border-color: rgba(148,163,184,0.18); }
+    html[data-theme="dark"], html[data-theme="dark"] body {
+      background:
+        radial-gradient(circle at top left, rgba(59,130,246,0.07), transparent 28%),
+        radial-gradient(circle at 85% 8%, rgba(34,197,94,0.05), transparent 24%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    }
+    html[data-theme="dark"] body::before {
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    }
+    html[data-theme="dark"] .toolbar { background: rgba(13,17,23,0.92); }
+    html[data-theme="dark"] .header {
+      background:
+        radial-gradient(circle at top right, rgba(255,255,255,0.10), transparent 30%),
+        linear-gradient(135deg, #0b1428 0%, #0f2060 50%, #1a3a96 100%);
+    }
+    html[data-theme="dark"] .field input,
+    html[data-theme="dark"] .field select,
+    html[data-theme="dark"] .field textarea {
+      background: rgba(22,30,50,0.95);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.03);
+    }
+    html[data-theme="dark"] .field input:focus,
+    html[data-theme="dark"] .field select:focus,
+    html[data-theme="dark"] .field textarea:focus {
+      background: rgba(22,30,50,1);
+      border-color: rgba(59,130,246,0.5);
+      box-shadow: 0 0 0 4px rgba(59,130,246,0.14), 0 10px 22px rgba(59,130,246,0.08);
+    }
+    html[data-theme="dark"] button.secondary,
+    html[data-theme="dark"] .button-like.secondary {
+      background: linear-gradient(180deg, #1a2540, #141c34);
+      border-color: rgba(59,130,246,0.25);
+      color: #93c5fd;
+    }
+    html[data-theme="dark"] button.ghost { background: transparent; color: var(--text-soft); }
+    html[data-theme="dark"] .stat {
+      background: linear-gradient(180deg, rgba(22,30,50,0.98), rgba(18,26,46,0.96));
+    }
+    html[data-theme="dark"] #user-info-bar {
+      background: rgba(22,32,60,0.95) !important;
+      border-color: rgba(59,130,246,0.45) !important;
+    }
+    html[data-theme="dark"] .objective {
+      background: linear-gradient(180deg, rgba(20,28,48,0.99), rgba(16,24,44,0.97));
+    }
+    html[data-theme="dark"] .objective-header {
+      background: linear-gradient(180deg, rgba(22,30,50,0.99), rgba(18,26,46,0.97));
+    }
+    html[data-theme="dark"] .objective.open .objective-header {
+      background: linear-gradient(180deg, rgba(18,26,46,0.99), rgba(14,22,42,0.98));
+    }
+    html[data-theme="dark"] .objective-body {
+      background: linear-gradient(180deg, rgba(16,24,44,0.95), rgba(13,20,40,0.97));
+    }
+    html[data-theme="dark"] .practice-card {
+      background: linear-gradient(180deg, rgba(22,30,52,0.99), rgba(18,26,48,0.97));
+    }
+    html[data-theme="dark"] .practice-card:hover {
+      background: linear-gradient(180deg, rgba(26,34,58,0.99), rgba(22,30,54,0.99));
+    }
+    html[data-theme="dark"] .timeline-group,
+    html[data-theme="dark"] .timeline-item {
+      background: linear-gradient(180deg, rgba(20,28,48,0.99), rgba(16,24,44,0.97));
+    }
+    html[data-theme="dark"] .timeline-group-header {
+      background: linear-gradient(180deg, rgba(22,30,50,0.99), rgba(18,26,46,0.97));
+      border-bottom-color: rgba(148,163,184,0.12);
+    }
+    html[data-theme="dark"] .domain-card {
+      background: linear-gradient(180deg, rgba(20,28,48,0.98), rgba(16,24,44,0.96));
+    }
+    html[data-theme="dark"] .dashboard-panel {
+      background: linear-gradient(180deg, rgba(20,28,48,0.98), rgba(16,24,44,0.96));
+    }
+
+    /* -- Cyber theme ------------------------------------------------------- */
+    html[data-theme="cyber"] {
+      --bg: #050e0b; --bg-2: #030908;
+      --surface: rgba(0,20,14,0.96); --surface-strong: #04130d; --surface-muted: #030f09;
+      --text: #00e5a0; --text-soft: #00b87a; --muted: #007a50;
+      --border: rgba(0,229,160,0.16); --border-strong: rgba(0,229,160,0.30);
+      --primary: #00e5a0; --primary-2: #00c484; --primary-soft: rgba(0,229,160,0.14);
+      --success: #00e5a0; --success-soft: rgba(0,229,160,0.14);
+      --warning: #fbbf24; --warning-soft: rgba(251,191,36,0.14);
+      --danger: #ff2b6e; --danger-soft: rgba(255,43,110,0.14);
+      --neutral-soft: rgba(0,229,160,0.10);
+      --shadow-sm: 0 6px 18px rgba(0,0,0,0.5);
+      --shadow-md: 0 16px 42px rgba(0,0,0,0.6);
+      --shadow-lg: 0 24px 60px rgba(0,229,160,0.12);
+    }
+    html[data-theme="cyber"] .app-sidebar { background: #020c07; border-right-color: rgba(0,229,160,0.12); }
+    html[data-theme="cyber"] .app-topbar  { background: #030f09; border-bottom-color: rgba(0,229,160,0.12); }
+    html[data-theme="cyber"] .sidebar-nav-item.active { background: rgba(0,229,160,0.12); color: #00e5a0; border-color: rgba(0,229,160,0.30); }
+    html[data-theme="cyber"] .sidebar-nav-item:hover  { background: rgba(0,229,160,0.06); color: #00e5a0; }
+    html[data-theme="cyber"] .cmd-result.focused      { background: rgba(0,229,160,0.10); }
+    html[data-theme="cyber"] .cmd-palette,
+    html[data-theme="cyber"] .actions-menu { background: #030f09; border-color: rgba(0,229,160,0.22); }
+    html[data-theme="cyber"] .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2300e5a0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
+    html[data-theme="cyber"], html[data-theme="cyber"] body {
+      background:
+        radial-gradient(circle at top left, rgba(0,229,160,0.10), transparent 28%),
+        radial-gradient(circle at 85% 8%, rgba(0,229,160,0.06), transparent 24%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    }
+    html[data-theme="cyber"] body::before {
+      background-image:
+        linear-gradient(rgba(0,229,160,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,160,0.07) 1px, transparent 1px);
+    }
+    html[data-theme="cyber"] .toolbar { background: rgba(0,14,10,0.95); }
+    html[data-theme="cyber"] .header {
+      background:
+        radial-gradient(circle at top right, rgba(0,229,160,0.20), transparent 30%),
+        linear-gradient(135deg, #011a0e 0%, #002f1a 50%, #004d2a 100%);
+      border-color: rgba(0,229,160,0.35);
+    }
+    html[data-theme="cyber"] .field input,
+    html[data-theme="cyber"] .field select,
+    html[data-theme="cyber"] .field textarea {
+      background: rgba(0,20,14,0.95);
+      box-shadow: inset 0 1px 1px rgba(0,229,160,0.04);
+    }
+    html[data-theme="cyber"] .field input:focus,
+    html[data-theme="cyber"] .field select:focus,
+    html[data-theme="cyber"] .field textarea:focus {
+      background: rgba(0,20,14,1);
+      border-color: rgba(0,229,160,0.6);
+      box-shadow: 0 0 0 4px rgba(0,229,160,0.12), 0 0 18px rgba(0,229,160,0.10);
+    }
+    html[data-theme="cyber"] button:not(.secondary):not(.ghost):not(.theme-btn):not(.page-tab):not(.file-remove-btn):not(.file-history-btn) {
+      background: linear-gradient(180deg, #00e5a0, #00c484);
+      color: #001a0e;
+    }
+    html[data-theme="cyber"] button.secondary,
+    html[data-theme="cyber"] .button-like.secondary {
+      background: linear-gradient(180deg, #04130d, #030f09);
+      border-color: rgba(0,229,160,0.30);
+      color: #00e5a0;
+    }
+    html[data-theme="cyber"] button.ghost { background: transparent; color: var(--text-soft); }
+    html[data-theme="cyber"] .stat {
+      background: linear-gradient(180deg, rgba(0,20,14,0.98), rgba(0,16,10,0.96));
+    }
+    html[data-theme="cyber"] .page-tab.active {
+      background: rgba(0,229,160,0.12);
+      color: #00e5a0;
+      border-color: rgba(0,229,160,0.40);
+    }
+    html[data-theme="cyber"] #user-info-bar {
+      background: rgba(0,30,20,0.95) !important;
+      border-color: rgba(0,229,160,0.45) !important;
+    }
+    html[data-theme="cyber"] .objective {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.24);
+      box-shadow: 0 0 14px rgba(0,229,160,0.06), var(--shadow-md);
+    }
+    html[data-theme="cyber"] .objective-header {
+      background: linear-gradient(180deg, rgba(0,22,15,0.99), rgba(0,18,12,0.97));
+    }
+    html[data-theme="cyber"] .objective.open .objective-header {
+      background: linear-gradient(180deg, rgba(0,20,14,0.99), rgba(0,16,10,0.98));
+      border-bottom-color: rgba(0,229,160,0.24);
+    }
+    html[data-theme="cyber"] .objective-body {
+      background: linear-gradient(180deg, rgba(0,15,10,0.96), rgba(0,11,7,0.98));
+    }
+    html[data-theme="cyber"] .objective-title h2 {
+      font-family: 'Courier New', 'Fira Mono', monospace;
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 10px rgba(0,229,160,0.25);
+    }
+    html[data-theme="cyber"] .practice-card {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.20);
+      box-shadow: 0 0 8px rgba(0,229,160,0.04), var(--shadow-sm);
+    }
+    html[data-theme="cyber"] .practice-card:hover {
+      background: linear-gradient(180deg, rgba(0,24,16,0.99), rgba(0,20,13,0.99));
+      border-color: rgba(0,229,160,0.40);
+      box-shadow: 0 0 18px rgba(0,229,160,0.14), var(--shadow-md);
+    }
+    html[data-theme="cyber"] .timeline-group,
+    html[data-theme="cyber"] .timeline-item {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.20);
+    }
+    html[data-theme="cyber"] .timeline-group-header {
+      background: linear-gradient(180deg, rgba(0,20,14,0.99), rgba(0,15,10,0.97));
+      border-bottom-color: rgba(0,229,160,0.16);
+    }
+    html[data-theme="cyber"] .domain-card {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.20);
+      box-shadow: 0 0 8px rgba(0,229,160,0.04), var(--shadow-sm);
+    }
+    html[data-theme="cyber"] .dashboard-panel {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.22);
+      box-shadow: 0 0 12px rgba(0,229,160,0.06), var(--shadow-md);
+    }
+    html[data-theme="cyber"] .badge {
+      background: rgba(0,229,160,0.12);
+      color: #00e5a0;
+      border-color: rgba(0,229,160,0.32);
+      text-shadow: 0 0 8px rgba(0,229,160,0.4);
+      font-family: 'Courier New', monospace;
+    }
+    html[data-theme="cyber"] .status-badge {
+      font-family: 'Courier New', monospace;
+      font-size: .72rem;
+      letter-spacing: 0.04em;
+    }
+    html[data-theme="cyber"] .status-badge.fully {
+      box-shadow: 0 0 8px rgba(0,229,160,0.30);
+    }
+    html[data-theme="cyber"] .field label {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    html[data-theme="cyber"] .summary,
+    html[data-theme="cyber"] .toolbar {
+      background: rgba(0,14,10,0.96);
+      border-color: rgba(0,229,160,0.20);
+    }
+    /* scanlines */
+    html[data-theme="cyber"] body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9998;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 3px,
+        rgba(0,0,0,0.10) 3px, rgba(0,0,0,0.10) 4px
+      );
+    }
+    /* neon glow pulse on primary cta */
+    html[data-theme="cyber"] button:not(.secondary):not(.ghost):not(.theme-btn):not(.page-tab):not(.file-remove-btn):not(.file-history-btn):hover {
+      box-shadow: 0 0 22px rgba(0,229,160,0.45) !important;
+    }
+
+    /* -- Theme toggle button ------------------------------------------------ */
+    .theme-btn {
+      min-height: unset; padding: 4px 9px; font-size: .95rem;
+      background: transparent; border-color: transparent;
+      color: rgba(255,255,255,0.65); box-shadow: none; border-radius: 6px;
+      line-height: 1; font-weight: 400;
+    }
+    .theme-btn:hover { background: rgba(255,255,255,0.15) !important; transform: none !important; box-shadow: none !important; color: #fff; }
+    .theme-btn.active { background: rgba(255,255,255,0.22) !important; color: #fff; }
+
+    /* ── App shell layout ────────────────────────────────────────────── */
+    body { overflow-x: hidden; }
+    section.header { display: none !important; }
+
+    .app-topbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: var(--topbar-h); background: var(--surface-strong);
+      border-bottom: 1px solid var(--border); display: flex;
+      align-items: center; gap: 12px; padding: 0 16px;
+      z-index: 100; box-shadow: var(--shadow-sm);
+    }
+    .app-topbar-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.9rem; font-weight: 700; color: var(--text);
+      white-space: nowrap; flex-shrink: 0; text-decoration: none;
+    }
+    .app-topbar-hamburger {
+      display: none; background: none; border: none; padding: 6px;
+      cursor: pointer; border-radius: 8px; color: var(--text-soft);
+      min-height: unset; box-shadow: none; align-items: center; justify-content: center;
+    }
+    .app-topbar-hamburger:hover { background: var(--neutral-soft); transform: none; box-shadow: none; }
+    .app-topbar-search-trigger {
+      flex: 1; max-width: 340px; margin: 0 auto;
+      display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+      border-radius: 10px; border: 1px solid var(--border); background: var(--bg);
+      color: var(--muted); font-size: 0.85rem; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      min-height: unset; box-shadow: none; font-weight: 400; font-family: inherit;
+    }
+    .app-topbar-search-trigger:hover { border-color: var(--primary); background: var(--surface-muted); transform: none; box-shadow: none; }
+    .app-topbar-search-trigger span { flex: 1; text-align: left; }
+    .app-topbar-search-trigger kbd {
+      padding: 2px 6px; font-size: 0.7rem; font-family: inherit;
+      border: 1px solid var(--border-strong); border-radius: 5px;
+      color: var(--muted); background: var(--surface);
+    }
+    .app-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .topbar-theme-toggle {
+      display: flex; gap: 2px; background: var(--bg);
+      padding: 3px; border-radius: 8px; border: 1px solid var(--border);
+    }
+    .user-avatar-btn {
+      display: flex; align-items: center; gap: 7px; padding: 4px 10px;
+      border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      min-height: unset; box-shadow: none; transition: background 0.15s;
+    }
+    .user-avatar-btn:hover { background: var(--surface-muted); transform: none; box-shadow: none; }
+    .user-avatar-circle {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--primary-2));
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 0.7rem; font-weight: 700; flex-shrink: 0;
+    }
+    .topbar-signout-btn {
+      padding: 5px 11px; font-size: 0.78rem; min-height: unset; box-shadow: none;
+    }
+    .app-sidebar {
+      position: fixed; top: var(--topbar-h); left: 0; bottom: 0;
+      width: var(--sidebar-w); background: #0f172a;
+      border-right: 1px solid rgba(148,163,184,0.10);
+      display: flex; flex-direction: column; z-index: 90;
+      overflow-y: auto; overflow-x: hidden;
+      transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+    }
+    .sidebar-nav { padding: 12px 10px; flex: 1; }
+    .sidebar-section-label {
+      padding: 10px 10px 4px; font-size: 0.67rem; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: rgba(148,163,184,0.4);
+    }
+    .sidebar-nav-item {
+      display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+      border-radius: 10px; cursor: pointer; font-size: 0.855rem; font-weight: 500;
+      color: rgba(226,232,240,0.80); transition: background 0.12s, color 0.12s;
+      border: 1px solid transparent; user-select: none; width: 100%;
+      background: none; text-align: left; font-family: inherit; min-height: unset;
+      box-shadow: none;
+    }
+    .sidebar-nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; transform: none; box-shadow: none; }
+    .sidebar-nav-item.active { background: rgba(59,130,246,0.18); color: #fff; border-color: rgba(59,130,246,0.22); }
+    .sidebar-nav-item svg { flex-shrink: 0; width: 16px; height: 16px; opacity: 0.72; }
+    .sidebar-nav-item.active svg { opacity: 1; }
+    .sidebar-footer {
+      padding: 10px 12px; border-top: 1px solid rgba(148,163,184,0.08);
+      font-size: 0.7rem; color: rgba(148,163,184,0.4);
+    }
+    .sidebar-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 89;
+    }
+    .sidebar-overlay.open { display: block; }
+    .app-content {
+      margin-left: var(--sidebar-w); margin-top: var(--topbar-h);
+      padding: 28px; max-width: 1780px;
+      min-height: calc(100vh - var(--topbar-h)); box-sizing: border-box;
+    }
+    .page-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 22px; flex-wrap: wrap;
+    }
+    .page-header-text h1 {
+      margin: 0 0 4px; font-size: 1.45rem; font-weight: 700;
+      letter-spacing: -0.02em; color: var(--text);
+    }
+    .page-header-text p {
+      margin: 0; color: var(--muted); font-size: 0.855rem;
+      line-height: 1.55; max-width: 640px;
+    }
+    .page-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .actions-menu-wrapper { position: relative; }
+    .actions-menu {
+      position: absolute; top: calc(100% + 6px); right: 0;
+      width: 240px; background: var(--surface-strong);
+      border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg); z-index: 200; overflow: hidden;
+      display: none; animation: menuFadeIn 0.12s ease;
+    }
+    @keyframes menuFadeIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .actions-menu[data-open] { display: block; }
+    .actions-menu-group { padding: 4px 0; border-bottom: 1px solid var(--border); }
+    .actions-menu-group:last-child { border-bottom: none; }
+    .actions-menu-group-label {
+      padding: 6px 14px 2px; font-size: 0.67rem; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
+    }
+    .actions-menu-item {
+      display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+      font-size: 0.855rem; font-weight: 500; color: var(--text); cursor: pointer;
+      transition: background 0.1s; border: none; background: none;
+      width: 100%; text-align: left; font-family: inherit;
+      min-height: unset; box-shadow: none; border-radius: 0;
+    }
+    .actions-menu-item:hover { background: var(--primary-soft); color: var(--primary); transform: none; box-shadow: none; }
+    .actions-menu-item.danger { color: var(--danger); }
+    .actions-menu-item.danger:hover { background: var(--danger-soft); color: var(--danger); }
+    .actions-menu-item svg { flex-shrink: 0; width: 15px; height: 15px; opacity: 0.75; }
+
+    /* ── Command palette ─────────────────────────────────────────────── */
+    .cmd-palette-overlay {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.62);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      z-index: 9999; display: none; align-items: flex-start;
+      justify-content: center; padding-top: 72px;
+    }
+    .cmd-palette-overlay.open { display: flex; }
+    .cmd-palette {
+      width: min(560px, 95vw); background: var(--surface-strong);
+      border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg); overflow: hidden;
+      display: flex; flex-direction: column; max-height: 480px;
+    }
+    .cmd-palette-input-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .cmd-palette-input-row svg { flex-shrink: 0; color: var(--muted); }
+    .cmd-palette-input {
+      flex: 1; border: none; background: none; color: var(--text);
+      font: inherit; font-size: 1rem; outline: none; padding: 0;
+    }
+    .cmd-palette-input::placeholder { color: var(--muted); }
+    .cmd-palette-results { overflow-y: auto; flex: 1; }
+    .cmd-result-group-label {
+      padding: 8px 16px 4px; font-size: 0.67rem; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
+    }
+    .cmd-result {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px; cursor: pointer; transition: background 0.08s;
+    }
+    .cmd-result:hover, .cmd-result.focused { background: var(--primary-soft); }
+    .cmd-result-icon { flex-shrink: 0; width: 15px; height: 15px; color: var(--muted); }
+    .cmd-result-icon svg { width: 15px; height: 15px; }
+    .cmd-result-title {
+      font-size: 0.855rem; font-weight: 500; color: var(--text);
+      flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cmd-result-meta { font-size: 0.72rem; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+    .cmd-result-match { color: var(--primary); font-weight: 700; }
+    .cmd-palette-empty { padding: 36px; text-align: center; color: var(--muted); font-size: 0.875rem; }
+
+    /* ── Empty states ────────────────────────────────────────────────── */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 64px 32px; text-align: center;
+      color: var(--muted);
+    }
+    .empty-state-icon { width: 56px; height: 56px; margin-bottom: 16px; opacity: 0.4; color: var(--muted); }
+    .empty-state-icon svg { width: 56px; height: 56px; }
+    .empty-state-title { margin: 0 0 8px; font-size: 1rem; font-weight: 700; color: var(--text-soft); letter-spacing: -0.01em; }
+    .empty-state-body { margin: 0 0 20px; font-size: 0.855rem; line-height: 1.55; max-width: 340px; }
+    .empty-state-action { min-height: unset; }
+
+    /* ── Form improvements ───────────────────────────────────────────── */
+    .field select {
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+      background-size: 15px; padding-right: 32px;
+    }
+    .input-wrapper { position: relative; }
+    .input-wrapper input[type="date"] { padding-right: 36px; }
+    .input-icon {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      pointer-events: none; color: var(--muted); width: 15px; height: 15px;
+    }
+    .field label.required::after { content: " *"; color: var(--danger); font-weight: 700; }
+    .char-counter { margin-top: 4px; text-align: right; font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .char-counter.near-limit { color: var(--warning); }
+    .char-counter.at-limit { color: var(--danger); font-weight: 700; }
+
+    /* ── Responsive ──────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .app-topbar-hamburger { display: flex; }
+      .app-sidebar { transform: translateX(-100%); }
+      .app-sidebar.open { transform: translateX(0); }
+      .app-content { margin-left: 0; }
+      .app-topbar-search-trigger { max-width: 220px; }
+    }
+    @media (max-width: 600px) {
+      .app-content { padding: 16px; }
+      .app-topbar-search-trigger { display: none; }
+      .page-header { flex-direction: column; }
     }
 
     * { box-sizing: border-box; }
@@ -241,6 +751,21 @@
     button:active,
     .button-like:active {
       transform: translateY(0);
+    }
+
+    button:focus-visible,
+    .button-like:focus-visible,
+    a:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    button:disabled,
+    button[disabled] {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
 
     button,
@@ -895,15 +1420,16 @@
     }
 
     @media print {
-      body::before, .toolbar, .top-actions, .page-nav, #timelinePage, #assessmentPage {
+      body::before, .toolbar, .top-actions, .page-nav, #timelinePage, #assessmentPage,
+      .app-topbar, .app-sidebar, .sidebar-overlay, .cmd-palette-overlay {
         display: none !important;
       }
       #dashboardPage {
         display: block !important;
       }
-      .container {
-        max-width: none;
-        padding: 0;
+      .app-content, .container {
+        margin-left: 0 !important; margin-top: 0 !important;
+        max-width: none; padding: 0;
       }
       .header {
         color: #000;
@@ -924,33 +1450,408 @@
     .comparison-change.regressed { background:rgba(239,68,68,0.14); color:#991b1b; }
     .comparison-change.unchanged { background:rgba(59,130,246,0.12); color:#1d4ed8; }
 
+    /* ── Admin panel styles ─────────────────────────────────────────── */
+    .admin-user-card {
+      background: var(--surface-strong);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: 20px 22px;
+    }
+    .admin-user-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .admin-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, #155eef, #0f4fd6);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: .95rem; flex-shrink: 0;
+    }
+    .admin-user-info { flex: 1; min-width: 0; }
+    .admin-user-name { font-weight: 700; font-size: .95rem; color: var(--text); }
+    .admin-user-email { font-size: .8rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .role-badge { padding: 3px 12px; border-radius: 999px; font-size: .75rem; font-weight: 700; letter-spacing: .02em; }
+    .role-badge.admin { background: rgba(192,16,72,.1); color: #c01048; }
+    .role-badge.user  { background: rgba(6,118,71,.1);  color: #067647; }
+    .admin-role-toggle { display: flex; gap: 6px; }
+    .admin-role-toggle button {
+      padding: 5px 14px; border-radius: 8px; border: 1px solid var(--border-strong);
+      background: transparent; font-size: .8rem; font-weight: 600;
+      cursor: pointer; color: var(--text-soft); font-family: inherit;
+      transition: background .15s, color .15s;
+    }
+    .admin-role-toggle button.active-role { background: #155eef; color: #fff; border-color: #155eef; }
+    .admin-domains-section { margin-top: 16px; }
+    .admin-domains-label { font-size: .8rem; font-weight: 600; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .04em; }
+    .admin-domain-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .admin-domain-chip {
+      display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+      border-radius: 10px; border: 1px solid var(--border-strong);
+      background: var(--surface-muted); cursor: pointer; user-select: none;
+      font-size: .8rem; font-weight: 600; color: var(--text-soft);
+      transition: background .12s, border-color .12s;
+    }
+    .admin-domain-chip input[type=checkbox] { accent-color: #155eef; cursor: pointer; width: 14px; height: 14px; }
+    .admin-domain-chip.checked { background: rgba(21,94,239,.08); border-color: rgba(21,94,239,.3); color: #155eef; }
+    .admin-save-row { margin-top: 14px; display: flex; gap: 8px; align-items: center; }
+    .admin-save-status { font-size: .8rem; color: var(--muted); }
+
+    /* ── Audit log styles ───────────────────────────────────────────── */
+    .audit-toolbar {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;
+      margin-bottom: 18px;
+    }
+    .audit-toolbar .field { flex: 1; min-width: 160px; }
+    .audit-table-wrap { overflow-x: auto; }
+    .audit-table {
+      width: 100%; border-collapse: collapse; font-size: .82rem;
+    }
+    .audit-table th {
+      text-align: left; padding: 8px 12px; font-size: .75rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+      border-bottom: 2px solid var(--border); white-space: nowrap;
+    }
+    .audit-table td {
+      padding: 8px 12px; border-bottom: 1px solid var(--border);
+      vertical-align: top; color: var(--text-soft); max-width: 280px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .audit-table td.wrap { white-space: pre-wrap; word-break: break-word; white-space: normal; }
+    .audit-table tr:hover td { background: var(--surface-muted); }
+    .audit-field-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 6px;
+      background: var(--primary-soft); color: var(--primary);
+      font-size: .72rem; font-weight: 700; white-space: nowrap;
+    }
+    .audit-value-old { color: var(--danger); }
+    .audit-value-new { color: var(--success); }
+    .audit-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: .85rem; color: var(--muted); }
+    .audit-empty { padding: 36px; text-align: center; color: var(--muted); font-size: .9rem; }
+
+    /* ── Confidence widget (admin only) ─────────────────────────────────────── */
+    .confidence-widget {
+      margin-top: 14px;
+      padding: 10px 14px 12px;
+      background: rgba(109,40,217,.05);
+      border: 1px solid rgba(109,40,217,.18);
+      border-radius: 10px;
+    }
+    .confidence-widget-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .confidence-admin-badge {
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: #6d28d9;
+      background: rgba(109,40,217,.12);
+      padding: 2px 7px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .confidence-widget-title {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--text-soft);
+      margin-right: 4px;
+    }
+    .conf-stars-row { display: flex; gap: 1px; }
+    .conf-star {
+      background: none;
+      border: none;
+      font-size: 1.25rem;
+      cursor: pointer;
+      padding: 1px 3px;
+      color: #d1d5db;
+      line-height: 1;
+      transition: color .12s, transform .1s;
+      border-radius: 4px;
+    }
+    .conf-star:hover { transform: scale(1.15); }
+    .conf-star.filled { color: #f59e0b; }
+    .conf-stars-row.conf-rating-1 .conf-star.filled { color: #ef4444; }
+    .conf-stars-row.conf-rating-2 .conf-star.filled { color: #f97316; }
+    .conf-stars-row.conf-rating-3 .conf-star.filled { color: #eab308; }
+    .conf-stars-row.conf-rating-4 .conf-star.filled { color: #84cc16; }
+    .conf-stars-row.conf-rating-5 .conf-star.filled { color: #22c55e; }
+    .confidence-level-badge {
+      font-size: .72rem;
+      font-weight: 600;
+      padding: 2px 9px;
+      border-radius: 20px;
+    }
+    .conf-rating-1.confidence-level-badge { background: rgba(239,68,68,.1);  color: #dc2626; }
+    .conf-rating-2.confidence-level-badge { background: rgba(249,115,22,.1); color: #ea580c; }
+    .conf-rating-3.confidence-level-badge { background: rgba(234,179,8,.1);  color: #ca8a04; }
+    .conf-rating-4.confidence-level-badge { background: rgba(132,204,22,.1); color: #65a30d; }
+    .conf-rating-5.confidence-level-badge { background: rgba(34,197,94,.1);  color: #16a34a; }
+    .conf-clear-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: .8rem;
+      padding: 2px 4px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    .conf-clear-btn:hover { color: var(--danger); }
+    .conf-notes-input {
+      margin-top: 8px;
+      width: 100%;
+      min-height: 48px;
+      font-size: .8rem;
+      resize: vertical;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+    }
+    .conf-notes-input:focus { outline: 2px solid #6d28d9; outline-offset: 1px; }
+
+    /* ── Objective assignment accordion (admin) ──────────────────────────────── */
+    .contributor-section { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+    .contributor-summary { cursor:pointer;font-size:.82rem;font-weight:600;color:var(--text-soft);list-style:none;user-select:none;padding:2px 0;display:flex;align-items:center;gap:6px; }
+    .contributor-summary::-webkit-details-marker { display:none; }
+    .contributor-section[open] .contributor-summary { color:var(--text); }
+    .contributor-list { display:flex;flex-direction:column;gap:6px;margin-top:10px; }
+    .contributor-row { display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:.83rem;flex-wrap:wrap; }
+    .contributor-name { min-width:110px; }
+    .contributor-evidence { flex:1;color:var(--text-soft);font-size:.79rem;font-style:italic; }
+    .contributor-accepted { color:#166534;font-size:.8rem;font-weight:600; }
+    .obj-accordion { margin-top: 6px; }
+    .obj-domain-group { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
+    .obj-domain-summary {
+      padding: 7px 12px; cursor: pointer; font-weight: 600;
+      font-size: .83rem; list-style: none; user-select: none;
+      color: var(--text);
+    }
+    .obj-domain-summary::-webkit-details-marker { display: none; }
+    .obj-domain-group[open] .obj-domain-summary { border-bottom: 1px solid var(--border); }
+    .obj-domain-group .admin-domain-grid { padding: 8px 10px; }
+
+    /* ── SP breakdown table (admin only) ──────────────────────────────────── */
+    .sp-breakdown-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .85rem;
+    }
+    .sp-breakdown-table th, .sp-breakdown-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .sp-breakdown-table th {
+      font-size: .78rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      background: var(--surface-muted);
+    }
+    .sp-breakdown-table tr:last-child td { border-bottom: none; }
+    .sp-breakdown-table tr:hover td { background: var(--surface-muted); }
+    .sp-score-pct { font-weight: 700; font-size: .92rem; }
+    .sp-score-detail { font-size: .73rem; color: var(--muted); margin-top: 1px; }
+
+    /* ── History modal ──────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(15,23,42,.52);
+      display: flex; align-items: center; justify-content: center; z-index: 1000;
+      backdrop-filter: blur(3px);
+    }
+    .modal-box {
+      background: var(--surface-strong); border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg); width: min(720px, 95vw); max-height: 80vh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .modal-header {
+      display: flex; align-items: center; gap: 10px; padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h3 { margin: 0; font-size: 1rem; flex: 1; }
+    .modal-body { overflow-y: auto; padding: 18px 22px; }
+    .modal-close {
+      background: none; border: none; cursor: pointer; padding: 4px;
+      color: var(--muted); font-size: 1.1rem; line-height: 1;
+      border-radius: 6px; transition: background .12s;
+    }
+    .modal-close:hover { background: var(--neutral-soft); }
+
+    /* ── File upload section ────────────────────────────────────────── */
+    .file-upload-section { margin-top: 8px; }
+    .file-upload-label {
+      font-size: .78rem; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px;
+    }
+    .file-drop-zone {
+      border: 2px dashed var(--border-strong); border-radius: 10px;
+      padding: 14px 16px; text-align: center; cursor: pointer;
+      background: var(--surface-muted); transition: border-color .15s, background .15s;
+      font-size: .82rem; color: var(--muted);
+    }
+    .file-drop-zone:hover, .file-drop-zone.drag-over {
+      border-color: var(--primary); background: var(--primary-soft);
+    }
+    .file-drop-zone input[type=file] { display: none; }
+    .uploaded-files-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .uploaded-file-row {
+      display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+      background: var(--surface-muted); border: 1px solid var(--border);
+      border-radius: 8px; font-size: .8rem;
+    }
+    .uploaded-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-soft); font-weight: 500; }
+    .uploaded-file-meta { color: var(--muted); font-size: .73rem; white-space: nowrap; }
+    .uploaded-file-actions { display: flex; gap: 4px; }
+    .file-btn {
+      padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border-strong);
+      background: transparent; cursor: pointer; font-size: .75rem; font-weight: 600;
+      font-family: inherit; color: var(--text-soft); transition: background .12s;
+    }
+    .file-btn:hover { background: var(--neutral-soft); }
+    .file-btn.danger { color: var(--danger); border-color: rgba(192,16,72,.3); }
+    .file-btn.danger:hover { background: var(--danger-soft); }
+    .file-history-btn {
+      padding: 3px 9px; border-radius: 6px; border: 1px solid var(--border-strong);
+      background: transparent; cursor: pointer; font-size: .73rem; font-weight: 600;
+      font-family: inherit; color: var(--muted); transition: background .12s, color .12s;
+      white-space: nowrap;
+    }
+    .file-history-btn:hover { background: var(--primary-soft); color: var(--primary); border-color: rgba(21,94,239,.3); }
+
+    .practice-save-btn {
+      display: none; align-items: center; gap: 6px;
+      padding: 5px 14px; background: var(--primary); color: #fff;
+      border: none; border-radius: 8px; font-size: .8rem; font-weight: 600;
+      cursor: pointer; font-family: inherit; transition: background .15s;
+    }
+    .practice-save-btn:hover { background: #1241c0; }
+    .practice-save-btn.saved {
+      background: rgba(6,118,71,.1); color: #067647;
+      border: 1px solid rgba(6,118,71,.25); pointer-events: none;
+    }
+
 </style>
 
 </head>
 <body>
-  <div class="container">
+
+  <!-- ── App topbar ─────────────────────────────────────────────────── -->
+  <header class="app-topbar">
+    <button class="app-topbar-hamburger" id="sidebarToggleBtn" aria-label="Toggle navigation">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="app-topbar-logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="4" fill="var(--primary)" opacity="0.15"/><path d="M12 4l7 4v4c0 4-3 7.5-7 9-4-1.5-7-5-7-9V8l7-4z" fill="var(--primary)" opacity="0.85"/><path d="M9 12l2 2 4-4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      AESCSF v2
+    </div>
+    <button class="app-topbar-search-trigger" id="cmdKTrigger" type="button" aria-label="Open command palette">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <span>Search practices, pages, actions…</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <div class="app-topbar-right">
+      <div class="topbar-theme-toggle">
+        <button class="theme-btn" data-theme="light"  onclick="setTheme('light')"  title="Light mode">&#9728;</button>
+        <button class="theme-btn" data-theme="dark"   onclick="setTheme('dark')"   title="Dark mode">&#9790;</button>
+        <button class="theme-btn" data-theme="cyber"  onclick="setTheme('cyber')"  title="Cyber mode">&#9889;</button>
+      </div>
+      <button class="user-avatar-btn" id="topbarUserBtn" style="display:none;" type="button">
+        <div class="user-avatar-circle" id="topbarUserInitials">?</div>
+        <span id="topbarUserName"></span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button class="ghost topbar-signout-btn" id="topbarSignOutBtn" onclick="signOut()" style="display:none;" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <!-- ── Sidebar overlay ────────────────────────────────────────────── -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- ── App sidebar ────────────────────────────────────────────────── -->
+  <nav class="app-sidebar" id="appSidebar" aria-label="Main navigation">
+    <div class="sidebar-nav">
+      <div class="sidebar-section-label">Navigation</div>
+      <button class="sidebar-nav-item" data-page-tab="dashboard" id="sidebarDashboardTab" style="display:none;" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </button>
+      <button class="sidebar-nav-item active" data-page-tab="assessment" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        Assessment
+      </button>
+      <button class="sidebar-nav-item" data-page-tab="timeline" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Timeline
+      </button>
+      <button class="sidebar-nav-item" data-page-tab="comparison" id="sidebarComparisonTab" style="display:none;" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+        Comparison
+      </button>
+      <div class="sidebar-section-label" id="sidebarAdminLabel" style="display:none;">Admin</div>
+      <button class="sidebar-nav-item" data-page-tab="admin" id="sidebarAdminTab" style="display:none;" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Admin
+      </button>
+      <button class="sidebar-nav-item" data-page-tab="audit" id="sidebarAuditTab" style="display:none;" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Audit Log
+      </button>
+    </div>
+    <div class="sidebar-footer" id="sidebarStorageMode"></div>
+  </nav>
+
+  <div id="main-app">
+  <div class="app-content">
     <section class="header">
+      <div id="user-info-bar" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:rgba(21,94,239,.9);border:1px solid rgba(21,94,239,.9);border-radius:12px;margin-bottom:16px;">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" style="flex-shrink:0;"><path fill="#fff" d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 12c5.33 0 8 2.67 8 4v2H4v-2c0-1.33 2.67-4 8-4z"/></svg>
+        <span id="user-display-name" style="font-size:.875rem;font-weight:600;color:#fff;"></span>
+        <span id="user-role-badge" style="display:none;padding:2px 10px;border-radius:999px;font-size:.75rem;font-weight:700;letter-spacing:.02em;"></span>
+        <span style="flex:1;"></span>
+        <div style="display:flex;gap:2px;background:rgba(0,0,0,.2);padding:3px;border-radius:8px;align-items:center;" title="Switch theme">
+          <button class="theme-btn" data-theme="light"  onclick="setTheme('light')"  title="Light mode">&#9728;</button>
+          <button class="theme-btn" data-theme="dark"   onclick="setTheme('dark')"   title="Dark mode">&#9790;</button>
+          <button class="theme-btn" data-theme="cyber"  onclick="setTheme('cyber')"  title="Cyber mode">&#9889;</button>
+        </div>
+        <button onclick="signOut()" style="padding:5px 12px;background:transparent;border:1px solid rgba(255,255,255,.5);border-radius:8px;font-size:.8rem;font-weight:500;color:#fff;cursor:pointer;font-family:inherit;">Sign out</button>
+      </div>
       <h1>AESCSF v2 Evidence Tracker</h1>
       <p>Capture implementation status, evidence, owners, dates, and notes against each AESCSF v2 practice. Your work is stored locally in the browser and can also be exported to or imported from JSON.</p>
-      <div class="top-actions">
+      <div class="top-actions" id="topActionsBar">
         <button id="exportBtn">Export JSON</button>
         <button class="secondary" id="exportTemplateCsvBtn">AEMO Export</button>
         <button class="secondary" id="exportGapBtn">Export Gap Register</button>
         <button class="secondary" id="pdfBtn">Generate PDF Report</button>
+        <button class="secondary" id="saveSnapshotBtn" title="Save the current assessment as a named snapshot for year-on-year comparison">Save Snapshot</button>
         <label class="button-like secondary" for="importFile">Import JSON</label>
         <input id="importFile" type="file" accept=".json,application/json" hidden />
         <button class="ghost" id="resetBtn">Reset Assessment Data</button>
       </div>
       <div class="page-nav">
-        <button class="page-tab active" data-page-tab="dashboard">Dashboard</button>
-        <button class="page-tab" data-page-tab="assessment">Assessment</button>
+        <button class="page-tab" data-page-tab="dashboard" id="dashboardPageTab" style="display:none;">Dashboard</button>
+        <button class="page-tab active" data-page-tab="assessment">Assessment</button>
         <button class="page-tab" data-page-tab="timeline">Target Date Timeline</button>
-        <button class="page-tab" data-page-tab="comparison">Comparison</button>
+        <button class="page-tab" data-page-tab="comparison" id="comparisonPageTab" style="display:none;">Comparison</button>
+        <button class="page-tab" data-page-tab="admin" id="adminPageTab" style="display:none;">Admin</button>
+        <button class="page-tab" data-page-tab="audit" id="auditPageTab" style="display:none;">Audit Log</button>
       </div>
     </section>
 
     
     <div id="dashboardPage" class="page active">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1>Dashboard</h1>
+          <p>Executive overview of assessment progress, domain maturity, and open gaps.</p>
+        </div>
+      </div>
       <section class="summary">
         <div class="timeline-toolbar">
           <div>
@@ -1037,9 +1938,84 @@
           <div id="dashboardGapTable"></div>
         </section>
       </section>
+
+      <!-- Admin-only Security Profile breakdown -->
+      <section id="spBreakdownSection" class="dashboard-grid" style="display:none;">
+        <section class="dashboard-panel dashboard-panel-span">
+          <div class="panel-header">
+            <div>
+              <h3>Security Profile Maturity <span class="confidence-admin-badge" style="vertical-align:middle;margin-left:6px;">Admin Only</span></h3>
+              <div class="footer-note">Average maturity score by domain for each Security Profile — SP-1 (Foundational), SP-2 (Intermediate), SP-3 (Advanced) — overlaid on a single radar for direct comparison.</div>
+            </div>
+          </div>
+          <div class="chart-wrap" style="height:360px;"><canvas id="spBreakdownRadarChart"></canvas></div>
+        </section>
+        <section class="dashboard-panel dashboard-panel-span">
+          <div class="panel-header">
+            <div>
+              <h3>Domain × Security Profile Detail</h3>
+              <div class="footer-note">Completion rate (fully / total) and average score per domain at each Security Profile level.</div>
+            </div>
+          </div>
+          <div id="spBreakdownTable"></div>
+        </section>
+      </section>
     </div>
 
     <div id="assessmentPage" class="page">
+    <div class="page-header" id="assessmentPageHeader">
+      <div class="page-header-text">
+        <h1>Assessment</h1>
+        <p>Capture implementation status, evidence, owners, and notes for each AESCSF v2 practice.</p>
+      </div>
+      <div class="page-header-actions">
+        <div class="actions-menu-wrapper" id="actionsMenuWrapper">
+          <button class="secondary" id="actionsMenuBtn" type="button" aria-haspopup="true" aria-expanded="false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            Actions
+          </button>
+          <div class="actions-menu" id="actionsMenu">
+            <div class="actions-menu-group">
+              <div class="actions-menu-group-label">Export</div>
+              <button class="actions-menu-item" id="actionsExportJson" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export JSON
+              </button>
+              <button class="actions-menu-item" id="actionsAemoExport" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                AEMO Export
+              </button>
+              <button class="actions-menu-item" id="actionsGapRegister" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                Gap Register PDF
+              </button>
+              <button class="actions-menu-item" id="actionsFullReport" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M9 13h6M9 17h4M14 2v6h6"/></svg>
+                Full Report PDF
+              </button>
+            </div>
+            <div class="actions-menu-group">
+              <div class="actions-menu-group-label">Data</div>
+              <label class="actions-menu-item" for="importFile" style="cursor:pointer;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Import JSON
+              </label>
+              <button class="actions-menu-item" id="actionsSaveSnapshot" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Snapshot
+              </button>
+            </div>
+            <div class="actions-menu-group">
+              <div class="actions-menu-group-label">Danger</div>
+              <button class="actions-menu-item danger" id="actionsReset" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+                Reset Assessment Data
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <section class="summary">
       <div class="summary-grid">
         <div class="stat">
@@ -1125,6 +2101,12 @@
     </div>
 
     <div id="timelinePage" class="page">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1>Timeline</h1>
+          <p>Practices with target dates grouped into overdue, upcoming, and future schedules.</p>
+        </div>
+      </div>
       <section class="summary">
         <div class="timeline-toolbar">
           <div>
@@ -1155,51 +2137,75 @@
     </div>
 
     <div id="comparisonPage" class="page">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1>Comparison</h1>
+          <p>Year-on-year comparison across saved snapshots or imported JSON files.</p>
+        </div>
+      </div>
       <section class="summary">
         <div class="timeline-toolbar">
           <div>
-            <h2 style="margin:0 0 6px 0;">Comparison</h2>
-            <div class="footer-note" style="margin-top:0;">Compare a previous assessment JSON against a current assessment JSON, or compare the previous file against the live assessment currently loaded in the tracker.</div>
+            <h2 style="margin:0 0 6px 0;">Year-on-Year Comparison</h2>
+            <div class="footer-note" style="margin-top:0;">Select saved snapshots to compare, or import JSON exports from previous periods. Use <strong>Save Snapshot</strong> in the toolbar to archive the current assessment state.</div>
           </div>
+          <button class="ghost" id="clearComparisonBtn" type="button">Clear Comparison</button>
         </div>
         <div class="dashboard-grid">
+
           <section class="dashboard-panel">
-            <div class="panel-header">
-              <div>
-                <h3>Previous Assessment</h3>
-                <div class="footer-note" id="comparisonPreviousMeta">Upload a JSON export from the previous assessment period.</div>
+            <div class="panel-header"><div>
+              <h3>Previous Assessment</h3>
+              <div class="footer-note" id="comparisonPreviousMeta">Nothing loaded — select a snapshot or import a JSON file.</div>
+            </div></div>
+            <div class="field">
+              <label>Loaded</label>
+              <input id="comparisonPreviousName" type="text" value="Nothing loaded" readonly />
+            </div>
+            <div class="field" id="comparisonPreviousSnapshotRow">
+              <label>Saved Snapshots</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="comparisonPreviousSelect" style="flex:1;padding:8px 10px;border-radius:10px;border:1px solid var(--border-strong);background:var(--surface-strong);font-size:.875rem;color:var(--text);font-family:inherit;">
+                  <option value="">— Select a snapshot —</option>
+                </select>
+                <button class="secondary" id="comparisonPreviousLoadBtn" type="button">Load</button>
+                <button class="ghost" id="comparisonPreviousDeleteBtn" type="button" title="Delete selected snapshot">Delete</button>
               </div>
             </div>
-            <div class="field">
-              <label>Loaded File</label>
-              <input id="comparisonPreviousName" type="text" value="No file loaded" readonly />
-            </div>
             <div class="top-actions" style="margin-top:12px;">
-              <label class="button-like secondary" for="comparisonPreviousFile">Import Previous JSON</label>
+              <label class="button-like secondary" for="comparisonPreviousFile">Import JSON</label>
               <input id="comparisonPreviousFile" type="file" accept=".json,application/json" hidden />
-              <button class="ghost" id="comparisonExportPreviousBtn" type="button">Export Previous JSON</button>
+              <button class="ghost" id="comparisonExportPreviousBtn" type="button">Export JSON</button>
             </div>
           </section>
 
           <section class="dashboard-panel">
-            <div class="panel-header">
-              <div>
-                <h3>Current Assessment</h3>
-                <div class="footer-note" id="comparisonCurrentMeta">Upload a JSON export from the current assessment period or use the live assessment.</div>
+            <div class="panel-header"><div>
+              <h3>Current Assessment</h3>
+              <div class="footer-note" id="comparisonCurrentMeta">Nothing loaded — select a snapshot, use the live assessment, or import a JSON file.</div>
+            </div></div>
+            <div class="field">
+              <label>Loaded</label>
+              <input id="comparisonCurrentName" type="text" value="Nothing loaded" readonly />
+            </div>
+            <div class="field" id="comparisonCurrentSnapshotRow">
+              <label>Saved Snapshots</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="comparisonCurrentSelect" style="flex:1;padding:8px 10px;border-radius:10px;border:1px solid var(--border-strong);background:var(--surface-strong);font-size:.875rem;color:var(--text);font-family:inherit;">
+                  <option value="">— Select a snapshot —</option>
+                </select>
+                <button class="secondary" id="comparisonCurrentLoadBtn" type="button">Load</button>
+                <button class="ghost" id="comparisonCurrentDeleteBtn" type="button" title="Delete selected snapshot">Delete</button>
               </div>
             </div>
-            <div class="field">
-              <label>Loaded File</label>
-              <input id="comparisonCurrentName" type="text" value="No file loaded" readonly />
-            </div>
             <div class="top-actions" style="margin-top:12px;">
-              <label class="button-like secondary" for="comparisonCurrentFile">Import Current JSON</label>
+              <label class="button-like secondary" for="comparisonCurrentFile">Import JSON</label>
               <input id="comparisonCurrentFile" type="file" accept=".json,application/json" hidden />
               <button class="secondary" id="comparisonUseLiveBtn" type="button">Use Live Assessment</button>
-              <button class="ghost" id="comparisonExportCurrentBtn" type="button">Export Current JSON</button>
-              <button class="ghost" id="clearComparisonBtn" type="button">Clear Comparison</button>
+              <button class="ghost" id="comparisonExportCurrentBtn" type="button">Export JSON</button>
             </div>
           </section>
+
         </div>
       </section>
 
@@ -1272,13 +2278,178 @@
       </section>
     </div>
 
+    <!-- ── Admin panel ─────────────────────────────────────────────── -->
+    <div id="adminPage" class="page">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1>Admin</h1>
+          <p>Manage roles and domain assignments for all registered users.</p>
+        </div>
+      </div>
+      <section class="summary" style="margin-bottom:24px;">
+        <div class="timeline-toolbar" style="flex-wrap:wrap;gap:12px;">
+          <div>
+            <h2 style="margin:0 0 6px 0;">Admin — User &amp; Access Management</h2>
+            <div class="footer-note" style="margin-top:0;">Manage roles and domain assignments for all registered users. Assign domains to users so they only see the practices relevant to their responsibilities.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="secondary" id="adminRefreshBtn">Refresh</button>
+            <button class="secondary" id="adminLoadMergedBtn">Load Merged View</button>
+            <button class="secondary" id="adminLoadApprovedBtn">Load Approved View</button>
+          </div>
+        </div>
+        <div id="adminMergedBanner" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(181,71,8,.08);border:1px solid rgba(181,71,8,.2);border-radius:12px;font-size:.875rem;color:#b54708;display:flex;align-items:center;gap:10px;">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path fill="#b54708" d="M12 2a10 10 0 1 1 0 20A10 10 0 0 1 12 2zm0 5v6m0 2v2"/></svg>
+          Merged view loaded — showing combined data from all contributors. <button onclick="adminRestoreOwnView()" style="margin-left:auto;padding:4px 12px;background:transparent;border:1px solid rgba(181,71,8,.4);border-radius:8px;font-size:.8rem;font-weight:500;color:#b54708;cursor:pointer;">Restore my view</button>
+        </div>
+        <div id="adminApprovedBanner" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.2);border-radius:12px;font-size:.875rem;color:#166534;display:flex;align-items:center;gap:10px;">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path fill="#166534" d="M9 12l2 2 4-4m5 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke="#166534" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Approved assessment loaded â showing officially approved data. <button onclick="adminRestoreOwnView()" style="margin-left:auto;padding:4px 12px;background:transparent;border:1px solid rgba(22,163,74,.4);border-radius:8px;font-size:.8rem;font-weight:500;color:#166534;cursor:pointer;">Restore my view</button>
+        </div>
+      <div id="assignmentIncompleteBanner" class="merged-banner" style="display:none;background:rgba(234,179,8,.12);border-color:rgba(234,179,8,.4);">
+        <span id="assignmentIncompleteBannerMsg"></span>
+        <button class="secondary" onclick="document.getElementById('assignmentIncompleteBanner').style.display='none'" style="margin-left:auto;">Dismiss</button>
+      </div>
+      </section>
+
+      <div style="padding:14px 18px;background:rgba(21,94,239,.06);border:1px solid rgba(21,94,239,.14);border-radius:12px;margin-bottom:18px;font-size:.85rem;color:var(--text-soft);line-height:1.5;">
+        <strong>How domain assignment works:</strong> AESCSF v2 practices are organised into 11 domains (e.g. ACCESS, ARCHITECTURE, WORKFORCE). Tick the domains each user is responsible for and click <em>Save assignments</em>. That user will then only see the practices within those domains in the Assessment and Dashboard views. Admins always see all 11 domains.
+      </div>
+
+      <section id="adminUserList" style="display:flex;flex-direction:column;gap:16px;">
+        <div style="padding:32px;text-align:center;color:var(--muted);font-size:.9rem;">Loading users…</div>
+      </section>
+
+        <section class="summary" style="margin-top:22px;">
+          <div class="timeline-toolbar">
+            <div>
+              <h2 style="margin:0 0 6px 0;">Multi-Respondent Responses</h2>
+              <div class="footer-note" style="margin-top:0;">Side-by-side view of all assigned users' independent responses per practice.</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <select id="responseDomainFilter" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.85rem;"><option value="">All domains</option></select>
+              <select id="responseObjectiveFilter" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.85rem;"><option value="">All objectives</option></select>
+              <button class="secondary" id="responseLoadBtn">Load responses</button>
+            </div>
+          </div>
+          <div id="responsesContainer"><div class="audit-empty">Select filters and click Load to view multi-respondent responses.</div></div>
+        </section>
+    </div>
+
+    <!-- ── Audit Log page ────────────────────────────────────────────── -->
+    <div id="auditPage" class="page">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1>Audit Log</h1>
+          <p>Complete field-level change history with user, timestamp, old and new values.</p>
+        </div>
+      </div>
+      <section class="summary">
+        <div class="timeline-toolbar">
+          <div>
+            <h2 style="margin:0 0 6px 0;">Audit Log</h2>
+            <div class="footer-note" style="margin-top:0;">Complete change history — every field edit recorded with user, timestamp, old value, and new value. Admins see all users; standard users see their own changes only.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <a id="auditExportBtn" href="/api/audit/export" target="_blank"
+               style="padding:8px 16px;background:transparent;border:1px solid var(--border-strong);border-radius:10px;font-size:.85rem;font-weight:600;color:var(--text-soft);cursor:pointer;text-decoration:none;font-family:inherit;">
+              Export CSV
+            </a>
+            <button class="secondary" id="auditRefreshBtn">Refresh</button>
+            <button class="secondary" id="auditPurgeBtn" style="display:none;color:var(--danger);border-color:var(--danger);">Purge old entries</button>
+          </div>
+        </div>
+
+        <div class="audit-toolbar">
+          <div class="field">
+            <label for="auditFilterPractice">Practice ID</label>
+            <input id="auditFilterPractice" type="text" placeholder="e.g. ACCESS-1a" />
+          </div>
+          <div class="field">
+            <label for="auditFilterField">Field</label>
+            <select id="auditFilterField">
+              <option value="">All fields</option>
+              <option>status</option>
+              <option>owner</option>
+              <option>targetDate</option>
+              <option>lastReviewed</option>
+              <option>evidence</option>
+              <option>notes</option>
+              <option>gap</option>
+              <option>attachments</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="auditFilterFrom">From</label>
+            <input id="auditFilterFrom" type="date" />
+          </div>
+          <div class="field">
+            <label for="auditFilterTo">To</label>
+            <input id="auditFilterTo" type="date" />
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="secondary" id="auditSearchBtn">Search</button>
+          </div>
+        </div>
+
+        <div id="auditTableContainer">
+          <div class="audit-empty">Click Search or Refresh to load the audit log.</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── History modal (shared) ────────────────────────────────────── -->
+    <div id="historyModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeHistoryModal()">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3 id="historyModalTitle">Change History</h3>
+          <button class="modal-close" onclick="closeHistoryModal()">✕</button>
+        </div>
+        <div class="modal-body" id="historyModalBody">
+          <div class="audit-empty">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  </div><!-- /#main-app -->
+
+  <!-- ── Command Palette ──────────────────────────────────────────────── -->
+  <div class="cmd-palette-overlay" id="cmdPaletteOverlay" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="cmd-palette" id="cmdPalette">
+      <div class="cmd-palette-input-row">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="cmd-palette-input" id="cmdPaletteInput" type="text" placeholder="Search practices, navigate, or run an action…" autocomplete="off" spellcheck="false" />
+        <kbd style="padding:2px 7px;font-size:.7rem;border:1px solid var(--border-strong);border-radius:5px;color:var(--muted);background:var(--surface);font-family:inherit;flex-shrink:0;">ESC</kbd>
+      </div>
+      <div class="cmd-palette-results" id="cmdPaletteResults" role="listbox"></div>
+    </div>
   </div>
 
+  <!-- Runtime config — served by Nginx; sets window.__AESCSF_CONFIG__ -->
+  <script src="/config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script>
     const STORAGE_KEY = "aescsf-v2-evidence-tracker";
+
+    function emptyStateHtml({ icon, title, body, actionLabel, actionId }) {
+      const icons = {
+        search:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`,
+        clipboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 12l2 2 4-4"/></svg>`,
+        network:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M10.83 16.11a6 6 0 012.34 0"/><circle cx="12" cy="20" r="1"/></svg>`,
+        timeline:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+        history:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+      };
+      const idAttr = actionId ? ` id="${actionId}"` : "";
+      return `<div class="empty-state">
+        <div class="empty-state-icon">${icons[icon] || icons.search}</div>
+        <h3 class="empty-state-title">${escapeHtml(title)}</h3>
+        <p class="empty-state-body">${body}</p>
+        ${actionLabel ? `<button class="secondary empty-state-action"${idAttr}>${escapeHtml(actionLabel)}</button>` : ""}
+      </div>`;
+    }
     const APP_CONFIG = Object.freeze({
       appVersion: "1.2.0",
       storageMode: (window.__AESCSF_CONFIG__ && window.__AESCSF_CONFIG__.storageMode) || "local",
@@ -1351,16 +2522,16 @@
       return {
         mode: "api",
         load() {
-          console.info("API storage mode is reserved for future on-prem or hosted deployments. Falling back to browser storage for now.");
           return localAdapter.load();
         },
         save(nextState) {
-          console.info("API storage mode is reserved for future on-prem or hosted deployments. Falling back to browser storage for now.");
           localAdapter.save(nextState);
+          /* Fire-and-forget sync to backend — errors are non-fatal */
+          this.saveRemote(nextState).catch(err => console.warn("[AESCSF] API sync failed:", err));
         },
         async loadRemote() {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), config.requestTimeoutMs);
+          const timeoutId  = setTimeout(() => controller.abort(), config.requestTimeoutMs);
           try {
             const response = await fetch(`${config.apiBaseUrl}${config.apiAssessmentPath}`, {
               method: "GET",
@@ -1376,7 +2547,7 @@
         },
         async saveRemote(nextState) {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), config.requestTimeoutMs);
+          const timeoutId  = setTimeout(() => controller.abort(), config.requestTimeoutMs);
           try {
             const response = await fetch(`${config.apiBaseUrl}${config.apiAssessmentPath}`, {
               method: "PUT",
@@ -1459,6 +2630,7 @@
     const importFile = document.getElementById("importFile");
     let domainRadarChart = null;
     let milRadarChart = null;
+    let spBreakdownChart = null;
     let comparisonRadarChart = null;
     let comparisonStatusChart = null;
     let comparisonGapChart = null;
@@ -1480,16 +2652,34 @@
     }
 
     function setActivePage(page) {
+      const ADMIN_ONLY_PAGES = new Set(["dashboard", "comparison", "admin", "audit"]);
+      if (ADMIN_ONLY_PAGES.has(page) && window.__AESCSF_RBAC__?.role !== "admin") {
+        page = "assessment";
+      }
       dashboardPage.classList.toggle("active", page === "dashboard");
       assessmentPage.classList.toggle("active", page === "assessment");
       timelinePage.classList.toggle("active", page === "timeline");
       if (comparisonPage) comparisonPage.classList.toggle("active", page === "comparison");
+      const adminPage = document.getElementById("adminPage");
+      if (adminPage) adminPage.classList.toggle("active", page === "admin");
+      const auditPage = document.getElementById("auditPage");
+      if (auditPage) auditPage.classList.toggle("active", page === "audit");
       pageTabs.forEach(tab => {
         tab.classList.toggle("active", tab.dataset.pageTab === page);
       });
-      if (page === "timeline") renderTimeline();
-      if (page === "dashboard") renderDashboard();
+      document.querySelectorAll(".sidebar-nav-item[data-page-tab]").forEach(item => {
+        item.classList.toggle("active", item.dataset.pageTab === page);
+      });
+      if (window.innerWidth <= 900) {
+        document.getElementById("appSidebar")?.classList.remove("open");
+        document.getElementById("sidebarOverlay")?.classList.remove("open");
+        document.body.style.overflow = "";
+      }
+      if (page === "timeline")   renderTimeline();
+      if (page === "dashboard")  renderDashboard();
       if (page === "comparison") renderComparison();
+      if (page === "admin")      renderAdminPanel();
+      if (page === "audit")      renderAuditLog();
     }
 
     function formatDate(dateString) {
@@ -1518,7 +2708,11 @@
     }
 
     function populateDomains() {
-      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const rbac = window.__AESCSF_RBAC__;
+      const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const domains = (rbac && rbac.role !== "admin" && rbac.domains.length)
+        ? allDomains.filter(d => rbac.domains.includes(d))
+        : allDomains;
       domainFilter.innerHTML = `<option value="">All</option>${domains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("")}`;
     }
 
@@ -1602,7 +2796,11 @@
         const matchesMil = !milFilter.value || practice.mil === milFilter.value;
         const matchesSp = !spFilter.value || practice.securityProfile === spFilter.value;
         const matchesStatus = !statusFilter.value || assessment.status === statusFilter.value;
-        return matchesSearch && matchesDomain && matchesMil && matchesSp && matchesStatus;
+        const rbac = window.__AESCSF_RBAC__;
+        const matchesRbac = !rbac || rbac.role === "admin"
+          || rbac.domains.includes(practice.domain)
+          || (rbac.objectives || []).includes(practice.objectiveId);
+        return matchesSearch && matchesDomain && matchesMil && matchesSp && matchesStatus && matchesRbac;
       });
     }
 
@@ -1659,10 +2857,13 @@
     }
 
     function getAllRows() {
-      return PRACTICES.map(practice => ({
-        practice,
-        assessment: state.assessments[practice.practiceId] || defaultAssessment()
-      }));
+      const rbac = window.__AESCSF_RBAC__;
+      return PRACTICES
+        .filter(p => !rbac || rbac.role === "admin" || !rbac.domains.length || rbac.domains.includes(p.domain))
+        .map(practice => ({
+          practice,
+          assessment: state.assessments[practice.practiceId] || defaultAssessment()
+        }));
     }
 
     function getGapRows() {
@@ -1701,7 +2902,28 @@
       const grouped = groupByObjective(getFilteredPractices());
 
       if (!grouped.length) {
-        app.innerHTML = `<div class="empty">No practices match the current filters.</div>`;
+        const rbacE = window.__AESCSF_RBAC__;
+        const hasAssignment = rbacE && rbacE.role !== "admin" && (rbacE.domains.length || (rbacE.objectives || []).length);
+        const isNoAssign = rbacE && rbacE.role !== "admin" && !hasAssignment;
+        app.innerHTML = emptyStateHtml({
+          icon: isNoAssign ? "clipboard" : "search",
+          title: isNoAssign ? "No practices assigned" : "No practices found",
+          body: isNoAssign
+            ? "No practices have been assigned to you yet. Contact your administrator to get started."
+            : "No practices match the current filters. Try adjusting your search or clearing the filters.",
+          actionLabel: isNoAssign ? null : "Clear filters",
+          actionId: isNoAssign ? null : "emptyStateClearFilters"
+        });
+        if (!isNoAssign) {
+          document.getElementById("emptyStateClearFilters")?.addEventListener("click", () => {
+            document.getElementById("searchInput").value = "";
+            document.getElementById("domainFilter").value = "";
+            document.getElementById("milFilter").value = "";
+            document.getElementById("spFilter").value = "";
+            document.getElementById("statusFilter").value = "";
+            render();
+          });
+        }
         updateSummary();
         return;
       }
@@ -1729,10 +2951,158 @@
         `;
       }).join("");
 
-      bindObjectiveToggles();
-      bindAssessmentInputs();
       updateSummary();
       renderTimeline();
+      setTimeout(attachCharCounters, 0);
+    }
+
+    /* ── Confidence rating helpers ──────────────────────────────────────────── */
+    function confidenceLabel(r) {
+      return ["", "Very Low", "Low", "Medium", "High", "Very High"][r] || "";
+    }
+    function confidenceRatingClass(r) {
+      return r > 0 ? `conf-rating-${r}` : "";
+    }
+    function renderContributors(practiceId) {
+      if (!state._mergedView) return "";
+      const contributors = (state._contributors || {})[practiceId];
+      if (!contributors || contributors.length === 0) return "";
+      const rows = contributors.map(c => {
+        const sc = statusClass(c.assessment?.status || "");
+        const ev = c.assessment?.evidence ? escapeHtml(c.assessment.evidence.slice(0,80)) + (c.assessment.evidence.length > 80 ? "…" : "") : "—";
+        return `<div class="contributor-row">
+          <div class="contributor-name"><strong>${escapeHtml(c.display_name)}</strong><br><span style="color:var(--muted);font-size:.75rem;">${escapeHtml(c.username)}</span></div>
+          <span class="status-badge ${sc}">${escapeHtml(c.assessment?.status || "Not Assessed")}</span>
+          <div class="contributor-evidence">${ev}</div>
+          <button class="secondary" id="accept-${escapeHtml(c.user_oid)}-${escapeHtml(practiceId)}"
+            onclick="acceptContribution('${escapeHtml(c.user_oid)}','${escapeHtml(practiceId)}')" 
+            style="padding:3px 10px;font-size:.79rem;white-space:nowrap;">Accept</button>
+        </div>`;
+      }).join("");
+      return `<details class="contributor-section">
+        <summary class="contributor-summary">
+          👥 Respondents (${contributors.length}) — click to review and accept
+        </summary>
+        <div class="contributor-list">${rows}</div>
+      </details>`;
+    }
+
+    async function acceptContribution(userOid, practiceId) {
+      const btnId = `accept-${userOid}-${practiceId}`;
+      const btn = document.getElementById(btnId);
+      if (btn) { btn.disabled = true; btn.textContent = "Accepting…"; }
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(userOid)}/approve-contributions`, {
+          method: "POST", body: JSON.stringify({ practiceIds: [practiceId] })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          if (btn) { btn.disabled = false; btn.textContent = "Accept"; }
+          alert(`Failed: ${err.error || resp.status}`);
+          return;
+        }
+        // Update local merged state with the accepted answer
+        const c = (state._contributors?.[practiceId] || []).find(c => c.user_oid === userOid);
+        if (c) {
+          if (!state.assessments[practiceId]) state.assessments[practiceId] = defaultAssessment();
+          Object.assign(state.assessments[practiceId], c.assessment);
+        }
+        render();
+        // Scroll accepted card back into view and mark button
+        requestAnimationFrame(() => {
+          const newBtn = document.getElementById(btnId);
+          if (newBtn) { newBtn.textContent = "✓ Accepted"; newBtn.style.cssText += ";background:rgba(22,163,74,.12);color:#166534;border-color:rgba(22,163,74,.4);"; }
+        });
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = "Accept"; }
+        alert(err.message);
+      }
+    }
+
+    function renderConfidenceWidget(practiceId) {
+      const conf = (window.__AESCSF_CONFIDENCE__ || {})[practiceId] || { rating: 0, notes: "" };
+      const r = conf.rating || 0;
+      const pid = escapeHtml(practiceId);
+      const stars = [1,2,3,4,5].map(n =>
+        `<button type="button" class="conf-star${r >= n ? " filled" : ""}" data-confidence-star="${n}" data-pid="${pid}">${r >= n ? "★" : "☆"}</button>`
+      ).join("");
+      return `
+        <div class="confidence-widget">
+          <div class="confidence-widget-header">
+            <span class="confidence-admin-badge">Admin Only</span>
+            <span class="confidence-widget-title">Compliance Confidence</span>
+            <div class="conf-stars-row ${confidenceRatingClass(r)}" data-pid="${pid}">${stars}</div>
+            ${r > 0 ? `<span class="confidence-level-badge ${confidenceRatingClass(r)}">${confidenceLabel(r)}</span>` : ""}
+            ${r > 0 ? `<button type="button" class="conf-clear-btn" data-pid="${pid}" title="Clear rating">✕</button>` : ""}
+          </div>
+          <textarea class="conf-notes-input" data-pid="${pid}" placeholder="Confidence rationale (admin only, optional)…" maxlength="2000">${escapeHtml(conf.notes || "")}</textarea>
+        </div>`;
+    }
+    function updateConfidenceWidget(widget, rating, notes) {
+      const pid = widget.querySelector("[data-pid]")?.dataset.pid;
+      if (!window.__AESCSF_CONFIDENCE__) window.__AESCSF_CONFIDENCE__ = {};
+      if (pid) window.__AESCSF_CONFIDENCE__[pid] = { rating, notes };
+      const starsRow = widget.querySelector(".conf-stars-row");
+      if (starsRow) {
+        starsRow.className = `conf-stars-row ${confidenceRatingClass(rating)}`.trim();
+        starsRow.querySelectorAll("[data-confidence-star]").forEach(btn => {
+          const n = parseInt(btn.dataset.confidenceStar);
+          btn.className = `conf-star${rating >= n ? " filled" : ""}`;
+          btn.textContent = rating >= n ? "★" : "☆";
+        });
+      }
+      const header = widget.querySelector(".confidence-widget-header");
+      let badge    = widget.querySelector(".confidence-level-badge");
+      let clearBtn = widget.querySelector(".conf-clear-btn");
+      if (rating > 0) {
+        if (!badge) { badge = document.createElement("span"); header.appendChild(badge); }
+        badge.className   = `confidence-level-badge ${confidenceRatingClass(rating)}`;
+        badge.textContent = confidenceLabel(rating);
+        if (!clearBtn) {
+          clearBtn = document.createElement("button");
+          clearBtn.type = "button";
+          clearBtn.className = "conf-clear-btn";
+          if (pid) clearBtn.dataset.pid = pid;
+          clearBtn.title = "Clear rating";
+          clearBtn.textContent = "✕";
+          header.appendChild(clearBtn);
+        }
+      } else {
+        badge?.remove();
+        clearBtn?.remove();
+      }
+      const notesEl = widget.querySelector(".conf-notes-input");
+      if (notesEl && document.activeElement !== notesEl && notesEl.value !== (notes || "")) {
+        notesEl.value = notes || "";
+      }
+    }
+    async function saveConfidence(practiceId, rating, notes) {
+      if (!window.__AESCSF_CONFIDENCE__) window.__AESCSF_CONFIDENCE__ = {};
+      window.__AESCSF_CONFIDENCE__[practiceId] = { rating, notes };
+      try {
+        await adminFetch(`/admin/confidence/${encodeURIComponent(practiceId)}`, {
+          method: "PUT",
+          body: JSON.stringify({ rating, notes })
+        });
+      } catch (err) {
+        console.error("[AESCSF] Confidence save error:", err);
+      }
+    }
+    async function loadConfidenceRatings() {
+      if (window.__AESCSF_RBAC__?.role !== "admin" || APP_CONFIG.storageMode !== "api") return;
+      try {
+        const resp = await adminFetch("/admin/confidence");
+        if (!resp.ok) return;
+        window.__AESCSF_CONFIDENCE__ = await resp.json();
+        document.querySelectorAll(".confidence-widget").forEach(widget => {
+          const pid = widget.querySelector("[data-pid]")?.dataset.pid;
+          if (!pid) return;
+          const conf = (window.__AESCSF_CONFIDENCE__ || {})[pid] || { rating: 0, notes: "" };
+          updateConfidenceWidget(widget, conf.rating, conf.notes);
+        });
+      } catch (err) {
+        console.warn("[AESCSF] Could not load confidence ratings:", err);
+      }
     }
 
     function renderPracticeCard(practice) {
@@ -1750,7 +3120,7 @@
               </div>
             </div>
             <div class="field" style="min-width: 220px;">
-              <label>Status</label>
+              <label class="required">Assessment Status</label>
               <select data-field="status" class="status-select ${statusClass(a.status)}">
                 ${getStatusOptions(practice).map(option => `<option ${a.status === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
               </select>
@@ -1766,36 +3136,65 @@
             </div>
             <div class="field">
               <label>Target Date</label>
-              <input data-field="targetDate" type="date" value="${escapeHtml(a.targetDate)}" />
+              <div class="input-wrapper"><input data-field="targetDate" type="date" value="${escapeHtml(a.targetDate)}" /><svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
             </div>
             <div class="field">
               <label>Last Reviewed</label>
-              <input data-field="lastReviewed" type="date" value="${escapeHtml(a.lastReviewed)}" />
+              <div class="input-wrapper"><input data-field="lastReviewed" type="date" value="${escapeHtml(a.lastReviewed)}" /><svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
             </div>
           </div>
 
           <div class="grid-2">
             <div class="field">
               <label>Evidence</label>
-              <textarea data-field="evidence" placeholder="Record the evidence demonstrating implementation, such as policy names, screenshots, ticket references, system settings, reports, or interview notes.">${escapeHtml(a.evidence)}</textarea>
+              <textarea data-field="evidence" maxlength="4000" placeholder="Record the evidence demonstrating implementation, such as policy names, screenshots, ticket references, system settings, reports, or interview notes.">${escapeHtml(a.evidence)}</textarea>
             </div>
             <div class="field">
               <label>Gap / Remediation</label>
-              <textarea data-field="gap" placeholder="Describe any implementation gap, control weakness, or remediation action.">${escapeHtml(a.gap)}</textarea>
+              <textarea data-field="gap" maxlength="4000" placeholder="Describe any implementation gap, control weakness, or remediation action.">${escapeHtml(a.gap)}</textarea>
             </div>
           </div>
 
           <div class="grid-2">
             <div class="field">
               <label>Notes</label>
-              <textarea data-field="notes" placeholder="Add assessment notes, assumptions, caveats, or references.">${escapeHtml(a.notes)}</textarea>
+              <textarea data-field="notes" maxlength="4000" placeholder="Add assessment notes, assumptions, caveats, or references.">${escapeHtml(a.notes)}</textarea>
             </div>
             <div class="field">
               <label>Evidence Attachment Links</label>
-              <textarea data-field="attachments" placeholder="Enter one URL, file path, SharePoint link, ticket reference, or document reference per line.">${escapeHtml(a.attachments)}</textarea>
+              <textarea data-field="attachments" maxlength="4000" placeholder="Enter one URL, file path, SharePoint link, ticket reference, or document reference per line.">${escapeHtml(a.attachments)}</textarea>
               <div class="attachment-preview">${renderAttachmentPreview(a.attachments)}</div>
             </div>
           </div>
+
+          ${APP_CONFIG.storageMode === "api" ? `
+          <div class="grid-2" style="margin-top:4px;">
+            <div class="file-upload-section">
+              <div class="file-upload-label">Uploaded Evidence Files</div>
+              <div class="file-drop-zone" data-practice-id="${escapeHtml(practice.practiceId)}"
+                   onclick="document.getElementById('fileInput-${escapeHtml(practice.practiceId)}').click()"
+                   ondragover="event.preventDefault();this.classList.add('drag-over')"
+                   ondragleave="this.classList.remove('drag-over')"
+                   ondrop="handleFileDrop(event,'${escapeHtml(practice.practiceId)}')">
+                <input type="file" id="fileInput-${escapeHtml(practice.practiceId)}" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.docx,.xlsx,.pptx,.doc,.xls"
+                       onchange="handleFileInputChange(event,'${escapeHtml(practice.practiceId)}')">
+                Click to upload or drag &amp; drop — PDF, images, Word, Excel, CSV (max 20 MB)
+              </div>
+              <div class="uploaded-files-list" id="files-${escapeHtml(practice.practiceId)}">
+                <div style="color:var(--muted);font-size:.78rem;padding:4px 0;">Loading files…</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:4px;">
+              <button class="practice-save-btn">Save changes</button>
+              <button class="file-history-btn" onclick="openHistoryModal('${escapeHtml(practice.practiceId)}')">&#128337; Change History</button>
+            </div>
+          </div>` : `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+            <button class="practice-save-btn">Save changes</button>
+            <button class="file-history-btn" onclick="openHistoryModal('${escapeHtml(practice.practiceId)}')">&#128337; Change History</button>
+          </div>`}
+          ${window.__AESCSF_RBAC__?.role === "admin" && APP_CONFIG.storageMode === "api" ? renderConfidenceWidget(practice.practiceId) : ""}
+          ${window.__AESCSF_RBAC__?.role === "admin" ? renderContributors(practice.practiceId) : ""}
         </article>
       `;
     }
@@ -1846,7 +3245,14 @@
       document.getElementById("timelineNoDate").textContent = counts.noDate;
 
       if (!scheduled.length) {
-        timelineApp.innerHTML = `<div class="empty">No target dates have been entered yet. Add target dates on the Assessment page to build the schedule timeline.</div>`;
+        timelineApp.innerHTML = emptyStateHtml({
+          icon: "timeline",
+          title: "No target dates set",
+          body: "Add target dates on the Assessment page to build the schedule timeline.",
+          actionLabel: "Go to Assessment",
+          actionId: "emptyTimelineGoAssess"
+        });
+        document.getElementById("emptyTimelineGoAssess")?.addEventListener("click", () => setActivePage("assessment"));
         return;
       }
 
@@ -1930,6 +3336,147 @@
       if (!rows.length) return 0;
       const totalScore = rows.reduce((sum, row) => sum + scoreForStatus(row.assessment.status), 0);
       return Number((totalScore / rows.length).toFixed(2));
+    }
+
+    /* ── Chart theme helpers ─────────────────────────────────────────── */
+    function getChartColors() {
+      const theme = document.documentElement.dataset.theme || "light";
+      if (theme === "cyber") return {
+        grid:         "rgba(0,229,160,0.14)",
+        angleLines:   "rgba(0,229,160,0.14)",
+        tickColor:    "#007a50",
+        pointLabel:   "#00b87a",
+        backdrop:     "transparent",
+        legend:       "#00b87a",
+        barGrid:      "rgba(0,229,160,0.10)",
+        domain: { bg:"rgba(0,229,160,0.18)",  border:"rgba(0,229,160,0.95)",  point:"rgba(0,229,160,1)"  },
+        mil:    { bg:"rgba(251,191,36,0.18)", border:"rgba(251,191,36,0.9)",  point:"rgba(251,191,36,1)" },
+        sp: {
+          "SP-1":{ bg:"rgba(0,229,160,0.15)",  border:"rgba(0,229,160,0.95)", point:"rgba(0,229,160,1)"  },
+          "SP-2":{ bg:"rgba(251,191,36,0.15)", border:"rgba(251,191,36,0.9)", point:"rgba(251,191,36,1)" },
+          "SP-3":{ bg:"rgba(255,43,110,0.14)", border:"rgba(255,43,110,0.85)",point:"rgba(255,43,110,1)" },
+        },
+        comp: ["rgba(0,229,160,0.25)","rgba(251,191,36,0.20)"],
+        compBorder: ["rgba(0,229,160,0.9)","rgba(251,191,36,0.85)"],
+      };
+      if (theme === "dark") return {
+        grid:         "rgba(148,163,184,0.14)",
+        angleLines:   "rgba(148,163,184,0.14)",
+        tickColor:    "#64748b",
+        pointLabel:   "#94a3b8",
+        backdrop:     "transparent",
+        legend:       "#94a3b8",
+        barGrid:      "rgba(148,163,184,0.10)",
+        domain: { bg:"rgba(59,130,246,0.22)",  border:"rgba(59,130,246,0.9)",  point:"rgba(59,130,246,1)"  },
+        mil:    { bg:"rgba(34,197,94,0.20)",   border:"rgba(34,197,94,0.85)",  point:"rgba(34,197,94,1)"   },
+        sp: {
+          "SP-1":{ bg:"rgba(59,130,246,0.18)",  border:"rgba(59,130,246,0.9)",  point:"rgba(59,130,246,1)"  },
+          "SP-2":{ bg:"rgba(34,197,94,0.16)",   border:"rgba(34,197,94,0.85)",  point:"rgba(34,197,94,1)"   },
+          "SP-3":{ bg:"rgba(139,92,246,0.16)",  border:"rgba(139,92,246,0.85)", point:"rgba(139,92,246,1)"  },
+        },
+        comp: ["rgba(59,130,246,0.22)","rgba(34,197,94,0.18)"],
+        compBorder: ["rgba(59,130,246,0.9)","rgba(34,197,94,0.85)"],
+      };
+      return {
+        grid:         "rgba(148,163,184,0.22)",
+        angleLines:   "rgba(148,163,184,0.22)",
+        tickColor:    "#64748b",
+        pointLabel:   "#475569",
+        backdrop:     "rgba(255,255,255,0.82)",
+        legend:       "#64748b",
+        barGrid:      "rgba(148,163,184,0.18)",
+        domain: { bg:"rgba(21,94,239,0.18)",   border:"rgba(21,94,239,0.95)",  point:"rgba(21,94,239,1)"   },
+        mil:    { bg:"rgba(6,118,71,0.16)",    border:"rgba(6,118,71,0.9)",    point:"rgba(6,118,71,1)"    },
+        sp: {
+          "SP-1":{ bg:"rgba(21,94,239,0.15)",  border:"rgba(21,94,239,0.95)",  point:"rgba(21,94,239,1)"   },
+          "SP-2":{ bg:"rgba(6,118,71,0.13)",   border:"rgba(6,118,71,0.9)",    point:"rgba(6,118,71,1)"    },
+          "SP-3":{ bg:"rgba(109,40,217,0.13)", border:"rgba(109,40,217,0.85)", point:"rgba(109,40,217,1)"  },
+        },
+        comp: ["rgba(21,94,239,0.15)","rgba(6,118,71,0.13)"],
+        compBorder: ["rgba(21,94,239,0.9)","rgba(6,118,71,0.85)"],
+      };
+    }
+
+    function radarScaleOpts(maxVal = 3) {
+      const c = getChartColors();
+      return { r: { min: 0, max: maxVal, ticks: { stepSize: 1, color: c.tickColor, backdropColor: c.backdrop }, grid: { color: c.grid }, angleLines: { color: c.angleLines }, pointLabels: { color: c.pointLabel, font: { size: 11 } } } };
+    }
+
+    function barScaleOpts() {
+      const c = getChartColors();
+      return { x: { ticks: { color: c.tickColor }, grid: { color: c.barGrid } }, y: { beginAtZero: true, ticks: { color: c.tickColor, precision: 0 }, grid: { color: c.barGrid } } };
+    }
+
+    function legendOpts(position = "bottom") {
+      const c = getChartColors();
+      return { position, labels: { color: c.legend } };
+    }
+
+    function renderSpBreakdown(Presentrics) {
+      const section = document.getElementById("spBreakdownSection");
+      if (!section || window.__AESCSF_RBAC__?.role !== "admin") return;
+
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const SPS = ["SP-1", "SP-2", "SP-3"];
+      const SP_COLORS = getChartColors().sp;
+
+      if (window.Chart) {
+        if (spBreakdownChart) spBreakdownChart.destroy();
+        spBreakdownChart = new Chart(document.getElementById("spBreakdownRadarChart"), {
+          type: "radar",
+          data: {
+            labels: domains,
+            datasets: SPS.map(sp => ({
+              label: sp,
+              data: domains.map(domain => {
+                const rows = Presentrics.rows.filter(r => r.practice.domain === domain && r.practice.securityProfile === sp);
+                return rows.length ? averageScoreForGroup(rows) : 0;
+              }),
+              fill: true,
+              backgroundColor:    SP_COLORS[sp].bg,
+              borderColor:        SP_COLORS[sp].border,
+              pointBackgroundColor: SP_COLORS[sp].point,
+              borderWidth: 2
+            }))
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: radarScaleOpts(3),
+            plugins: { legend: { display: true, ...legendOpts("bottom") } }
+          }
+        });
+      }
+
+      document.getElementById("spBreakdownTable").innerHTML = `
+        <table class="sp-breakdown-table">
+          <thead>
+            <tr>
+              <th>Domain</th>
+              <th>SP-1 &mdash; Foundational</th>
+              <th>SP-2 &mdash; Intermediate</th>
+              <th>SP-3 &mdash; Advanced</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${domains.map(domain => {
+              const cells = SPS.map(sp => {
+                const rows = Presentrics.rows.filter(r => r.practice.domain === domain && r.practice.securityProfile === sp);
+                if (!rows.length) return `<td><span style="color:var(--muted)">\u2014</span></td>`;
+                const fully = rows.filter(r => isCompletedStatus(r.assessment.status)).length;
+                const pct   = Math.round((fully / rows.length) * 100);
+                const score = averageScoreForGroup(rows);
+                const color = pct >= 80 ? "#16a34a" : pct >= 50 ? "#ca8a04" : "#dc2626";
+                return `<td>
+                  <div class="sp-score-pct" style="color:${color};">${pct}%</div>
+                  <div class="sp-score-detail">${fully} / ${rows.length} complete &middot; avg ${score} / 3</div>
+                  <div class="mini-bar" style="margin-top:4px;"><span style="width:${pct}%;background:${color};opacity:.8;"></span></div>
+                </td>`;
+              }).join("");
+              return `<tr><td><strong>${escapeHtml(domain)}</strong></td>${cells}</tr>`;
+            }).join("")}
+          </tbody>
+        </table>`;
     }
 
     function renderDashboard() {
@@ -2024,6 +3571,7 @@
         if (domainRadarChart) domainRadarChart.destroy();
         if (milRadarChart) milRadarChart.destroy();
 
+        const cc = getChartColors();
         domainRadarChart = new Chart(document.getElementById("domainRadarChart"), {
           type: "radar",
           data: {
@@ -2032,16 +3580,16 @@
               label: "Domain maturity",
               data: domainRows.map(item => item.score),
               fill: true,
-              backgroundColor: "rgba(21, 94, 239, 0.18)",
-              borderColor: "rgba(21, 94, 239, 0.95)",
-              pointBackgroundColor: "rgba(21, 94, 239, 1)",
+              backgroundColor: cc.domain.bg,
+              borderColor: cc.domain.border,
+              pointBackgroundColor: cc.domain.point,
               borderWidth: 2
             }]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            scales: { r: { min: 0, max: 3, ticks: { stepSize: 1 } } },
+            scales: radarScaleOpts(3),
             plugins: { legend: { display: false } }
           }
         });
@@ -2054,20 +3602,21 @@
               label: "MIL coverage",
               data: mils.map(item => item.score),
               fill: true,
-              backgroundColor: "rgba(6, 118, 71, 0.16)",
-              borderColor: "rgba(6, 118, 71, 0.9)",
-              pointBackgroundColor: "rgba(6, 118, 71, 1)",
+              backgroundColor: cc.mil.bg,
+              borderColor: cc.mil.border,
+              pointBackgroundColor: cc.mil.point,
               borderWidth: 2
             }]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            scales: { r: { min: 0, max: 3, ticks: { stepSize: 1 } } },
+            scales: radarScaleOpts(3),
             plugins: { legend: { display: false } }
           }
         });
       }
+      renderSpBreakdown(Presentrics);
     }
 
     function exportGapRegister() {
@@ -2428,56 +3977,144 @@ function buildPdfDomainRows(rows) {
 
 
 
-    function bindObjectiveToggles() {
-      document.querySelectorAll("[data-toggle-objective]").forEach(header => {
-        header.addEventListener("click", () => {
+    function setupDelegatedListeners() {
+      const app = document.getElementById("app");
+      if (!app) return;
+
+      const isTextLike = el =>
+        el.tagName === "TEXTAREA" ||
+        (el.tagName === "INPUT" && (el.type === "text" || el.type === ""));
+
+      app.addEventListener("click", e => {
+        /* Objective section toggle */
+        const header = e.target.closest("[data-toggle-objective]");
+        if (header) {
           const objective = header.parentElement;
           const key = objective.dataset.objectiveKey;
           objective.classList.toggle("open");
+          const isOpen = objective.classList.contains("open");
           if (key) {
-            if (objective.classList.contains("open")) openObjectiveKeys.add(key);
+            if (isOpen) openObjectiveKeys.add(key);
             else openObjectiveKeys.delete(key);
           }
-        });
-      });
-    }
+          /* Lazy-load file lists only when a section is first expanded */
+          if (isOpen && APP_CONFIG.storageMode === "api") {
+            objective.querySelectorAll(".uploaded-files-list[id^='files-']").forEach(el => {
+              if (!el.dataset.loaded) {
+                el.dataset.loaded = "1";
+                loadFilesForPractice(el.id.replace("files-", ""));
+              }
+            });
+          }
+          return;
+        }
 
-    function bindAssessmentInputs() {
-      document.querySelectorAll(".practice-card").forEach(card => {
+        /* Save button — commits all buffered text-field changes at once */
+        const saveBtn = e.target.closest(".practice-save-btn");
+        if (saveBtn) {
+          saveState();
+          renderDashboard();
+          renderTimeline();
+          saveBtn.textContent = "Saved \u2713";
+          saveBtn.className = "practice-save-btn saved";
+          setTimeout(() => { saveBtn.style.display = "none"; saveBtn.textContent = "Save changes"; saveBtn.className = "practice-save-btn"; }, 1600);
+        }
+
+        /* Confidence star */
+        const confStar = e.target.closest("[data-confidence-star]");
+        if (confStar) {
+          const rating = parseInt(confStar.dataset.confidenceStar);
+          const pid    = confStar.dataset.pid;
+          const widget = confStar.closest(".confidence-widget");
+          const notes  = widget?.querySelector(".conf-notes-input")?.value || "";
+          const current = (window.__AESCSF_CONFIDENCE__ || {})[pid];
+          const newRating = current?.rating === rating ? 0 : rating;
+          updateConfidenceWidget(widget, newRating, notes);
+          saveConfidence(pid, newRating, notes);
+          return;
+        }
+
+        /* Confidence clear */
+        const confClear = e.target.closest(".conf-clear-btn");
+        if (confClear) {
+          const pid    = confClear.dataset.pid;
+          const widget = confClear.closest(".confidence-widget");
+          const notes  = widget?.querySelector(".conf-notes-input")?.value || "";
+          updateConfidenceWidget(widget, 0, notes);
+          saveConfidence(pid, 0, notes);
+          return;
+        }
+      });
+
+      app.addEventListener("input", e => {
+        const input = e.target.closest("[data-field]");
+        if (!input) return;
+        const card = input.closest(".practice-card");
+        if (!card) return;
         const practiceId = card.dataset.practiceId;
-        card.querySelectorAll("[data-field]").forEach(input => {
-          input.addEventListener("input", () => {
-            const field = input.dataset.field;
-            state.assessments[practiceId][field] = input.value;
-            if (field === "status") {
-              input.className = `status-select ${statusClass(input.value)}`;
-              card.className = `practice-card ${statusClass(input.value)}`;
-              updateSummary();
-            }
-            if (field === "attachments") {
-              const preview = input.parentElement.querySelector(".attachment-preview");
-              if (preview) preview.innerHTML = renderAttachmentPreview(input.value);
-            }
-            saveState();
-            renderDashboard();
-          });
-          input.addEventListener("change", () => {
-            const field = input.dataset.field;
-            state.assessments[practiceId][field] = input.value;
-            if (field === "status") {
-              input.className = `status-select ${statusClass(input.value)}`;
-              card.className = `practice-card ${statusClass(input.value)}`;
-              render();
-            } else {
-              saveState();
-              renderDashboard();
-              renderTimeline();
-            }
-          });
-        });
+        const saveBtn = card.querySelector(".practice-save-btn");
+        const field = input.dataset.field;
+        if (!state.assessments[practiceId]) return;
+        state.assessments[practiceId][field] = input.value;
+
+        function markDirty() {
+          if (saveBtn) { saveBtn.style.display = "inline-flex"; saveBtn.textContent = "Save changes"; saveBtn.className = "practice-save-btn"; }
+        }
+
+        if (field === "status") {
+          /* Status is a deliberate click — save immediately */
+          input.className = `status-select ${statusClass(input.value)}`;
+          card.className = `practice-card ${statusClass(input.value)}`;
+          updateSummary();
+          saveState();
+          renderDashboard();
+        } else if (field === "attachments") {
+          /* Update attachment preview live, but wait for Save */
+          const preview = input.parentElement.querySelector(".attachment-preview");
+          if (preview) preview.innerHTML = renderAttachmentPreview(input.value);
+          markDirty();
+        } else if (isTextLike(input)) {
+          /* All other text / textarea fields: mark dirty, defer save */
+          markDirty();
+        } else {
+          /* Date pickers and other non-text inputs: save immediately */
+          saveState();
+          renderDashboard();
+        }
+      });
+
+      app.addEventListener("change", e => {
+        const input = e.target.closest("[data-field]");
+        if (!input) return;
+        const card = input.closest(".practice-card");
+        if (!card) return;
+        const practiceId = card.dataset.practiceId;
+        const field = input.dataset.field;
+        if (!state.assessments[practiceId]) return;
+        state.assessments[practiceId][field] = input.value;
+
+        if (field === "status") {
+          input.className = `status-select ${statusClass(input.value)}`;
+          card.className = `practice-card ${statusClass(input.value)}`;
+        } else if (!isTextLike(input)) {
+          /* Date or other non-text fields: save on change */
+          saveState();
+          renderDashboard();
+          renderTimeline();
+        }
+        /* Text fields: handled by input event above */
+      });
+
+      app.addEventListener("focusout", e => {
+        const notesEl = e.target.closest(".conf-notes-input");
+        if (!notesEl) return;
+        const pid  = notesEl.dataset.pid;
+        const conf = (window.__AESCSF_CONFIDENCE__ || {})[pid] || {};
+        if (notesEl.value !== (conf.notes || "")) {
+          saveConfidence(pid, conf.rating || 0, notesEl.value);
+        }
       });
     }
-
     function downloadBlob(blob, filename) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -2619,13 +4256,17 @@ function buildPdfDomainRows(rows) {
 
     function updateComparisonMeta() {
       const previousName = document.getElementById("comparisonPreviousName");
-      const currentName = document.getElementById("comparisonCurrentName");
+      const currentName  = document.getElementById("comparisonCurrentName");
       const previousMeta = document.getElementById("comparisonPreviousMeta");
-      const currentMeta = document.getElementById("comparisonCurrentMeta");
-      if (previousName) previousName.value = comparisonState.previous?.fileName || "No file loaded";
-      if (currentName) currentName.value = comparisonState.current?.fileName || "No file loaded";
-      if (previousMeta) previousMeta.textContent = comparisonState.previous ? `Assessment label: ${comparisonState.previousLabel}` : "Upload a JSON export from the previous assessment period.";
-      if (currentMeta) currentMeta.textContent = comparisonState.current ? `Assessment label: ${comparisonState.currentLabel}` : "Upload a JSON export from the current assessment period or use the live assessment.";
+      const currentMeta  = document.getElementById("comparisonCurrentMeta");
+      if (previousName) previousName.value = comparisonState.previous ? comparisonState.previousLabel : "Nothing loaded";
+      if (currentName)  currentName.value  = comparisonState.current  ? comparisonState.currentLabel  : "Nothing loaded";
+      if (previousMeta) previousMeta.textContent = comparisonState.previous
+        ? `Loaded: ${comparisonState.previousLabel}`
+        : "Nothing loaded — select a snapshot or import a JSON file.";
+      if (currentMeta)  currentMeta.textContent  = comparisonState.current
+        ? `Loaded: ${comparisonState.currentLabel}`
+        : "Nothing loaded — select a snapshot, use the live assessment, or import a JSON file.";
     }
 
     function renderComparisonCharts(previousSnapshot, currentSnapshot) {
@@ -2644,16 +4285,17 @@ function buildPdfDomainRows(rows) {
       const currentDistribution = statusDistributionFromSnapshot(currentSnapshot);
       const metrics = buildComparisonMetrics(previousSnapshot, currentSnapshot);
 
+      const cc2 = getChartColors();
       comparisonRadarChart = new Chart(comparisonRadarCanvas, {
         type: "radar",
         data: {
           labels: domains,
           datasets: [
-            { label: comparisonState.previousLabel, data: previousDomainScores, fill: true, borderWidth: 2 },
-            { label: comparisonState.currentLabel, data: currentDomainScores, fill: true, borderWidth: 2 }
+            { label: comparisonState.previousLabel, data: previousDomainScores, fill: true, borderWidth: 2, backgroundColor: cc2.comp[0], borderColor: cc2.compBorder[0], pointBackgroundColor: cc2.compBorder[0] },
+            { label: comparisonState.currentLabel,  data: currentDomainScores,  fill: true, borderWidth: 2, backgroundColor: cc2.comp[1], borderColor: cc2.compBorder[1], pointBackgroundColor: cc2.compBorder[1] }
           ]
         },
-        options: { maintainAspectRatio: false, scales: { r: { suggestedMin: 0, suggestedMax: 3, ticks: { stepSize: 1 } } }, plugins: { legend: { position: "bottom" } } }
+        options: { maintainAspectRatio: false, scales: radarScaleOpts(3), plugins: { legend: { display: true, ...legendOpts("bottom") } } }
       });
 
       comparisonStatusChart = new Chart(comparisonStatusCanvas, {
@@ -2661,17 +4303,17 @@ function buildPdfDomainRows(rows) {
         data: {
           labels: ["Open / Partial", "Largely", "Fully / Yes / Not Present", "Not Assessed", "N/A"],
           datasets: [
-            { label: comparisonState.previousLabel, data: [previousDistribution["Open / Partial"], previousDistribution.Largely, previousDistribution["Fully / Yes / Not Present"], previousDistribution["Not Assessed"], previousDistribution["N/A"]], borderWidth: 1 },
-            { label: comparisonState.currentLabel, data: [currentDistribution["Open / Partial"], currentDistribution.Largely, currentDistribution["Fully / Yes / Not Present"], currentDistribution["Not Assessed"], currentDistribution["N/A"]], borderWidth: 1 }
+            { label: comparisonState.previousLabel, data: [previousDistribution["Open / Partial"], previousDistribution.Largely, previousDistribution["Fully / Yes / Not Present"], previousDistribution["Not Assessed"], previousDistribution["N/A"]], borderWidth: 1, backgroundColor: cc2.comp[0], borderColor: cc2.compBorder[0] },
+            { label: comparisonState.currentLabel,  data: [currentDistribution["Open / Partial"],  currentDistribution.Largely,  currentDistribution["Fully / Yes / Not Present"],  currentDistribution["Not Assessed"],  currentDistribution["N/A"]],  borderWidth: 1, backgroundColor: cc2.comp[1], borderColor: cc2.compBorder[1] }
           ]
         },
-        options: { maintainAspectRatio: false, responsive: true, plugins: { legend: { position: "bottom" } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        options: { maintainAspectRatio: false, responsive: true, plugins: { legend: { display: true, ...legendOpts("bottom") } }, scales: barScaleOpts() }
       });
 
       comparisonGapChart = new Chart(comparisonGapCanvas, {
         type: "bar",
-        data: { labels: [comparisonState.previousLabel, comparisonState.currentLabel], datasets: [{ label: "Open Gaps", data: [metrics.previousGaps, metrics.currentGaps], borderWidth: 1 }] },
-        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        data: { labels: [comparisonState.previousLabel, comparisonState.currentLabel], datasets: [{ label: "Open Gaps", data: [metrics.previousGaps, metrics.currentGaps], borderWidth: 1, backgroundColor: [cc2.comp[0], cc2.comp[1]], borderColor: [cc2.compBorder[0], cc2.compBorder[1]] }] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: barScaleOpts() }
       });
     }
 
@@ -2710,6 +4352,7 @@ function buildPdfDomainRows(rows) {
     }
 
     function renderComparison() {
+      loadSnapshotList(); /* refresh snapshot dropdowns (no-op if not in API mode) */
       updateComparisonMeta();
       if (comparisonState.current?.isLive) {
         comparisonState.current = { ...getLiveComparisonSnapshot(), isLive: true };
@@ -2878,17 +4521,1176 @@ function buildPdfDomainRows(rows) {
       comparisonState.currentLabel = "Live Assessment";
       renderComparison();
     });
-    const exportPrevBtn = document.getElementById("comparisonExportPreviousBtn");
-    if (exportPrevBtn) exportPrevBtn.addEventListener("click", () => exportComparisonSnapshot("previous"));
-    const exportCurrBtn = document.getElementById("comparisonExportCurrentBtn");
-    if (exportCurrBtn) exportCurrBtn.addEventListener("click", () => exportComparisonSnapshot("current"));
-    const clearCompBtn = document.getElementById("clearComparisonBtn");
-    if (clearCompBtn) clearCompBtn.addEventListener("click", clearComparisonState);
+    document.getElementById("comparisonExportPreviousBtn")?.addEventListener("click", () => exportComparisonSnapshot("previous"));
+    document.getElementById("comparisonExportCurrentBtn")?.addEventListener("click",  () => exportComparisonSnapshot("current"));
+    document.getElementById("clearComparisonBtn")?.addEventListener("click", clearComparisonState);
+    document.getElementById("comparisonPreviousLoadBtn")?.addEventListener("click",   () => loadSnapshotIntoComparison("previous"));
+    document.getElementById("comparisonCurrentLoadBtn")?.addEventListener("click",    () => loadSnapshotIntoComparison("current"));
+    document.getElementById("comparisonPreviousDeleteBtn")?.addEventListener("click", () => deleteSnapshotFromSelect("previous"));
+    document.getElementById("comparisonCurrentDeleteBtn")?.addEventListener("click",  () => deleteSnapshotFromSelect("current"));
+    document.getElementById("saveSnapshotBtn")?.addEventListener("click", saveCurrentSnapshot);
+
+    /* ── Snapshot helpers ───────────────────────────────────────────────────
+       Snapshots are named, timestamped copies of an assessment stored in the
+       database. They replace the need to manually export and re-import JSON
+       for year-on-year comparison.
+    ──────────────────────────────────────────────────────────────────────── */
+    let _snapshotCache = [];
+
+    function formatSnapshotDate(unixSecs) {
+      return new Date(unixSecs * 1000).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
+    }
+
+    async function loadSnapshotList() {
+      if (APP_CONFIG.storageMode !== "api") return;
+      try {
+        const resp = await adminFetch("/snapshots");
+        if (!resp.ok) return;
+        _snapshotCache = await resp.json();
+        const placeholder = '<option value="">— Select a snapshot —</option>';
+        const options = _snapshotCache.length
+          ? placeholder + _snapshotCache.map(s =>
+              `<option value="${s.id}">${escapeHtml(s.label)} — ${formatSnapshotDate(s.created_at)}</option>`
+            ).join("")
+          : '<option value="">No snapshots saved yet</option>';
+        ["comparisonPreviousSelect", "comparisonCurrentSelect"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.innerHTML = options;
+        });
+      } catch (err) {
+        console.warn("[AESCSF] Could not load snapshot list:", err);
+      }
+    }
+
+    async function loadSnapshotIntoComparison(side) {
+      const selectId = side === "previous" ? "comparisonPreviousSelect" : "comparisonCurrentSelect";
+      const select   = document.getElementById(selectId);
+      const id       = select?.value;
+      if (!id) return;
+      try {
+        const resp = await adminFetch(`/snapshots/${encodeURIComponent(id)}`);
+        if (!resp.ok) { alert(`Failed to load snapshot (${resp.status})`); return; }
+        const data  = await resp.json();
+        const label = data.label || _snapshotCache.find(s => s.id == id)?.label || "Snapshot";
+        comparisonState[side]            = buildSnapshotFromAssessments(data.assessments, label, label);
+        comparisonState[side + "Label"]  = label;
+        renderComparison();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function saveCurrentSnapshot() {
+      if (APP_CONFIG.storageMode !== "api") {
+        alert("Snapshots are stored on the server and require API storage mode.\n\nSwitch storageMode to \"api\" in your deployment config to use this feature.");
+        return;
+      }
+      const label = prompt("Enter a name for this snapshot\n(e.g. FY2024, Q1 2025, Pre-Audit 2025):");
+      if (!label || !label.trim()) return;
+      try {
+        const resp = await adminFetch("/snapshots", {
+          method: "POST",
+          body: JSON.stringify({ label: label.trim(), data: buildPersistableState(state) })
+        });
+        if (!resp.ok) { alert(`Failed to save snapshot (${resp.status})`); return; }
+        const saved = await resp.json();
+        await loadSnapshotList();
+        /* Pre-select the new snapshot in the current slot */
+        const currSelect = document.getElementById("comparisonCurrentSelect");
+        if (currSelect) currSelect.value = saved.id;
+      } catch (err) { alert(err.message); }
+    }
+
+    async function deleteSnapshotFromSelect(side) {
+      const selectId = side === "previous" ? "comparisonPreviousSelect" : "comparisonCurrentSelect";
+      const select   = document.getElementById(selectId);
+      const id       = select?.value;
+      if (!id) return;
+      const snap = _snapshotCache.find(s => s.id == id);
+      if (!snap || !confirm(`Delete snapshot "${snap.label}"?\n\nThis cannot be undone.`)) return;
+      try {
+        const resp = await adminFetch(`/snapshots/${encodeURIComponent(id)}`, { method: "DELETE" });
+        if (!resp.ok) { alert(`Failed to delete snapshot (${resp.status})`); return; }
+        /* Clear the comparison side if it was showing the deleted snapshot */
+        if (comparisonState[side]?.fileName === snap.label || comparisonState[side + "Label"] === snap.label) {
+          comparisonState[side] = null;
+          comparisonState[side + "Label"] = side === "previous" ? "Previous Assessment" : "Current Assessment";
+          updateComparisonMeta();
+          resetComparisonSummary();
+        }
+        await loadSnapshotList();
+      } catch (err) { alert(err.message); }
+    }
+
+    /* ── Sign-out ────────────────────────────────────────────────────────── */
+
+    /* ── Sidebar toggle ───────────────────────────────────────────────── */
+    (function initSidebar() {
+      const sidebar  = document.getElementById("appSidebar");
+      const overlay  = document.getElementById("sidebarOverlay");
+      const toggle   = document.getElementById("sidebarToggleBtn");
+      if (!sidebar || !toggle) return;
+      const openSb  = () => { sidebar.classList.add("open"); overlay.classList.add("open"); document.body.style.overflow = "hidden"; };
+      const closeSb = () => { sidebar.classList.remove("open"); overlay.classList.remove("open"); document.body.style.overflow = ""; };
+      toggle.addEventListener("click", () => sidebar.classList.contains("open") ? closeSb() : openSb());
+      overlay.addEventListener("click", closeSb);
+    })();
+
+    /* ── Actions dropdown ─────────────────────────────────────────────── */
+    (function initActionsMenu() {
+      const btn     = document.getElementById("actionsMenuBtn");
+      const menu    = document.getElementById("actionsMenu");
+      const wrapper = document.getElementById("actionsMenuWrapper");
+      if (!btn || !menu) return;
+      const openMenu  = () => { menu.setAttribute("data-open",""); btn.setAttribute("aria-expanded","true"); };
+      const closeMenu = () => { menu.removeAttribute("data-open"); btn.setAttribute("aria-expanded","false"); };
+      btn.addEventListener("click", e => { e.stopPropagation(); menu.hasAttribute("data-open") ? closeMenu() : openMenu(); });
+      document.addEventListener("click", e => { if (menu.hasAttribute("data-open") && !wrapper.contains(e.target)) closeMenu(); });
+      document.addEventListener("keydown", e => { if (e.key === "Escape" && menu.hasAttribute("data-open")) closeMenu(); });
+
+      const wire = (id, fn) => document.getElementById(id)?.addEventListener("click", () => { closeMenu(); fn(); });
+      wire("actionsExportJson",   exportJson);
+      wire("actionsAemoExport",   exportTemplateCsv);
+      wire("actionsGapRegister",  exportGapRegister);
+      wire("actionsFullReport",   generatePdfReport);
+      wire("actionsSaveSnapshot", saveCurrentSnapshot);
+      document.getElementById("actionsReset")?.addEventListener("click", () => {
+        closeMenu();
+        if (confirm("This will clear all saved assessment data in this browser. Continue?")) {
+          state = buildInitialState(); saveState(); render();
+        }
+      });
+    })();
+
+    /* ── Command Palette (Cmd+K) ──────────────────────────────────────── */
+    (function initCommandPalette() {
+      const overlay = document.getElementById("cmdPaletteOverlay");
+      const input   = document.getElementById("cmdPaletteInput");
+      const results = document.getElementById("cmdPaletteResults");
+      const trigger = document.getElementById("cmdKTrigger");
+      if (!overlay || !input || !results) return;
+
+      let focusedIndex = -1;
+
+      const PAGE_COMMANDS = [
+        { type:"page", label:"Dashboard",  page:"dashboard",  icon:"grid",   adminOnly:true },
+        { type:"page", label:"Assessment", page:"assessment", icon:"check",  adminOnly:false },
+        { type:"page", label:"Timeline",   page:"timeline",   icon:"clock",  adminOnly:false },
+        { type:"page", label:"Comparison", page:"comparison", icon:"chart",  adminOnly:true },
+        { type:"page", label:"Admin",      page:"admin",      icon:"users",  adminOnly:true },
+        { type:"page", label:"Audit Log",  page:"audit",      icon:"file",   adminOnly:true },
+      ];
+      const ACTION_COMMANDS = [
+        { type:"action", label:"Export JSON",         fn: exportJson },
+        { type:"action", label:"AEMO Export (CSV)",   fn: exportTemplateCsv },
+        { type:"action", label:"Gap Register PDF",    fn: exportGapRegister },
+        { type:"action", label:"Full Report PDF",     fn: generatePdfReport },
+        { type:"action", label:"Save Snapshot",       fn: saveCurrentSnapshot },
+      ];
+
+      const ICONS = {
+        grid:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
+        check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`,
+        clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+        chart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>`,
+        users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>`,
+        file:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+        action:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 2 13 9 20 9"/><path d="M20 14.66V20a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2h10"/></svg>`,
+        pract: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l7 4v4c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6l7-4z"/></svg>`,
+      };
+
+      function fuzzyScore(str, q) {
+        if (!q) return 1;
+        str = str.toLowerCase(); q = q.toLowerCase();
+        if (str.includes(q)) return 1;
+        let si = 0, qi = 0, sc = 0;
+        while (si < str.length && qi < q.length) { if (str[si] === q[qi]) { sc++; qi++; } si++; }
+        return qi === q.length ? sc / q.length * 0.5 : 0;
+      }
+
+      function hlMatch(text, q) {
+        if (!q) return escapeHtml(text);
+        const idx = text.toLowerCase().indexOf(q.toLowerCase());
+        if (idx === -1) return escapeHtml(text);
+        return escapeHtml(text.slice(0,idx)) + `<mark class="cmd-result-match">${escapeHtml(text.slice(idx,idx+q.length))}</mark>` + escapeHtml(text.slice(idx+q.length));
+      }
+
+      function buildResults(q) {
+        const isAdmin = window.__AESCSF_RBAC__?.role === "admin";
+        const pageMatches = PAGE_COMMANDS.filter(c => (!c.adminOnly || isAdmin) && fuzzyScore(c.label, q) > 0)
+          .map(c => ({...c, score: fuzzyScore(c.label, q), icon: c.icon}))
+          .sort((a,b) => b.score - a.score).slice(0,4);
+        const actionMatches = ACTION_COMMANDS.filter(c => fuzzyScore(c.label, q) > 0)
+          .map(c => ({...c, score: fuzzyScore(c.label, q), icon:"action"}))
+          .sort((a,b) => b.score - a.score).slice(0,4);
+        const practMatches = !q.trim() ? [] : (typeof PRACTICES !== "undefined" ? PRACTICES : [])
+          .filter(p => fuzzyScore(p.practiceId, q) > 0 || fuzzyScore(p.practice.slice(0,80), q) > 0)
+          .map(p => ({type:"practice", label:p.practiceId, meta:`${p.domain} · ${p.mil}`, subtitle:p.practice.slice(0,55)+"…", practiceId:p.practiceId, icon:"pract", score:Math.max(fuzzyScore(p.practiceId,q), fuzzyScore(p.practice.slice(0,80),q))}))
+          .sort((a,b) => b.score - a.score).slice(0,6);
+        const groups = [];
+        if (pageMatches.length)   groups.push({ label:"Pages",    items:pageMatches });
+        if (actionMatches.length) groups.push({ label:"Actions",  items:actionMatches });
+        if (practMatches.length)  groups.push({ label:"Practices", items:practMatches });
+        return groups;
+      }
+
+      function renderResults(q) {
+        focusedIndex = -1;
+        const groups = buildResults(q);
+        if (!groups.length) {
+          results.innerHTML = `<div class="cmd-palette-empty">No results${q ? ` for "${escapeHtml(q)}"` : ""}</div>`;
+          results._flat = [];
+          return;
+        }
+        const flat = [];
+        let html = "";
+        groups.forEach(g => {
+          html += `<div class="cmd-result-group-label">${escapeHtml(g.label)}</div>`;
+          g.items.forEach(item => {
+            const i = flat.length; flat.push(item);
+            html += `<div class="cmd-result" role="option" data-ci="${i}"><span class="cmd-result-icon">${ICONS[item.icon]||ICONS.file}</span><span class="cmd-result-title">${hlMatch(item.label, q)}</span>${item.meta ? `<span class="cmd-result-meta">${escapeHtml(item.meta)}</span>` : ""}</div>`;
+          });
+        });
+        results.innerHTML = html;
+        results._flat = flat;
+      }
+
+      function execute(item) {
+        closePalette();
+        if (item.type === "page")     { setActivePage(item.page); return; }
+        if (item.type === "action")   { item.fn(); return; }
+        if (item.type === "practice") {
+          setActivePage("assessment");
+          setTimeout(() => {
+            const card = document.querySelector(`[data-practice-id="${CSS.escape(item.practiceId)}"]`);
+            if (card) { const obj = card.closest(".objective"); if (obj) obj.classList.add("open"); card.scrollIntoView({ behavior:"smooth", block:"center" }); }
+          }, 100);
+        }
+      }
+
+      const openPalette = () => { overlay.classList.add("open"); input.value = ""; renderResults(""); requestAnimationFrame(() => input.focus()); };
+      const closePalette = () => { overlay.classList.remove("open"); };
+
+      overlay.addEventListener("click", e => { if (e.target === overlay) closePalette(); });
+      trigger?.addEventListener("click", openPalette);
+      input.addEventListener("input", () => renderResults(input.value));
+      results.addEventListener("click", e => { const row = e.target.closest(".cmd-result[data-ci]"); if (row && results._flat) execute(results._flat[+row.dataset.ci]); });
+      input.addEventListener("keydown", e => {
+        const rows = results.querySelectorAll(".cmd-result");
+        if (e.key === "ArrowDown") { e.preventDefault(); focusedIndex = Math.min(focusedIndex+1, rows.length-1); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); focusedIndex = Math.max(focusedIndex-1, 0); }
+        else if (e.key === "Enter") { if (focusedIndex >= 0 && results._flat) execute(results._flat[focusedIndex]); return; }
+        else if (e.key === "Escape") { closePalette(); return; }
+        rows.forEach((r,i) => r.classList.toggle("focused", i === focusedIndex));
+        if (focusedIndex >= 0) rows[focusedIndex]?.scrollIntoView({ block:"nearest" });
+      });
+      document.addEventListener("keydown", e => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); overlay.classList.contains("open") ? closePalette() : openPalette(); }
+      });
+      window.openCommandPalette = openPalette;
+    })();
+
+    /* ── Character counters on textareas ──────────────────────────────── */
+    function attachCharCounters() {
+      document.querySelectorAll(".field textarea[maxlength]").forEach(ta => {
+        if (ta.dataset.counterAttached) return;
+        ta.dataset.counterAttached = "1";
+        const max = parseInt(ta.getAttribute("maxlength") || "4000");
+        const counter = document.createElement("div");
+        counter.className = "char-counter";
+        counter.textContent = `${ta.value.length} / ${max}`;
+        ta.parentElement.appendChild(counter);
+        ta.addEventListener("input", () => {
+          const len = ta.value.length;
+          counter.textContent = `${len} / ${max}`;
+          counter.className = "char-counter" + (len >= max ? " at-limit" : len >= max*0.85 ? " near-limit" : "");
+        });
+      });
+    }
+
+    function setTheme(t) {
+      document.documentElement.dataset.theme = t;
+      try { localStorage.setItem('aescsf_theme', t); } catch {}
+      document.querySelectorAll('.theme-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.theme === t);
+      });
+    }
+
+    function signOut() {
+      /* Clear the oauth2-proxy session cookie and land on the login page.
+       * rd=/login is a relative path so oauth2-proxy accepts it without any
+       * whitelist configuration.  This is the standard SaaS pattern: the user
+       * is signed out of this app but their Azure SSO session stays active —
+       * clicking "Sign in" again will re-authenticate them via SSO (silently
+       * if the Azure session is still valid, or with a prompt if it has
+       * expired). */
+      window.location.href = "/oauth2/sign_out?rd=/login";
+    }
+
+    /* ── API initialisation (called by MSAL bootstrap after auth) ──────── */
+    function showAuthErrorBar(status) {
+      const bar  = document.getElementById("user-info-bar");
+      const name = document.getElementById("user-display-name");
+      const btn  = bar ? bar.querySelector("button") : null;
+      if (bar) {
+        bar.style.background   = "rgba(239,68,68,.06)";
+        bar.style.borderColor  = "rgba(239,68,68,.2)";
+        bar.style.display      = "flex";
+      }
+      if (name) name.innerHTML =
+        (status === 401 || status === 403)
+          ? 'Session error \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">reload to sign in again</a>'
+          : 'Could not reach the server \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">retry</a>';
+      if (btn) btn.style.display = "none";
+    }
+
+    async function initializeFromApi() {
+      /* In local/offline mode show a minimal bar so the user knows storage mode */
+      if (APP_CONFIG.storageMode !== "api") {
+        const bar  = document.getElementById("user-info-bar");
+        const name = document.getElementById("user-display-name");
+        const btn  = bar ? bar.querySelector("button") : null;
+        if (name) name.textContent = "Offline mode — data stored in this browser only";
+        if (btn)  btn.style.display = "none";
+        if (bar) {
+          bar.style.background  = "rgba(100,116,139,.06)";
+          bar.style.borderColor = "rgba(100,116,139,.2)";
+          bar.style.display     = "flex";
+        }
+        return;
+      }
+
+      /* Step 1: load user profile + RBAC */
+      try {
+        const meResp   = await fetch(`${APP_CONFIG.apiBaseUrl}/me`, {
+          headers: { "Accept": "application/json" },
+          credentials: "same-origin"
+        });
+        if (meResp.ok) {
+          const me = await meResp.json();
+          window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], objectives: me.objectives || [], _oid: me.oid || "", displayName: me.displayName || me.username || "" };
+          applyRbacUI(me);
+          if (me.objectives && me.objectives.length) checkAssignmentCompletion(me.objectives);
+        } else {
+          showAuthErrorBar(meResp.status);
+        }
+      } catch (err) {
+        console.warn("[AESCSF] Could not load user profile:", err);
+        showAuthErrorBar(0);
+      }
+
+      /* Step 2: load assessment data and confidence ratings from API in parallel */
+      try {
+        const [remoteState] = await Promise.all([
+          storageAdapter.loadRemote(),
+          loadConfidenceRatings()
+        ]);
+        if (remoteState) {
+          state = remoteState;
+          prefillOwnerForAssignedPractices();
+          populateDomains(); /* re-run now that RBAC is known */
+          render();
+          renderDashboard();
+          /* Re-apply confidence data now that cards are rendered */
+          if (window.__AESCSF_RBAC__?.role === "admin") await loadConfidenceRatings();
+
+          /* Re-enter merged or approved mode if it was active when the page was last refreshed */
+          const _savedMode = sessionStorage.getItem("aescsf_merged_mode");
+          if (window.__AESCSF_RBAC__?.role === "admin" && _savedMode) {
+            const ownStr = sessionStorage.getItem("aescsf_own_state");
+            try { _adminStateBeforeMerge = ownStr ? JSON.parse(ownStr) : buildPersistableState(state); } catch {}
+            try {
+              const _path = _savedMode === "approved" ? "/admin/assessment/approved" : "/admin/assessment/merged";
+              const mResp = await adminFetch(_path);
+              if (mResp.ok) {
+                const viewData = await mResp.json();
+                if (_savedMode === "approved") {
+                  // Overlay approved data on top of the admin's own state
+                  const _reloadMerged = buildPersistableState(state);
+                  _reloadMerged.assessments = { ..._reloadMerged.assessments, ...(viewData.assessments || {}) };
+                  replaceState(_reloadMerged, { persist: false });
+                } else {
+                  replaceState(viewData, { persist: false });
+                }
+                render(); renderDashboard();
+                const bannerId = _savedMode === "approved" ? "adminApprovedBanner" : "adminMergedBanner";
+                const banner = document.getElementById(bannerId);
+                if (banner) banner.style.display = "flex";
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.warn("[AESCSF] Could not load from API, using cached local state:", err);
+      }
+    }
+    window.initializeFromApi = initializeFromApi;
+
+    function applyRbacUI(me) {
+      const isAdmin = me.role === "admin";
+      /* Show/hide admin-only tabs */
+      const adminOnlyTabs = ["dashboardPageTab", "comparisonPageTab", "adminPageTab", "auditPageTab"];
+      adminOnlyTabs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isAdmin ? "" : "none";
+      });
+      /* Sync sidebar admin-only items */
+      ["sidebarDashboardTab","sidebarComparisonTab","sidebarAdminTab","sidebarAuditTab"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isAdmin ? "" : "none";
+      });
+      const sidebarAdminLabel = document.getElementById("sidebarAdminLabel");
+      if (sidebarAdminLabel) sidebarAdminLabel.style.display = isAdmin ? "" : "none";
+      /* If a non-admin somehow lands on a restricted page, send them to assessment */
+      if (!isAdmin) {
+        const restricted = new Set(["dashboard", "comparison", "admin", "audit"]);
+        const activeTab = document.querySelector(".page-tab.active");
+        if (activeTab && restricted.has(activeTab.dataset.pageTab)) {
+          setActivePage("assessment");
+        }
+      }
+
+      /* Show action toolbar (export/import/reset) for admins only */
+      const topActions = document.getElementById("topActionsBar");
+      if (topActions) topActions.style.display = "none"; /* replaced by Actions menu */
+
+      /* Show/hide Assessment page actions menu based on admin status */
+      const actionsMenuWrapper = document.getElementById("actionsMenuWrapper");
+      if (actionsMenuWrapper) actionsMenuWrapper.style.display = isAdmin ? "" : "none";
+
+      /* Update topbar user display */
+      const topbarUserBtn  = document.getElementById("topbarUserBtn");
+      const topbarUserName = document.getElementById("topbarUserName");
+      const topbarUserInit = document.getElementById("topbarUserInitials");
+      const topbarSignOut  = document.getElementById("topbarSignOutBtn");
+      const displayName    = me.displayName || me.username || "";
+      if (topbarUserName) topbarUserName.textContent = displayName;
+      if (topbarUserInit) topbarUserInit.textContent = (displayName[0] || "?").toUpperCase();
+      if (topbarUserBtn)  topbarUserBtn.style.display = "flex";
+      if (topbarSignOut)  topbarSignOut.style.display = "";
+
+      /* Update sidebar storage mode footer */
+      const smEl = document.getElementById("sidebarStorageMode");
+      if (smEl) smEl.textContent = APP_CONFIG.storageMode === "api" ? "API mode" : "Offline mode";
+
+      /* Show audit purge button for admins in API mode */
+      const purgeBtn = document.getElementById("auditPurgeBtn");
+      if (purgeBtn) purgeBtn.style.display = (me.role === "admin" && APP_CONFIG.storageMode === "api") ? "" : "none";
+
+      /* Show admin-only SP breakdown section */
+      const spSection = document.getElementById("spBreakdownSection");
+      if (spSection) spSection.style.display = me.role === "admin" ? "" : "none";
+
+      /* Show snapshot UI only in API mode */
+      const snapshotEls = [
+        document.getElementById("saveSnapshotBtn"),
+        document.getElementById("comparisonPreviousSnapshotRow"),
+        document.getElementById("comparisonCurrentSnapshotRow")
+      ];
+      snapshotEls.forEach(el => { if (el) el.style.display = APP_CONFIG.storageMode === "api" ? "" : "none"; });
+
+      /* Show the user bar with name and role badge */
+      const userBar  = document.getElementById("user-info-bar");
+      const nameSpan = document.getElementById("user-display-name");
+      const roleBadge = document.getElementById("user-role-badge");
+      if (nameSpan) nameSpan.textContent = me.displayName || me.username || "";
+      if (roleBadge) {
+        roleBadge.textContent = me.role === "admin" ? "Admin" : "User";
+        roleBadge.style.background = "rgba(255,255,255,.2)";
+        roleBadge.style.color      = "#fff";
+        roleBadge.style.display    = "inline-block";
+      }
+      if (userBar) userBar.style.display = "flex";
+    }
 
     populateDomains();
+    setupDelegatedListeners();
     render();
-    renderDashboard();
-    setActivePage("dashboard");
+    setActivePage("assessment");
+    initializeFromApi();
+    setTheme(localStorage.getItem('aescsf_theme')||'light'); /* load user profile + remote state (oauth2-proxy session already established) */
+
+    /* ── Admin panel ──────────────────────────────────────────────────────
+       All admin functions are gated behind requireAdmin on the server.
+       The admin tab is hidden from non-admin users by applyRbacUI().
+    ──────────────────────────────────────────────────────────────────── */
+    const ALL_DOMAINS = [...new Set(PRACTICES.map(p => p.domain))].sort();
+    let _adminUsers = [];
+    let _adminStateBeforeMerge = null;
+
+    /* ── Assignment completion banner ────────────────────────────────────────── */
+    function prefillOwnerForAssignedPractices() {
+      const rbac = window.__AESCSF_RBAC__;
+      if (!rbac || rbac.role === "admin") return;
+      const name = rbac.displayName || "";
+      if (!name) return;
+      const domains    = new Set(rbac.domains    || []);
+      const objectives = new Set(rbac.objectives || []);
+      if (!domains.size && !objectives.size) return;
+      let changed = false;
+      for (const p of PRACTICES) {
+        if (!domains.has(p.domain) && !objectives.has(p.objectiveId)) continue;
+        if (!state.assessments[p.practiceId]) state.assessments[p.practiceId] = defaultAssessment();
+        if (!state.assessments[p.practiceId].owner) {
+          state.assessments[p.practiceId].owner = name;
+          changed = true;
+        }
+      }
+      if (changed) saveState();
+    }
+
+    function checkAssignmentCompletion(objectives) {
+      if (!objectives.length || APP_CONFIG.storageMode !== "api") return;
+      const assigned = PRACTICES.filter(p => objectives.includes(p.objectiveId));
+      const incomplete = assigned.filter(p => {
+        const a = state.assessments[p.practiceId];
+        return !a || !a.status || a.status === "Not Assessed";
+      });
+      if (!incomplete.length) return;
+      const banner = document.getElementById("assignmentIncompleteBanner");
+      const msg    = document.getElementById("assignmentIncompleteBannerMsg");
+      if (banner) banner.style.display = "flex";
+      if (msg) msg.textContent =
+        `You have ${incomplete.length} assigned practice${incomplete.length === 1 ? "" : "s"} not yet assessed. Switch to Assessment to complete them.`;
+    }
+
+    /* ── Objective assignment admin functions ────────────────────────────────── */
+    function adminToggleObjectiveChip(oid, objectiveId, checkbox) {
+      const chip = document.getElementById(`objchip-${oid}-${objectiveId}`);
+      if (chip) chip.classList.toggle("checked", checkbox.checked);
+    }
+
+    async function adminSaveObjectiveAssignments(oid) {
+      const objectives = [];
+      document.querySelectorAll(`[id^="objchip-${oid}-"]`).forEach(label => {
+        const cb = label.querySelector("input");
+        if (cb?.checked) objectives.push(label.id.replace(`objchip-${oid}-`, ""));
+      });
+      const statusEl = document.getElementById(`obj-save-status-${oid}`);
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/objective-assignments`, {
+          method: "PUT", body: JSON.stringify({ objectives })
+        });
+        if (!resp.ok) { if (statusEl) statusEl.textContent = `Error ${resp.status}`; return; }
+        if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 3000); }
+        /* Update local _adminUsers cache */
+        const u = _adminUsers.find(u => u.oid === oid);
+        if (u) u.objectives = objectives;
+      } catch (err) {
+        if (statusEl) statusEl.textContent = err.message;
+      }
+    }
+
+    /* ── Multi-respondent responses view ─────────────────────────────────────── */
+    async function approveContributions(userOid, practiceIds) {
+      const btnId = practiceIds ? `approve-${userOid}-${practiceIds[0]}` : `approve-all-${userOid}`;
+      const btn = document.getElementById(btnId);
+      if (btn) { btn.disabled = true; btn.textContent = "Approving…"; }
+      try {
+        const body = practiceIds ? { practiceIds } : {};
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(userOid)}/approve-contributions`, {
+          method: "POST", body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Approve" : "Approve all"; }
+          alert(`Approval failed: ${data.error || resp.status}`);
+          return;
+        }
+        if (btn) {
+          btn.textContent = `✓ Approved (${data.approved})`;
+          btn.style.cssText += ";background:rgba(22,163,74,.12);color:#166534;border-color:rgba(22,163,74,.4);";
+        }
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Approve" : "Approve all"; }
+        alert(err.message);
+      }
+    }
+
+    function initResponseFilters() {
+      const domainSel = document.getElementById("responseDomainFilter");
+      const objSel    = document.getElementById("responseObjectiveFilter");
+      if (!domainSel || !objSel) return;
+
+      const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      domainSel.innerHTML = `<option value="">All domains</option>` +
+        allDomains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+
+      function repopulateObjectives() {
+        const selectedDomain = domainSel.value;
+        const objectives = [...new Map(
+          PRACTICES
+            .filter(p => !selectedDomain || p.domain === selectedDomain)
+            .map(p => [p.objectiveId, p.objective])
+        ).entries()].sort(([a],[b]) => a.localeCompare(b));
+        objSel.innerHTML = `<option value="">All objectives</option>` +
+          objectives.map(([id, label]) =>
+            `<option value="${escapeHtml(id)}">${escapeHtml(id)} — ${escapeHtml(label.slice(0,50))}</option>`
+          ).join("");
+      }
+      repopulateObjectives();
+      domainSel.addEventListener("change", repopulateObjectives);
+    }
+
+    async function loadAndRenderResponses() {
+      const container = document.getElementById("responsesContainer");
+      if (!container) return;
+      container.innerHTML = `<div class="audit-empty">Loading…</div>`;
+      try {
+        const resp = await adminFetch("/admin/responses");
+        if (!resp.ok) { container.innerHTML = `<div class="audit-empty">Failed to load responses (${resp.status})</div>`; return; }
+        const data = await resp.json();
+        renderResponses(data);
+      } catch (err) {
+        container.innerHTML = `<div class="audit-empty">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderResponses(data) {
+      const domainF    = document.getElementById("responseDomainFilter")?.value    || "";
+      const objectiveF = document.getElementById("responseObjectiveFilter")?.value || "";
+      const container  = document.getElementById("responsesContainer");
+      if (!container) return;
+
+      const practiceMap = Object.fromEntries(PRACTICES.map(p => [p.practiceId, p]));
+      const entries = Object.entries(data)
+        .filter(([pid]) => {
+          const p = practiceMap[pid];
+          if (!p) return false;
+          if (domainF    && p.domain      !== domainF)    return false;
+          if (objectiveF && p.objectiveId !== objectiveF) return false;
+          return true;
+        })
+        .sort(([a], [b]) => a.localeCompare(b));
+
+      if (!entries.length) {
+        container.innerHTML = `<div class="audit-empty">No responses found. Assign objectives to users and ask them to complete their assessment.</div>`;
+        return;
+      }
+
+      // Build per-user contributor summary for bulk approve
+      const _allUsers = {};
+      for (const respondents of Object.values(data)) {
+        for (const r of respondents) {
+          if (!_allUsers[r.user_oid]) _allUsers[r.user_oid] = { ...r, count: 0 };
+          _allUsers[r.user_oid].count++;
+        }
+      }
+      const _contributorSummary = Object.keys(_allUsers).length ? `
+        <div style="margin-bottom:18px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;">
+          <div style="font-weight:600;font-size:.88rem;margin-bottom:10px;">Contributors — Approve All</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            ${Object.values(_allUsers).map(u => `
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;font-size:.84rem;">
+                <span><strong>${escapeHtml(u.display_name)}</strong> <span style="color:var(--muted)">${escapeHtml(u.username)}</span></span>
+                <span class="footer-note">${u.count} practice${u.count===1?"":"s"}</span>
+                <button class="secondary" id="approve-all-${escapeHtml(u.user_oid)}"
+                  onclick="approveContributions('${escapeHtml(u.user_oid)}', null)"
+                  style="padding:3px 10px;font-size:.8rem;">Approve all</button>
+              </div>`).join("")}
+          </div>
+        </div>` : "";
+
+      container.innerHTML = _contributorSummary + entries.map(([practiceId, respondents]) => {
+        const p = practiceMap[practiceId];
+        const rows = respondents.map(r => {
+          const sc = statusClass(r.assessment?.status || "");
+          return `<tr>
+            <td><strong>${escapeHtml(r.display_name)}</strong><br><span style="color:var(--muted);font-size:.75rem;">${escapeHtml(r.username)}</span></td>
+            <td><span class="status-select ${sc}" style="padding:3px 8px;border-radius:6px;font-size:.8rem;">${escapeHtml(r.assessment?.status || "Not Assessed")}</span></td>
+            <td class="wrap">${escapeHtml(r.assessment?.evidence || "—")}</td>
+            <td class="wrap">${escapeHtml(r.assessment?.gap      || "—")}</td>
+            <td class="wrap">${escapeHtml(r.assessment?.notes    || "—")}</td>
+            <td>${escapeHtml(r.assessment?.owner || "—")}</td>
+            <td><button class="secondary"
+              id="approve-${escapeHtml(r.user_oid)}-${escapeHtml(practiceId)}"
+              onclick="approveContributions('${escapeHtml(r.user_oid)}', ['${escapeHtml(practiceId)}'])"
+              style="padding:2px 8px;font-size:.78rem;">Approve</button></td>
+          </tr>`;
+        }).join("");
+        return `<div class="dashboard-panel" style="margin-bottom:14px;">
+          <div style="margin-bottom:10px;">
+            <strong>${escapeHtml(practiceId)}</strong>
+            <span class="badge" style="margin-left:6px;">${escapeHtml(p?.objectiveId || "")}</span>
+            <div style="font-size:.83rem;color:var(--text-soft);margin-top:3px;">${escapeHtml(p?.practice || "")}</div>
+          </div>
+          <div class="audit-table-wrap">
+            <table class="audit-table">
+              <thead><tr><th>Respondent</th><th>Status</th><th>Evidence</th><th>Gap / Remediation</th><th>Notes</th><th>Owner</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+        async function adminFetch(path, options = {}) {
+      return fetch(`${APP_CONFIG.apiBaseUrl}${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          ...(options.headers || {})
+        },
+        credentials: "same-origin"
+      });
+    }
+
+    async function renderAdminPanel() {
+      const container = document.getElementById("adminUserList");
+      if (!container) return;
+      container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);">Loading users…</div>`;
+      try {
+        const resp = await adminFetch("/admin/users");
+        if (!resp.ok) { container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger);">Failed to load users (${resp.status})</div>`; return; }
+        _adminUsers = await resp.json();
+        container.innerHTML = _adminUsers.map(u => buildUserCard(u)).join("");
+        initResponseFilters();
+      } catch (err) {
+        container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger);">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function buildUserCard(user) {
+      const initials = (user.display_name || user.username || "?")
+        .split(" ").slice(0, 2).map(s => s[0].toUpperCase()).join("");
+      const assignedSet = new Set(user.domains || []);
+      const domainChips = ALL_DOMAINS.map(d => {
+        const checked = assignedSet.has(d);
+        return `<label class="admin-domain-chip${checked ? " checked" : ""}" id="chip-${user.oid}-${d}">
+          <input type="checkbox" ${checked ? "checked" : ""}
+                 onchange="adminToggleDomainChip('${escapeHtml(user.oid)}','${escapeHtml(d)}',this)"
+                 style="pointer-events:none;">
+          ${escapeHtml(d)}
+        </label>`;
+      }).join("");
+      const currentOid = window.__AESCSF_RBAC__?._oid || "";
+      const isSelf = !!currentOid && currentOid === user.oid;
+      return `
+        <article class="admin-user-card" id="user-card-${escapeHtml(user.oid)}">
+          <div class="admin-user-head">
+            <div class="admin-avatar">${escapeHtml(initials)}</div>
+            <div class="admin-user-info">
+              <div class="admin-user-name">${escapeHtml(user.display_name || user.username)}${isSelf ? ' <span style="font-size:.75rem;color:var(--muted);font-weight:400;">(you)</span>' : ""}</div>
+              <div class="admin-user-email">${escapeHtml(user.username)}</div>
+            </div>
+            <span class="role-badge ${user.role}">${escapeHtml(user.role)}</span>
+            ${isSelf ? "" : `
+            <div class="admin-role-toggle">
+              <button class="${user.role === "admin" ? "active-role" : ""}"
+                      onclick="adminSetRole('${escapeHtml(user.oid)}','admin',this)">Admin</button>
+              <button class="${user.role === "user"  ? "active-role" : ""}"
+                      onclick="adminSetRole('${escapeHtml(user.oid)}','user',this)">User</button>
+            </div>`}
+          </div>
+          <div class="admin-domains-section">
+            <div class="admin-domains-label">Assigned Domains</div>
+            <div class="admin-domain-grid">${domainChips}</div>
+            <div class="admin-save-row">
+              <button onclick="adminSaveAssignments('${escapeHtml(user.oid)}')" class="secondary">Save assignments</button>
+              <span class="admin-save-status" id="save-status-${escapeHtml(user.oid)}"></span>
+            </div>
+          </div>
+        <div class="admin-domains-section" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+          <label style="font-size:.8rem;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.04em;">
+            Objective Assignments
+            <span class="footer-note" style="text-transform:none;letter-spacing:0;font-weight:400;">&nbsp;— assign specific objectives to this user (finer than domain)</span>
+          </label>
+          <div class="obj-accordion">
+            ${(() => {
+              const objAssignedSet = new Set(user.objectives || []);
+              const objectivesByDomain = new Map();
+              for (const p of PRACTICES) {
+                if (!objectivesByDomain.has(p.domain)) objectivesByDomain.set(p.domain, new Map());
+                objectivesByDomain.get(p.domain).set(p.objectiveId, p.objective);
+              }
+              return [...objectivesByDomain.entries()].map(([domain, objMap]) => {
+                const domainHasAssigned = [...objMap.keys()].some(oid => objAssignedSet.has(oid));
+                const chips = [...objMap.entries()].map(([objId, objLabel]) =>
+                  `<label class="admin-domain-chip${objAssignedSet.has(objId) ? " checked" : ""}" id="objchip-${escapeHtml(user.oid)}-${escapeHtml(objId)}" title="${escapeHtml(objLabel)}">
+                    <input type="checkbox" ${objAssignedSet.has(objId) ? "checked" : ""}
+                           onchange="adminToggleObjectiveChip('${escapeHtml(user.oid)}','${escapeHtml(objId)}',this)"
+                           style="pointer-events:none;">
+                    ${escapeHtml(objId)}
+                  </label>`
+                ).join("");
+                return `<details class="obj-domain-group"${domainHasAssigned ? " open" : ""}>
+                  <summary class="obj-domain-summary">${escapeHtml(domain)}</summary>
+                  <div class="admin-domain-grid">${chips}</div>
+                </details>`;
+              }).join("");
+            })()}
+          </div>
+          <div class="save-row">
+            <button class="secondary" onclick="adminSaveObjectiveAssignments('${escapeHtml(user.oid)}')">Save objectives</button>
+            <span id="obj-save-status-${escapeHtml(user.oid)}" class="save-status"></span>
+          </div>
+        </div>
+        </article>`;
+    }
+
+    function adminToggleDomainChip(oid, domain, checkbox) {
+      const chip = document.getElementById(`chip-${oid}-${domain}`);
+      if (chip) chip.classList.toggle("checked", checkbox.checked);
+    }
+
+    async function adminSetRole(oid, role, btn) {
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/role`, {
+          method: "PUT", body: JSON.stringify({ role })
+        });
+        if (!resp.ok) { alert(`Failed to set role: ${resp.status}`); return; }
+        /* Update badge + toggle buttons */
+        const card = document.getElementById(`user-card-${oid}`);
+        if (card) {
+          card.querySelector(".role-badge").textContent = role;
+          card.querySelector(".role-badge").className = `role-badge ${role}`;
+          card.querySelectorAll(".admin-role-toggle button").forEach(b => {
+            b.classList.toggle("active-role", b.textContent.toLowerCase() === role);
+          });
+        }
+      } catch (err) { alert(err.message); }
+    }
+
+    async function adminSaveAssignments(oid) {
+      const card = document.getElementById(`user-card-${oid}`);
+      if (!card) return;
+      const domains = ALL_DOMAINS.filter(d => {
+        const chip = document.getElementById(`chip-${oid}-${d}`);
+        return chip && chip.querySelector("input")?.checked;
+      });
+      const statusEl = document.getElementById(`save-status-${oid}`);
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/assignments`, {
+          method: "PUT", body: JSON.stringify({ domains })
+        });
+        if (!resp.ok) { if (statusEl) statusEl.textContent = `Error ${resp.status}`; return; }
+        if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 3000); }
+      } catch (err) {
+        if (statusEl) statusEl.textContent = err.message;
+      }
+    }
+
+    async function adminLoadMergedView() {
+      const banner = document.getElementById("adminMergedBanner");
+      try {
+        const resp = await adminFetch("/admin/assessment/merged");
+        if (!resp.ok) { alert(`Failed to load merged view: ${resp.status}`); return; }
+        const merged = await resp.json();
+        _adminStateBeforeMerge = buildPersistableState(state);
+        sessionStorage.setItem("aescsf_merged_mode", "1");
+        sessionStorage.setItem("aescsf_own_state", JSON.stringify(_adminStateBeforeMerge));
+        replaceState(merged, { persist: false });
+        render(); renderDashboard();
+        if (banner) banner.style.display = "flex";
+        setActivePage("dashboard");
+      } catch (err) { alert(err.message); }
+    }
+
+    async function adminLoadApprovedView() {
+      const banner = document.getElementById("adminApprovedBanner");
+      const mergedBanner = document.getElementById("adminMergedBanner");
+      try {
+        const resp = await adminFetch("/admin/assessment/approved");
+        if (resp.status === 404) { alert("No approved assessment yet. Use the Responses section to approve contributor data."); return; }
+        if (!resp.ok) { alert(`Failed to load approved view: ${resp.status}`); return; }
+        const approved = await resp.json();
+        _adminStateBeforeMerge = buildPersistableState(state);
+        sessionStorage.setItem("aescsf_merged_mode", "approved");
+        sessionStorage.setItem("aescsf_own_state", JSON.stringify(_adminStateBeforeMerge));
+        // Overlay approved data on top of admin's own state so unapproved practices still show
+        const _approvedMerged = buildPersistableState(state);
+        _approvedMerged.assessments = { ..._approvedMerged.assessments, ...(approved.assessments || {}) };
+        replaceState(_approvedMerged, { persist: false });
+        render(); renderDashboard();
+        if (mergedBanner) mergedBanner.style.display = "none";
+        if (banner) banner.style.display = "flex";
+        setActivePage("dashboard");
+      } catch (err) { alert(err.message); }
+    }
+
+    function adminRestoreOwnView() {
+      sessionStorage.removeItem("aescsf_merged_mode");
+      sessionStorage.removeItem("aescsf_own_state");
+      const ownState = _adminStateBeforeMerge;
+      _adminStateBeforeMerge = null;
+      if (ownState) replaceState(ownState, { persist: false });
+      render(); renderDashboard();
+      ["adminMergedBanner","adminApprovedBanner"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = "none";
+      });
+      setActivePage("dashboard");
+    }
+
+    document.getElementById("adminRefreshBtn")?.addEventListener("click", renderAdminPanel);
+    document.getElementById("adminLoadMergedBtn")?.addEventListener("click", adminLoadMergedView);
+    document.getElementById("adminLoadApprovedBtn")?.addEventListener("click", adminLoadApprovedView);
+    document.getElementById("responseLoadBtn")?.addEventListener("click", loadAndRenderResponses);
+    document.getElementById("responseDomainFilter")?.addEventListener("change", () => {
+      document.getElementById("responsesContainer").innerHTML = `<div class="audit-empty">Click Load to view responses.</div>`;
+    });
+
+    /* ═══════════════════════════════════════════════════════════════════
+       AUDIT LOG
+    ═══════════════════════════════════════════════════════════════════ */
+    let _auditState = { offset: 0, limit: 100, total: 0 };
+
+    async function renderAuditLog() {
+      _auditState.offset = 0;
+      await _loadAuditPage();
+    }
+
+    async function _loadAuditPage() {
+      const container = document.getElementById("auditTableContainer");
+      if (!container) return;
+      container.innerHTML = `<div class="audit-empty">Loading…</div>`;
+
+      const params = new URLSearchParams({ limit: _auditState.limit, offset: _auditState.offset });
+      const practice = document.getElementById("auditFilterPractice")?.value.trim();
+      const field    = document.getElementById("auditFilterField")?.value;
+      const from     = document.getElementById("auditFilterFrom")?.value;
+      const to       = document.getElementById("auditFilterTo")?.value;
+      if (practice) params.set("practice_id", practice);
+      if (field)    params.set("field", field);
+      if (from)     params.set("from", Math.floor(new Date(from).getTime() / 1000));
+      if (to)       params.set("to",   Math.floor(new Date(to + "T23:59:59").getTime() / 1000));
+
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/audit?${params}`, { credentials: "same-origin" });
+        if (!resp.ok) {
+          const hint = (resp.status === 401 || resp.status === 403)
+            ? ` \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">reload to sign in again</a>`
+            : "";
+          container.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load audit log (${resp.status})${hint}</div>`;
+          return;
+        }
+        const { rows, total, limit, offset } = await resp.json();
+        _auditState.total = total;
+
+        if (!rows.length) {
+          container.innerHTML = emptyStateHtml({ icon: "history", title: "No audit entries found", body: "No changes recorded for the selected filters. Try adjusting the date range or practice ID." });
+          return;
+        }
+
+        const tableHtml = `
+          <div class="audit-table-wrap">
+            <table class="audit-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>User</th>
+                  <th>Practice ID</th>
+                  <th>Field</th>
+                  <th>Old Value</th>
+                  <th>New Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td style="white-space:nowrap;">${new Date(r.created_at * 1000).toLocaleString("en-AU")}</td>
+                    <td style="white-space:nowrap;" title="${escapeHtml(r.username)}">${escapeHtml(r.display_name || r.username)}</td>
+                    <td style="white-space:nowrap;font-weight:600;">${r.practice_id.startsWith("USER:") ? `<span style="background:rgba(239,68,68,.08);color:#b91c1c;border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:1px 7px;font-size:.75rem;font-weight:700;">Admin</span> ${escapeHtml(r.practice_id.slice(5))}` : escapeHtml(r.practice_id)}</td>
+                    <td><span class="audit-field-badge">${escapeHtml(r.field)}</span></td>
+                    <td class="wrap audit-value-old">${escapeHtml(r.old_value || "—")}</td>
+                    <td class="wrap audit-value-new">${escapeHtml(r.new_value || "—")}</td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="audit-pagination">
+            <span>Showing ${offset + 1}–${Math.min(offset + rows.length, total)} of ${total} entries</span>
+            <button class="secondary" style="padding:5px 14px;font-size:.8rem;" ${offset === 0 ? "disabled" : ""}
+                    onclick="_auditState.offset=Math.max(0,_auditState.offset-_auditState.limit);_loadAuditPage()">← Prev</button>
+            <button class="secondary" style="padding:5px 14px;font-size:.8rem;" ${offset + rows.length >= total ? "disabled" : ""}
+                    onclick="_auditState.offset+=_auditState.limit;_loadAuditPage()">Next →</button>
+          </div>`;
+        container.innerHTML = tableHtml;
+      } catch (err) {
+        container.innerHTML = `<div class="audit-empty" style="color:var(--danger);">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    document.getElementById("auditRefreshBtn")?.addEventListener("click", renderAuditLog);
+    document.getElementById("auditSearchBtn")?.addEventListener("click", renderAuditLog);
+    document.getElementById("auditPurgeBtn")?.addEventListener("click", async () => {
+      const btn = document.getElementById("auditPurgeBtn");
+      if (!confirm("Purge audit log entries older than the configured retention period?\n\nThis cannot be undone.")) return;
+      btn.disabled = true;
+      btn.textContent = "Purging…";
+      try {
+        const resp = await adminFetch("/audit/purge", { method: "DELETE" });
+        const data = await resp.json();
+        if (!resp.ok) { alert(`Purge failed: ${data.error || resp.status}`); return; }
+        const msg = data.retentionDays === 0
+          ? data.message
+          : `Purged ${data.deleted} entr${data.deleted === 1 ? "y" : "ies"} older than ${data.retentionDays} days.`;
+        alert(msg);
+        renderAuditLog();
+      } catch (err) {
+        alert(`Purge error: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Purge old entries";
+      }
+    });
+
+    /* ═══════════════════════════════════════════════════════════════════
+       PRACTICE CHANGE HISTORY MODAL
+    ═══════════════════════════════════════════════════════════════════ */
+    async function openHistoryModal(practiceId) {
+      const modal = document.getElementById("historyModal");
+      const title = document.getElementById("historyModalTitle");
+      const body  = document.getElementById("historyModalBody");
+      if (!modal) return;
+      title.textContent = `Change History — ${practiceId}`;
+      body.innerHTML = `<div class="audit-empty">Loading…</div>`;
+      modal.style.display = "flex";
+
+      if (APP_CONFIG.storageMode !== "api") {
+        body.innerHTML = `<div class="audit-empty">Audit history requires API storage mode.</div>`;
+        return;
+      }
+
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/audit/practice/${encodeURIComponent(practiceId)}`, { credentials: "same-origin" });
+        if (!resp.ok) { body.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load history (${resp.status})</div>`; return; }
+        const rows = await resp.json();
+        if (!rows.length) { body.innerHTML = `<div class="audit-empty">No changes recorded for this practice yet.</div>`; return; }
+        body.innerHTML = `
+          <table class="audit-table" style="min-width:0;">
+            <thead>
+              <tr><th>Timestamp</th><th>User</th><th>Field</th><th>Old Value</th><th>New Value</th></tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td style="white-space:nowrap;">${new Date(r.created_at * 1000).toLocaleString("en-AU")}</td>
+                  <td style="white-space:nowrap;" title="${escapeHtml(r.username)}">${escapeHtml(r.display_name || r.username)}</td>
+                  <td><span class="audit-field-badge">${escapeHtml(r.field)}</span></td>
+                  <td class="wrap audit-value-old">${escapeHtml(r.old_value || "—")}</td>
+                  <td class="wrap audit-value-new">${escapeHtml(r.new_value || "—")}</td>
+                </tr>`).join("")}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        body.innerHTML = `<div class="audit-empty" style="color:var(--danger);">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function closeHistoryModal() {
+      const modal = document.getElementById("historyModal");
+      if (modal) modal.style.display = "none";
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeHistoryModal();
+    });
+
+    /* ═══════════════════════════════════════════════════════════════════
+       EVIDENCE FILE UPLOAD
+    ═══════════════════════════════════════════════════════════════════ */
+    function formatBytes(bytes) {
+      if (bytes < 1024)        return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    async function loadFilesForPractice(practiceId) {
+      const container = document.getElementById(`files-${practiceId}`);
+      if (!container) return;
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/files/${encodeURIComponent(practiceId)}`, { credentials: "same-origin" });
+        if (!resp.ok) { container.innerHTML = `<div style="color:var(--danger);font-size:.78rem;">Failed to load files</div>`; return; }
+        const files = await resp.json();
+        if (!files.length) { container.innerHTML = `<div style="color:var(--muted);font-size:.78rem;">No files uploaded yet.</div>`; return; }
+        container.innerHTML = files.map(f => `
+          <div class="uploaded-file-row" id="file-row-${f.id}">
+            <span class="uploaded-file-name" title="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</span>
+            <span class="uploaded-file-meta">${formatBytes(f.size_bytes)} · ${new Date(f.uploaded_at * 1000).toLocaleDateString("en-AU")}</span>
+            <div class="uploaded-file-actions">
+              <a href="${APP_CONFIG.apiBaseUrl}/files/${f.id}/download" download="${escapeHtml(f.filename)}"
+                 class="file-btn">Download</a>
+              <button class="file-btn danger" onclick="deleteFile(${f.id},'${escapeHtml(practiceId)}')">Delete</button>
+            </div>
+          </div>`).join("");
+      } catch (err) {
+        container.innerHTML = `<div style="color:var(--danger);font-size:.78rem;">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function loadVisibleFileLists() {
+      document.querySelectorAll(".uploaded-files-list[id^='files-']").forEach(el => {
+        const practiceId = el.id.replace("files-", "");
+        loadFilesForPractice(practiceId);
+      });
+    }
+
+    function showFileError(practiceId, message) {
+      const container = document.getElementById(`files-${practiceId}`);
+      if (container) {
+        container.innerHTML = `<div style="color:var(--danger);font-size:.78rem;padding:4px 0;">${escapeHtml(message)}</div>`;
+      }
+    }
+
+    async function uploadFile(practiceId, file) {
+      const container = document.getElementById(`files-${practiceId}`);
+      const dropZone  = document.querySelector(`.file-drop-zone[data-practice-id="${CSS.escape(practiceId)}"]`);
+      if (dropZone) dropZone.textContent = `Uploading ${file.name}…`;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/files/${encodeURIComponent(practiceId)}`, {
+          method: "POST",
+          body: formData,
+          credentials: "same-origin"
+        });
+        const json = await resp.json();
+        if (!resp.ok) {
+          showFileError(practiceId, `Upload failed: ${json.error || resp.status}`);
+          return;
+        }
+        await loadFilesForPractice(practiceId);
+      } catch (err) {
+        showFileError(practiceId, `Upload error: ${err.message}`);
+      } finally {
+        if (dropZone) dropZone.innerHTML = `<input type="file" id="fileInput-${escapeHtml(practiceId)}" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.docx,.xlsx,.pptx,.doc,.xls" onchange="handleFileInputChange(event,'${escapeHtml(practiceId)}')">Click to upload or drag &amp; drop — PDF, images, Word, Excel, CSV (max 20 MB)`;
+      }
+    }
+
+    async function handleFileInputChange(event, practiceId) {
+      for (const file of Array.from(event.target.files)) {
+        await uploadFile(practiceId, file);
+      }
+      event.target.value = "";
+    }
+
+    async function handleFileDrop(event, practiceId) {
+      event.preventDefault();
+      const dropZone = event.currentTarget;
+      dropZone.classList.remove("drag-over");
+      for (const file of Array.from(event.dataTransfer.files)) {
+        await uploadFile(practiceId, file);
+      }
+    }
+
+    async function deleteFile(fileId, practiceId) {
+      if (!confirm("Delete this file? This cannot be undone.")) return;
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/files/${fileId}`, {
+          method: "DELETE", credentials: "same-origin"
+        });
+        if (!resp.ok) {
+          const j = await resp.json();
+          showFileError(practiceId, `Delete failed: ${j.error || resp.status}`);
+          return;
+        }
+        await loadFilesForPractice(practiceId);
+      } catch (err) {
+        showFileError(practiceId, `Delete error: ${err.message}`);
+      }
+    }
   </script>
 </body>
 </html>
