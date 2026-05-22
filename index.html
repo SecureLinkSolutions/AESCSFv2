@@ -3848,7 +3848,14 @@ function buildPdfDomainRows(rows) {
               const mResp = await adminFetch(_path);
               if (mResp.ok) {
                 const viewData = await mResp.json();
-                replaceState(viewData, { persist: false });
+                if (_savedMode === "approved") {
+                  // Overlay approved data on top of the admin's own state
+                  const _reloadMerged = buildPersistableState(state);
+                  _reloadMerged.assessments = { ..._reloadMerged.assessments, ...(viewData.assessments || {}) };
+                  replaceState(_reloadMerged, { persist: false });
+                } else {
+                  replaceState(viewData, { persist: false });
+                }
                 render(); renderDashboard();
                 const bannerId = _savedMode === "approved" ? "adminApprovedBanner" : "adminMergedBanner";
                 const banner = document.getElementById(bannerId);
@@ -4308,7 +4315,10 @@ function buildPdfDomainRows(rows) {
         _adminStateBeforeMerge = buildPersistableState(state);
         sessionStorage.setItem("aescsf_merged_mode", "approved");
         sessionStorage.setItem("aescsf_own_state", JSON.stringify(_adminStateBeforeMerge));
-        replaceState(approved, { persist: false });
+        // Overlay approved data on top of admin's own state so unapproved practices still show
+        const _approvedMerged = buildPersistableState(state);
+        _approvedMerged.assessments = { ..._approvedMerged.assessments, ...(approved.assessments || {}) };
+        replaceState(_approvedMerged, { persist: false });
         render(); renderDashboard();
         if (mergedBanner) mergedBanner.style.display = "none";
         if (banner) banner.style.display = "flex";
