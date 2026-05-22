@@ -2085,7 +2085,6 @@
         const matchesStatus = !statusFilter.value || assessment.status === statusFilter.value;
         const rbac = window.__AESCSF_RBAC__;
         const matchesRbac = !rbac || rbac.role === "admin"
-          || (!rbac.domains.length && !rbac.objectives.length)
           || rbac.domains.includes(practice.domain)
           || (rbac.objectives || []).includes(practice.objectiveId);
         return matchesSearch && matchesDomain && matchesMil && matchesSp && matchesStatus && matchesRbac;
@@ -2190,7 +2189,12 @@
       const grouped = groupByObjective(getFilteredPractices());
 
       if (!grouped.length) {
-        app.innerHTML = `<div class="empty">No practices match the current filters.</div>`;
+        const rbacE = window.__AESCSF_RBAC__;
+        const hasAssignment = rbacE && rbacE.role !== "admin" && (rbacE.domains.length || (rbacE.objectives || []).length);
+        const emptyMsg = rbacE && rbacE.role !== "admin" && !hasAssignment
+          ? "No practices have been assigned to you yet. Contact your administrator."
+          : "No practices match the current filters.";
+        app.innerHTML = `<div class="empty">${emptyMsg}</div>`;
         updateSummary();
         return;
       }
@@ -3803,7 +3807,7 @@ function buildPdfDomainRows(rows) {
         });
         if (meResp.ok) {
           const me = await meResp.json();
-          window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], objectives: me.objectives || [], _oid: me.oid || "" };
+          window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], objectives: me.objectives || [], _oid: me.oid || "", displayName: me.displayName || me.username || "" };
           applyRbacUI(me);
           if (me.objectives && me.objectives.length) checkAssignmentCompletion(me.objectives);
         } else {
@@ -3822,6 +3826,7 @@ function buildPdfDomainRows(rows) {
         ]);
         if (remoteState) {
           state = remoteState;
+          prefillOwnerForAssignedPractices();
           populateDomains(); /* re-run now that RBAC is known */
           render();
           renderDashboard();
@@ -3900,6 +3905,26 @@ function buildPdfDomainRows(rows) {
     let _adminStateBeforeMerge = null;
 
     /* ── Assignment completion banner ────────────────────────────────────────── */
+    function prefillOwnerForAssignedPractices() {
+      const rbac = window.__AESCSF_RBAC__;
+      if (!rbac || rbac.role === "admin") return;
+      const name = rbac.displayName || "";
+      if (!name) return;
+      const domains    = new Set(rbac.domains    || []);
+      const objectives = new Set(rbac.objectives || []);
+      if (!domains.size && !objectives.size) return;
+      let changed = false;
+      for (const p of PRACTICES) {
+        if (!domains.has(p.domain) && !objectives.has(p.objectiveId)) continue;
+        if (!state.assessments[p.practiceId]) state.assessments[p.practiceId] = defaultAssessment();
+        if (!state.assessments[p.practiceId].owner) {
+          state.assessments[p.practiceId].owner = name;
+          changed = true;
+        }
+      }
+      if (changed) saveState();
+    }
+
     function checkAssignmentCompletion(objectives) {
       if (!objectives.length || APP_CONFIG.storageMode !== "api") return;
       const assigned = PRACTICES.filter(p => objectives.includes(p.objectiveId));
