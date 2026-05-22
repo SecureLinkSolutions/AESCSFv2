@@ -97,6 +97,34 @@
       background: rgba(22,32,60,0.95) !important;
       border-color: rgba(59,130,246,0.45) !important;
     }
+    html[data-theme="dark"] .objective {
+      background: linear-gradient(180deg, rgba(20,28,48,0.99), rgba(16,24,44,0.97));
+    }
+    html[data-theme="dark"] .objective-header {
+      background: linear-gradient(180deg, rgba(22,30,50,0.99), rgba(18,26,46,0.97));
+    }
+    html[data-theme="dark"] .objective.open .objective-header {
+      background: linear-gradient(180deg, rgba(18,26,46,0.99), rgba(14,22,42,0.98));
+    }
+    html[data-theme="dark"] .objective-body {
+      background: linear-gradient(180deg, rgba(16,24,44,0.95), rgba(13,20,40,0.97));
+    }
+    html[data-theme="dark"] .practice-card {
+      background: linear-gradient(180deg, rgba(22,30,52,0.99), rgba(18,26,48,0.97));
+    }
+    html[data-theme="dark"] .practice-card:hover {
+      background: linear-gradient(180deg, rgba(26,34,58,0.99), rgba(22,30,54,0.99));
+    }
+    html[data-theme="dark"] .timeline-group,
+    html[data-theme="dark"] .timeline-item {
+      background: linear-gradient(180deg, rgba(20,28,48,0.99), rgba(16,24,44,0.97));
+    }
+    html[data-theme="dark"] .domain-card {
+      background: linear-gradient(180deg, rgba(20,28,48,0.98), rgba(16,24,44,0.96));
+    }
+    html[data-theme="dark"] .dashboard-panel {
+      background: linear-gradient(180deg, rgba(20,28,48,0.98), rgba(16,24,44,0.96));
+    }
 
     /* -- Cyber theme ------------------------------------------------------- */
     html[data-theme="cyber"] {
@@ -166,6 +194,93 @@
     html[data-theme="cyber"] #user-info-bar {
       background: rgba(0,30,20,0.95) !important;
       border-color: rgba(0,229,160,0.45) !important;
+    }
+    html[data-theme="cyber"] .objective {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.24);
+      box-shadow: 0 0 14px rgba(0,229,160,0.06), var(--shadow-md);
+    }
+    html[data-theme="cyber"] .objective-header {
+      background: linear-gradient(180deg, rgba(0,22,15,0.99), rgba(0,18,12,0.97));
+    }
+    html[data-theme="cyber"] .objective.open .objective-header {
+      background: linear-gradient(180deg, rgba(0,20,14,0.99), rgba(0,16,10,0.98));
+      border-bottom-color: rgba(0,229,160,0.24);
+    }
+    html[data-theme="cyber"] .objective-body {
+      background: linear-gradient(180deg, rgba(0,15,10,0.96), rgba(0,11,7,0.98));
+    }
+    html[data-theme="cyber"] .objective-title h2 {
+      font-family: 'Courier New', 'Fira Mono', monospace;
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 10px rgba(0,229,160,0.25);
+    }
+    html[data-theme="cyber"] .practice-card {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.20);
+      box-shadow: 0 0 8px rgba(0,229,160,0.04), var(--shadow-sm);
+    }
+    html[data-theme="cyber"] .practice-card:hover {
+      background: linear-gradient(180deg, rgba(0,24,16,0.99), rgba(0,20,13,0.99));
+      border-color: rgba(0,229,160,0.40);
+      box-shadow: 0 0 18px rgba(0,229,160,0.14), var(--shadow-md);
+    }
+    html[data-theme="cyber"] .timeline-group,
+    html[data-theme="cyber"] .timeline-item {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.20);
+    }
+    html[data-theme="cyber"] .domain-card {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.20);
+      box-shadow: 0 0 8px rgba(0,229,160,0.04), var(--shadow-sm);
+    }
+    html[data-theme="cyber"] .dashboard-panel {
+      background: linear-gradient(180deg, rgba(0,18,12,0.99), rgba(0,13,9,0.97));
+      border-color: rgba(0,229,160,0.22);
+      box-shadow: 0 0 12px rgba(0,229,160,0.06), var(--shadow-md);
+    }
+    html[data-theme="cyber"] .badge {
+      background: rgba(0,229,160,0.12);
+      color: #00e5a0;
+      border-color: rgba(0,229,160,0.32);
+      text-shadow: 0 0 8px rgba(0,229,160,0.4);
+      font-family: 'Courier New', monospace;
+    }
+    html[data-theme="cyber"] .status-badge {
+      font-family: 'Courier New', monospace;
+      font-size: .72rem;
+      letter-spacing: 0.04em;
+    }
+    html[data-theme="cyber"] .status-badge.fully {
+      box-shadow: 0 0 8px rgba(0,229,160,0.30);
+    }
+    html[data-theme="cyber"] .field label {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    html[data-theme="cyber"] .summary,
+    html[data-theme="cyber"] .toolbar {
+      background: rgba(0,14,10,0.96);
+      border-color: rgba(0,229,160,0.20);
+    }
+    /* scanlines */
+    html[data-theme="cyber"] body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9998;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 3px,
+        rgba(0,0,0,0.10) 3px, rgba(0,0,0,0.10) 4px
+      );
+    }
+    /* neon glow pulse on primary cta */
+    html[data-theme="cyber"] button:not(.secondary):not(.ghost):not(.theme-btn):not(.page-tab):not(.file-remove-btn):not(.file-history-btn):hover {
+      box-shadow: 0 0 22px rgba(0,229,160,0.45) !important;
     }
 
     /* -- Theme toggle button ------------------------------------------------ */
