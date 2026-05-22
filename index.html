@@ -1630,11 +1630,16 @@
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <button class="secondary" id="adminRefreshBtn">Refresh</button>
             <button class="secondary" id="adminLoadMergedBtn">Load Merged View</button>
+            <button class="secondary" id="adminLoadApprovedBtn">Load Approved View</button>
           </div>
         </div>
         <div id="adminMergedBanner" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(181,71,8,.08);border:1px solid rgba(181,71,8,.2);border-radius:12px;font-size:.875rem;color:#b54708;display:flex;align-items:center;gap:10px;">
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path fill="#b54708" d="M12 2a10 10 0 1 1 0 20A10 10 0 0 1 12 2zm0 5v6m0 2v2"/></svg>
           Merged view loaded — showing combined data from all contributors. <button onclick="adminRestoreOwnView()" style="margin-left:auto;padding:4px 12px;background:transparent;border:1px solid rgba(181,71,8,.4);border-radius:8px;font-size:.8rem;font-weight:500;color:#b54708;cursor:pointer;">Restore my view</button>
+        </div>
+        <div id="adminApprovedBanner" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.2);border-radius:12px;font-size:.875rem;color:#166534;display:flex;align-items:center;gap:10px;">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path fill="#166534" d="M9 12l2 2 4-4m5 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke="#166534" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Approved assessment loaded â showing officially approved data. <button onclick="adminRestoreOwnView()" style="margin-left:auto;padding:4px 12px;background:transparent;border:1px solid rgba(22,163,74,.4);border-radius:8px;font-size:.8rem;font-weight:500;color:#166534;cursor:pointer;">Restore my view</button>
         </div>
       <div id="assignmentIncompleteBanner" class="merged-banner" style="display:none;background:rgba(234,179,8,.12);border-color:rgba(234,179,8,.4);">
         <span id="assignmentIncompleteBannerMsg"></span>
@@ -3833,17 +3838,20 @@ function buildPdfDomainRows(rows) {
           /* Re-apply confidence data now that cards are rendered */
           if (window.__AESCSF_RBAC__?.role === "admin") await loadConfidenceRatings();
 
-          /* Re-enter merged mode if it was active when the page was last refreshed */
-          if (window.__AESCSF_RBAC__?.role === "admin" && sessionStorage.getItem("aescsf_merged_mode")) {
+          /* Re-enter merged or approved mode if it was active when the page was last refreshed */
+          const _savedMode = sessionStorage.getItem("aescsf_merged_mode");
+          if (window.__AESCSF_RBAC__?.role === "admin" && _savedMode) {
             const ownStr = sessionStorage.getItem("aescsf_own_state");
             try { _adminStateBeforeMerge = ownStr ? JSON.parse(ownStr) : buildPersistableState(state); } catch {}
             try {
-              const mResp = await adminFetch("/admin/assessment/merged");
+              const _path = _savedMode === "approved" ? "/admin/assessment/approved" : "/admin/assessment/merged";
+              const mResp = await adminFetch(_path);
               if (mResp.ok) {
-                const merged = await mResp.json();
-                replaceState(merged, { persist: false });
+                const viewData = await mResp.json();
+                replaceState(viewData, { persist: false });
                 render(); renderDashboard();
-                const banner = document.getElementById("adminMergedBanner");
+                const bannerId = _savedMode === "approved" ? "adminApprovedBanner" : "adminMergedBanner";
+                const banner = document.getElementById(bannerId);
                 if (banner) banner.style.display = "flex";
               }
             } catch {}
@@ -3984,6 +3992,31 @@ function buildPdfDomainRows(rows) {
     }
 
     /* ── Multi-respondent responses view ─────────────────────────────────────── */
+    async function approveContributions(userOid, practiceIds) {
+      const btnId = practiceIds ? `approve-${userOid}-${practiceIds[0]}` : `approve-all-${userOid}`;
+      const btn = document.getElementById(btnId);
+      if (btn) { btn.disabled = true; btn.textContent = "Approving…"; }
+      try {
+        const body = practiceIds ? { practiceIds } : {};
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(userOid)}/approve-contributions`, {
+          method: "POST", body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Approve" : "Approve all"; }
+          alert(`Approval failed: ${data.error || resp.status}`);
+          return;
+        }
+        if (btn) {
+          btn.textContent = `✓ Approved (${data.approved})`;
+          btn.style.cssText += ";background:rgba(22,163,74,.12);color:#166534;border-color:rgba(22,163,74,.4);";
+        }
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Approve" : "Approve all"; }
+        alert(err.message);
+      }
+    }
+
     function initResponseFilters() {
       const domainSel = document.getElementById("responseDomainFilter");
       const objSel    = document.getElementById("responseObjectiveFilter");
@@ -4045,7 +4078,30 @@ function buildPdfDomainRows(rows) {
         return;
       }
 
-      container.innerHTML = entries.map(([practiceId, respondents]) => {
+      // Build per-user contributor summary for bulk approve
+      const _allUsers = {};
+      for (const respondents of Object.values(data)) {
+        for (const r of respondents) {
+          if (!_allUsers[r.user_oid]) _allUsers[r.user_oid] = { ...r, count: 0 };
+          _allUsers[r.user_oid].count++;
+        }
+      }
+      const _contributorSummary = Object.keys(_allUsers).length ? `
+        <div style="margin-bottom:18px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;">
+          <div style="font-weight:600;font-size:.88rem;margin-bottom:10px;">Contributors — Approve All</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            ${Object.values(_allUsers).map(u => `
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;font-size:.84rem;">
+                <span><strong>${escapeHtml(u.display_name)}</strong> <span style="color:var(--muted)">${escapeHtml(u.username)}</span></span>
+                <span class="footer-note">${u.count} practice${u.count===1?"":"s"}</span>
+                <button class="secondary" id="approve-all-${escapeHtml(u.user_oid)}"
+                  onclick="approveContributions('${escapeHtml(u.user_oid)}', null)"
+                  style="padding:3px 10px;font-size:.8rem;">Approve all</button>
+              </div>`).join("")}
+          </div>
+        </div>` : "";
+
+      container.innerHTML = _contributorSummary + entries.map(([practiceId, respondents]) => {
         const p = practiceMap[practiceId];
         const rows = respondents.map(r => {
           const sc = statusClass(r.assessment?.status || "");
@@ -4056,6 +4112,10 @@ function buildPdfDomainRows(rows) {
             <td class="wrap">${escapeHtml(r.assessment?.gap      || "—")}</td>
             <td class="wrap">${escapeHtml(r.assessment?.notes    || "—")}</td>
             <td>${escapeHtml(r.assessment?.owner || "—")}</td>
+            <td><button class="secondary"
+              id="approve-${escapeHtml(r.user_oid)}-${escapeHtml(practiceId)}"
+              onclick="approveContributions('${escapeHtml(r.user_oid)}', ['${escapeHtml(practiceId)}'])"
+              style="padding:2px 8px;font-size:.78rem;">Approve</button></td>
           </tr>`;
         }).join("");
         return `<div class="dashboard-panel" style="margin-bottom:14px;">
@@ -4066,7 +4126,7 @@ function buildPdfDomainRows(rows) {
           </div>
           <div class="audit-table-wrap">
             <table class="audit-table">
-              <thead><tr><th>Respondent</th><th>Status</th><th>Evidence</th><th>Gap / Remediation</th><th>Notes</th><th>Owner</th></tr></thead>
+              <thead><tr><th>Respondent</th><th>Status</th><th>Evidence</th><th>Gap / Remediation</th><th>Notes</th><th>Owner</th><th></th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
@@ -4237,6 +4297,25 @@ function buildPdfDomainRows(rows) {
       } catch (err) { alert(err.message); }
     }
 
+    async function adminLoadApprovedView() {
+      const banner = document.getElementById("adminApprovedBanner");
+      const mergedBanner = document.getElementById("adminMergedBanner");
+      try {
+        const resp = await adminFetch("/admin/assessment/approved");
+        if (resp.status === 404) { alert("No approved assessment yet. Use the Responses section to approve contributor data."); return; }
+        if (!resp.ok) { alert(`Failed to load approved view: ${resp.status}`); return; }
+        const approved = await resp.json();
+        _adminStateBeforeMerge = buildPersistableState(state);
+        sessionStorage.setItem("aescsf_merged_mode", "approved");
+        sessionStorage.setItem("aescsf_own_state", JSON.stringify(_adminStateBeforeMerge));
+        replaceState(approved, { persist: false });
+        render(); renderDashboard();
+        if (mergedBanner) mergedBanner.style.display = "none";
+        if (banner) banner.style.display = "flex";
+        setActivePage("dashboard");
+      } catch (err) { alert(err.message); }
+    }
+
     function adminRestoreOwnView() {
       sessionStorage.removeItem("aescsf_merged_mode");
       sessionStorage.removeItem("aescsf_own_state");
@@ -4244,13 +4323,16 @@ function buildPdfDomainRows(rows) {
       _adminStateBeforeMerge = null;
       if (ownState) replaceState(ownState, { persist: false });
       render(); renderDashboard();
-      const banner = document.getElementById("adminMergedBanner");
-      if (banner) banner.style.display = "none";
+      ["adminMergedBanner","adminApprovedBanner"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = "none";
+      });
       setActivePage("dashboard");
     }
 
     document.getElementById("adminRefreshBtn")?.addEventListener("click", renderAdminPanel);
     document.getElementById("adminLoadMergedBtn")?.addEventListener("click", adminLoadMergedView);
+    document.getElementById("adminLoadApprovedBtn")?.addEventListener("click", adminLoadApprovedView);
     document.getElementById("responseLoadBtn")?.addEventListener("click", loadAndRenderResponses);
     document.getElementById("responseDomainFilter")?.addEventListener("change", () => {
       document.getElementById("responsesContainer").innerHTML = `<div class="audit-empty">Click Load to view responses.</div>`;

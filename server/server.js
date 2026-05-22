@@ -171,6 +171,12 @@ db.exec(`
     updated_at   INTEGER NOT NULL DEFAULT (unixepoch()),
     PRIMARY KEY (practice_id, tenant_id)
   );
+  CREATE TABLE IF NOT EXISTS approved_assessments (
+    tenant_id  TEXT    NOT NULL PRIMARY KEY,
+    data       TEXT    NOT NULL DEFAULT '{}',
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_by TEXT    NOT NULL DEFAULT ''
+  );
 `);
 
 /* ── Prepared statements ─────────────────────────────────────────────────── */
@@ -265,6 +271,18 @@ const stmtDeleteObjectiveAssignments = db.prepare(
 const stmtInsertObjectiveAssignment = db.prepare(
   "INSERT OR REPLACE INTO objective_assignments (user_oid, objective_id, assigned_by, assigned_at) VALUES (?, ?, ?, unixepoch())"
 );
+const stmtGetApproved = db.prepare(
+  "SELECT data FROM approved_assessments WHERE tenant_id = ?"
+);
+const stmtUpsertApproved = db.prepare(`
+  INSERT INTO approved_assessments (tenant_id, data, updated_at, updated_by)
+  VALUES (?, ?, unixepoch(), ?)
+  ON CONFLICT(tenant_id) DO UPDATE SET
+    data       = excluded.data,
+    updated_at = excluded.updated_at,
+    updated_by = excluded.updated_by
+`);
+
 const stmtGetAllConfidence = db.prepare(
   "SELECT practice_id, rating, notes, updated_at FROM confidence_ratings WHERE tenant_id = ?"
 );
@@ -781,6 +799,64 @@ app.get("/api/admin/assessment/merged", requireAuth, autoRegister, requireAdmin,
     console.error("[AESCSF API] Merge error:", err);
     res.status(500).json({ error: "Failed to build merged assessment" });
   }
+});
+
+app.get("/api/admin/assessment/approved", requireAuth, autoRegister, requireAdmin, (req, res) => {
+  const row = stmtGetApproved.get(req.user.tenant);
+  if (!row) return res.status(404).json({ error: "No approved assessment found" });
+  try {
+    res.json(JSON.parse(row.data));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to parse approved assessment" });
+  }
+});
+
+app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegister, requireAdmin, (req, res) => {
+  const { practiceIds } = req.body || {};
+  const target = stmtGetUser.get(req.params.oid);
+  if (!target) return res.status(404).json({ error: "User not found" });
+
+  const targetRow = stmtGetAssessment.get(req.params.oid, req.user.tenant);
+  if (!targetRow) return res.status(404).json({ error: "No assessment found for this user" });
+  const targetAssessments = (() => { try { return JSON.parse(targetRow.data)?.assessments || {}; } catch { return {}; } })();
+
+  const approvedRow = stmtGetApproved.get(req.user.tenant);
+  const approvedAssessments = (() => { try { return approvedRow ? JSON.parse(approvedRow.data)?.assessments || {} : {}; } catch { return {}; } })();
+
+  // Determine scope: explicit practiceIds list OR all practices in user's assigned scope
+  let toApprove;
+  if (Array.isArray(practiceIds) && practiceIds.length) {
+    toApprove = new Set(practiceIds);
+  } else {
+    const userDomains    = new Set(getUserAssignments(req.params.oid));
+    const userObjectives = new Set(getUserObjectiveAssignments(req.params.oid));
+    toApprove = new Set(
+      Object.keys(targetAssessments).filter(pid => {
+        if (!userDomains.size && !userObjectives.size) return true;
+        const pDomain    = pid.split("-")[0].toUpperCase();
+        const pObjective = practiceObjectiveId(pid);
+        return userDomains.has(pDomain) || userObjectives.has(pObjective);
+      })
+    );
+  }
+
+  let approvedCount = 0;
+  for (const practiceId of toApprove) {
+    if (targetAssessments[practiceId]) {
+      approvedAssessments[practiceId] = { ...targetAssessments[practiceId] };
+      approvedCount++;
+    }
+  }
+
+  stmtUpsertApproved.run(req.user.tenant, JSON.stringify({ assessments: approvedAssessments, _approvedView: true }), req.user.oid);
+
+  stmtInsertAudit.run(
+    req.user.oid, req.user.username, req.dbUser.display_name,
+    `USER:${target.username || req.params.oid}`, "contributions_approved",
+    "", `${approvedCount} practices approved`
+  );
+
+  res.json({ approved: approvedCount, userOid: req.params.oid });
 });
 
 /* ── Snapshot routes ─────────────────────────────────────────────────────── */
