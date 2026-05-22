@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AESCSF v2 Evidence Tracker</title>
   
+  <script>document.documentElement.dataset.theme=localStorage.getItem('aescsf_theme')||'light'</script>
   <style>
     :root {
       --bg: #f3f6fb;
@@ -36,6 +37,147 @@
       --radius-pill: 999px;
       --grid-gap: 16px;
     }
+
+    /* -- Dark theme -------------------------------------------------------- */
+    html[data-theme="dark"] {
+      --bg: #0d1117; --bg-2: #0a0e1a;
+      --surface: rgba(22,30,50,0.94); --surface-strong: #161e32; --surface-muted: #0f1626;
+      --text: #e2e8f0; --text-soft: #94a3b8; --muted: #64748b;
+      --border: rgba(148,163,184,0.12); --border-strong: rgba(148,163,184,0.22);
+      --primary: #3b82f6; --primary-2: #2563eb; --primary-soft: rgba(59,130,246,0.14);
+      --success: #22c55e; --success-soft: rgba(34,197,94,0.14);
+      --warning: #f97316; --warning-soft: rgba(249,115,22,0.14);
+      --danger: #f43f5e; --danger-soft: rgba(244,63,94,0.14);
+      --neutral-soft: rgba(100,116,139,0.14);
+      --shadow-sm: 0 6px 18px rgba(0,0,0,0.35);
+      --shadow-md: 0 16px 42px rgba(0,0,0,0.45);
+      --shadow-lg: 0 24px 60px rgba(0,0,0,0.55);
+    }
+    html[data-theme="dark"], html[data-theme="dark"] body {
+      background:
+        radial-gradient(circle at top left, rgba(59,130,246,0.07), transparent 28%),
+        radial-gradient(circle at 85% 8%, rgba(34,197,94,0.05), transparent 24%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    }
+    html[data-theme="dark"] body::before {
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    }
+    html[data-theme="dark"] .toolbar { background: rgba(13,17,23,0.92); }
+    html[data-theme="dark"] .header {
+      background:
+        radial-gradient(circle at top right, rgba(255,255,255,0.10), transparent 30%),
+        linear-gradient(135deg, #0b1428 0%, #0f2060 50%, #1a3a96 100%);
+    }
+    html[data-theme="dark"] .field input,
+    html[data-theme="dark"] .field select,
+    html[data-theme="dark"] .field textarea {
+      background: rgba(22,30,50,0.95);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.03);
+    }
+    html[data-theme="dark"] .field input:focus,
+    html[data-theme="dark"] .field select:focus,
+    html[data-theme="dark"] .field textarea:focus {
+      background: rgba(22,30,50,1);
+      border-color: rgba(59,130,246,0.5);
+      box-shadow: 0 0 0 4px rgba(59,130,246,0.14), 0 10px 22px rgba(59,130,246,0.08);
+    }
+    html[data-theme="dark"] button.secondary,
+    html[data-theme="dark"] .button-like.secondary {
+      background: linear-gradient(180deg, #1a2540, #141c34);
+      border-color: rgba(59,130,246,0.25);
+      color: #93c5fd;
+    }
+    html[data-theme="dark"] button.ghost { background: transparent; color: var(--text-soft); }
+    html[data-theme="dark"] .stat {
+      background: linear-gradient(180deg, rgba(22,30,50,0.98), rgba(18,26,46,0.96));
+    }
+    html[data-theme="dark"] #user-info-bar {
+      background: rgba(22,32,60,0.95) !important;
+      border-color: rgba(59,130,246,0.45) !important;
+    }
+
+    /* -- Cyber theme ------------------------------------------------------- */
+    html[data-theme="cyber"] {
+      --bg: #050e0b; --bg-2: #030908;
+      --surface: rgba(0,20,14,0.96); --surface-strong: #04130d; --surface-muted: #030f09;
+      --text: #00e5a0; --text-soft: #00b87a; --muted: #007a50;
+      --border: rgba(0,229,160,0.16); --border-strong: rgba(0,229,160,0.30);
+      --primary: #00e5a0; --primary-2: #00c484; --primary-soft: rgba(0,229,160,0.14);
+      --success: #00e5a0; --success-soft: rgba(0,229,160,0.14);
+      --warning: #fbbf24; --warning-soft: rgba(251,191,36,0.14);
+      --danger: #ff2b6e; --danger-soft: rgba(255,43,110,0.14);
+      --neutral-soft: rgba(0,229,160,0.10);
+      --shadow-sm: 0 6px 18px rgba(0,0,0,0.5);
+      --shadow-md: 0 16px 42px rgba(0,0,0,0.6);
+      --shadow-lg: 0 24px 60px rgba(0,229,160,0.12);
+    }
+    html[data-theme="cyber"], html[data-theme="cyber"] body {
+      background:
+        radial-gradient(circle at top left, rgba(0,229,160,0.10), transparent 28%),
+        radial-gradient(circle at 85% 8%, rgba(0,229,160,0.06), transparent 24%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    }
+    html[data-theme="cyber"] body::before {
+      background-image:
+        linear-gradient(rgba(0,229,160,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,160,0.07) 1px, transparent 1px);
+    }
+    html[data-theme="cyber"] .toolbar { background: rgba(0,14,10,0.95); }
+    html[data-theme="cyber"] .header {
+      background:
+        radial-gradient(circle at top right, rgba(0,229,160,0.20), transparent 30%),
+        linear-gradient(135deg, #011a0e 0%, #002f1a 50%, #004d2a 100%);
+      border-color: rgba(0,229,160,0.35);
+    }
+    html[data-theme="cyber"] .field input,
+    html[data-theme="cyber"] .field select,
+    html[data-theme="cyber"] .field textarea {
+      background: rgba(0,20,14,0.95);
+      box-shadow: inset 0 1px 1px rgba(0,229,160,0.04);
+    }
+    html[data-theme="cyber"] .field input:focus,
+    html[data-theme="cyber"] .field select:focus,
+    html[data-theme="cyber"] .field textarea:focus {
+      background: rgba(0,20,14,1);
+      border-color: rgba(0,229,160,0.6);
+      box-shadow: 0 0 0 4px rgba(0,229,160,0.12), 0 0 18px rgba(0,229,160,0.10);
+    }
+    html[data-theme="cyber"] button:not(.secondary):not(.ghost):not(.theme-btn):not(.page-tab):not(.file-remove-btn):not(.file-history-btn) {
+      background: linear-gradient(180deg, #00e5a0, #00c484);
+      color: #001a0e;
+    }
+    html[data-theme="cyber"] button.secondary,
+    html[data-theme="cyber"] .button-like.secondary {
+      background: linear-gradient(180deg, #04130d, #030f09);
+      border-color: rgba(0,229,160,0.30);
+      color: #00e5a0;
+    }
+    html[data-theme="cyber"] button.ghost { background: transparent; color: var(--text-soft); }
+    html[data-theme="cyber"] .stat {
+      background: linear-gradient(180deg, rgba(0,20,14,0.98), rgba(0,16,10,0.96));
+    }
+    html[data-theme="cyber"] .page-tab.active {
+      background: rgba(0,229,160,0.12);
+      color: #00e5a0;
+      border-color: rgba(0,229,160,0.40);
+    }
+    html[data-theme="cyber"] #user-info-bar {
+      background: rgba(0,30,20,0.95) !important;
+      border-color: rgba(0,229,160,0.45) !important;
+    }
+
+    /* -- Theme toggle button ------------------------------------------------ */
+    .theme-btn {
+      min-height: unset; padding: 4px 9px; font-size: .95rem;
+      background: transparent; border-color: transparent;
+      color: rgba(255,255,255,0.65); box-shadow: none; border-radius: 6px;
+      line-height: 1; font-weight: 400;
+    }
+    .theme-btn:hover { background: rgba(255,255,255,0.15) !important; transform: none !important; box-shadow: none !important; color: #fff; }
+    .theme-btn.active { background: rgba(255,255,255,0.22) !important; color: #fff; }
+
 
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -1239,6 +1381,11 @@
         <span id="user-display-name" style="font-size:.875rem;font-weight:600;color:#fff;"></span>
         <span id="user-role-badge" style="display:none;padding:2px 10px;border-radius:999px;font-size:.75rem;font-weight:700;letter-spacing:.02em;"></span>
         <span style="flex:1;"></span>
+        <div style="display:flex;gap:2px;background:rgba(0,0,0,.2);padding:3px;border-radius:8px;align-items:center;" title="Switch theme">
+          <button class="theme-btn" data-theme="light"  onclick="setTheme('light')"  title="Light mode">&#9728;</button>
+          <button class="theme-btn" data-theme="dark"   onclick="setTheme('dark')"   title="Dark mode">&#9790;</button>
+          <button class="theme-btn" data-theme="cyber"  onclick="setTheme('cyber')"  title="Cyber mode">&#9889;</button>
+        </div>
         <button onclick="signOut()" style="padding:5px 12px;background:transparent;border:1px solid rgba(255,255,255,.5);border-radius:8px;font-size:.8rem;font-weight:500;color:#fff;cursor:pointer;font-family:inherit;">Sign out</button>
       </div>
       <h1>AESCSF v2 Evidence Tracker</h1>
@@ -3826,6 +3973,15 @@ function buildPdfDomainRows(rows) {
     }
 
     /* ── Sign-out ────────────────────────────────────────────────────────── */
+
+    function setTheme(t) {
+      document.documentElement.dataset.theme = t;
+      try { localStorage.setItem('aescsf_theme', t); } catch {}
+      document.querySelectorAll('.theme-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.theme === t);
+      });
+    }
+
     function signOut() {
       /* Clear the oauth2-proxy session cookie and land on the login page.
        * rd=/login is a relative path so oauth2-proxy accepts it without any
@@ -3991,7 +4147,8 @@ function buildPdfDomainRows(rows) {
     setupDelegatedListeners();
     render();
     setActivePage("assessment");
-    initializeFromApi(); /* load user profile + remote state (oauth2-proxy session already established) */
+    initializeFromApi();
+    setTheme(localStorage.getItem('aescsf_theme')||'light'); /* load user profile + remote state (oauth2-proxy session already established) */
 
     /* ── Admin panel ──────────────────────────────────────────────────────
        All admin functions are gated behind requireAdmin on the server.
