@@ -36,6 +36,9 @@
       --radius-lg: 24px;
       --radius-pill: 999px;
       --grid-gap: 16px;
+      --sidebar-w: 220px;
+      --topbar-h: 60px;
+      --nav-icon-size: 18px;
     }
 
     /* -- Dark theme -------------------------------------------------------- */
@@ -53,6 +56,10 @@
       --shadow-md: 0 16px 42px rgba(0,0,0,0.45);
       --shadow-lg: 0 24px 60px rgba(0,0,0,0.55);
     }
+    html[data-theme="dark"] .app-sidebar { background: #090d16; border-right-color: rgba(148,163,184,0.08); }
+    html[data-theme="dark"] .app-topbar  { background: #0a0e1a; border-bottom-color: rgba(148,163,184,0.10); }
+    html[data-theme="dark"] .cmd-palette,
+    html[data-theme="dark"] .actions-menu { background: #111827; border-color: rgba(148,163,184,0.18); }
     html[data-theme="dark"], html[data-theme="dark"] body {
       background:
         radial-gradient(circle at top left, rgba(59,130,246,0.07), transparent 28%),
@@ -141,6 +148,14 @@
       --shadow-md: 0 16px 42px rgba(0,0,0,0.6);
       --shadow-lg: 0 24px 60px rgba(0,229,160,0.12);
     }
+    html[data-theme="cyber"] .app-sidebar { background: #020c07; border-right-color: rgba(0,229,160,0.12); }
+    html[data-theme="cyber"] .app-topbar  { background: #030f09; border-bottom-color: rgba(0,229,160,0.12); }
+    html[data-theme="cyber"] .sidebar-nav-item.active { background: rgba(0,229,160,0.12); color: #00e5a0; border-color: rgba(0,229,160,0.30); }
+    html[data-theme="cyber"] .sidebar-nav-item:hover  { background: rgba(0,229,160,0.06); color: #00e5a0; }
+    html[data-theme="cyber"] .cmd-result.focused      { background: rgba(0,229,160,0.10); }
+    html[data-theme="cyber"] .cmd-palette,
+    html[data-theme="cyber"] .actions-menu { background: #030f09; border-color: rgba(0,229,160,0.22); }
+    html[data-theme="cyber"] .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2300e5a0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
     html[data-theme="cyber"], html[data-theme="cyber"] body {
       background:
         radial-gradient(circle at top left, rgba(0,229,160,0.10), transparent 28%),
