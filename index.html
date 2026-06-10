@@ -2715,7 +2715,7 @@
     }
 
     function setActivePage(page) {
-      const ADMIN_ONLY_PAGES = new Set(["dashboard", "admin", "audit"]);
+      const ADMIN_ONLY_PAGES = new Set(["dashboard", "comparison", "admin", "audit"]);
       if (ADMIN_ONLY_PAGES.has(page) && window.__AESCSF_RBAC__?.role !== "admin") {
         page = "assessment";
       }
@@ -5063,25 +5063,21 @@ function buildPdfDomainRows(rows) {
     function applyRbacUI(me) {
       const isAdmin = me.role === "admin";
       /* Show/hide admin-only tabs */
-      /* Dashboard, Admin, Audit — admin only. Comparison — all users (golden snapshots are shared). */
-      ["dashboardPageTab", "adminPageTab", "auditPageTab"].forEach(id => {
+      /* Dashboard, Comparison, Admin, Audit — admin only */
+      ["dashboardPageTab", "comparisonPageTab", "adminPageTab", "auditPageTab"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = isAdmin ? "" : "none";
       });
-      const comparisonPageTab = document.getElementById("comparisonPageTab");
-      if (comparisonPageTab) comparisonPageTab.style.display = "";
       /* Sync sidebar items */
-      ["sidebarDashboardTab","sidebarAdminTab","sidebarAuditTab"].forEach(id => {
+      ["sidebarDashboardTab","sidebarComparisonTab","sidebarAdminTab","sidebarAuditTab"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = isAdmin ? "" : "none";
       });
-      const sidebarComparisonTab = document.getElementById("sidebarComparisonTab");
-      if (sidebarComparisonTab) sidebarComparisonTab.style.display = "";
       const sidebarAdminLabel = document.getElementById("sidebarAdminLabel");
       if (sidebarAdminLabel) sidebarAdminLabel.style.display = isAdmin ? "" : "none";
       /* If a non-admin somehow lands on a restricted page, send them to assessment */
       if (!isAdmin) {
-        const restricted = new Set(["dashboard", "admin", "audit"]);
+        const restricted = new Set(["dashboard", "comparison", "admin", "audit"]);
         const activeTab = document.querySelector(".page-tab.active");
         if (activeTab && restricted.has(activeTab.dataset.pageTab)) {
           setActivePage("assessment");
