@@ -984,6 +984,9 @@ app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegiste
 /**
  * POST /api/admin/users/:oid/endorse-contributions
  * Endorses the latest saved version of each practice for a given user.
+ * If no practice_versions record exists (data saved before versioning was deployed),
+ * a version is created on-the-fly from the user's current assessment data so the
+ * endorsement always succeeds.
  * Body: { practiceIds: ["ACCESS-1a", ...] } — omit to endorse all practices the user has saved.
  * Admin only.
  */
@@ -992,25 +995,43 @@ app.post("/api/admin/users/:oid/endorse-contributions", requireAuth, autoRegiste
   const target = stmtGetUser.get(req.params.oid);
   if (!target) return res.status(404).json({ error: "User not found" });
 
-  const endorsedBy = req.dbUser.display_name || req.user.username || "";
-  let endorsed = 0;
+  const endorsedBy  = req.dbUser.display_name || req.user.username || "";
+  const displayName = target.display_name || target.username || req.params.oid;
 
-  if (Array.isArray(practiceIds) && practiceIds.length) {
-    for (const pid of practiceIds) {
-      const row = db.prepare(
+  const assessmentRow = stmtGetAssessment.get(req.params.oid, req.user.tenant);
+  if (!assessmentRow) return res.status(404).json({ error: "No assessment data found for this user" });
+  let allAssessments;
+  try { allAssessments = JSON.parse(assessmentRow.data)?.assessments || {}; } catch { allAssessments = {}; }
+
+  const toEndorse = Array.isArray(practiceIds) && practiceIds.length
+    ? practiceIds
+    : Object.keys(allAssessments);
+
+  let endorsed = 0;
+  const endorseTx = db.transaction(() => {
+    for (const pid of toEndorse) {
+      const assessData = allAssessments[pid];
+      if (!assessData) continue;
+
+      /* Find the latest existing version for this user/practice */
+      const existing = db.prepare(
         "SELECT MAX(id) AS id FROM practice_versions WHERE practice_id = ? AND user_oid = ? AND tenant_id = ?"
       ).get(pid, req.params.oid, req.user.tenant);
-      if (row?.id) { stmtUpsertEndorsement.run(pid, req.user.tenant, row.id, endorsedBy); endorsed++; }
-    }
-  } else {
-    const rows = db.prepare(
-      "SELECT MAX(id) AS id, practice_id FROM practice_versions WHERE user_oid = ? AND tenant_id = ? GROUP BY practice_id"
-    ).all(req.params.oid, req.user.tenant);
-    for (const row of rows) {
-      stmtUpsertEndorsement.run(row.practice_id, req.user.tenant, row.id, endorsedBy);
+
+      let versionId;
+      if (existing?.id) {
+        versionId = existing.id;
+      } else {
+        /* No version yet — create one from current assessment data */
+        const ins = stmtInsertPracticeVersion.run(pid, req.params.oid, displayName, req.user.tenant, JSON.stringify(assessData));
+        versionId = ins.lastInsertRowid;
+      }
+
+      stmtUpsertEndorsement.run(pid, req.user.tenant, versionId, endorsedBy);
       endorsed++;
     }
-  }
+  });
+  endorseTx();
 
   stmtInsertAudit.run(
     req.user.oid, req.user.username, req.dbUser.display_name,
