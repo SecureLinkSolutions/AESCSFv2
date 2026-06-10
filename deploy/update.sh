@@ -81,22 +81,18 @@ section "Rolling Restart"
 info "Restarting API service…"
 sudo -u "$APP_USER" docker compose up -d --no-deps api
 
-# Wait for API health
+# Wait for API health using docker inspect (works across all Compose versions)
 info "Waiting for API health check…"
 HEALTHY=false
 for i in $(seq 1 50); do
-  if sudo -u "$APP_USER" docker compose ps --format json 2>/dev/null | python3 -c "
-import sys, json
-data = sys.stdin.read()
-try:
-    services = [json.loads(l) for l in data.strip().splitlines() if l]
-    api = next((s for s in services if 'api' in s.get('Service','')), None)
-    sys.exit(0 if api and api.get('Health') == 'healthy' else 1)
-except: sys.exit(1)
-" 2>/dev/null; then
-    HEALTHY=true
-    success "API is healthy"
-    break
+  CONTAINER_ID=$(sudo -u "$APP_USER" docker compose ps -q api 2>/dev/null | head -1)
+  if [[ -n "$CONTAINER_ID" ]]; then
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_ID" 2>/dev/null || true)
+    if [[ "$STATUS" == "healthy" ]]; then
+      HEALTHY=true
+      success "API is healthy"
+      break
+    fi
   fi
   [[ $i -lt 50 ]] && sleep 3
 done
