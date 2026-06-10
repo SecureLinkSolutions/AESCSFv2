@@ -251,7 +251,7 @@ BACKUP_SCRIPT
 chmod +x /usr/local/bin/aescsf-backup
 
 # Add cron job at 02:00 daily
-(crontab -l 2>/dev/null | grep -v aescsf-backup; echo "0 2 * * * /usr/local/bin/aescsf-backup >> /var/log/aescsf-backup.log 2>&1") | crontab -
+(crontab -l 2>/dev/null || true; echo "0 2 * * * /usr/local/bin/aescsf-backup >> /var/log/aescsf-backup.log 2>&1") | crontab -
 success "Daily backup cron job set (02:00 UTC → ${BACKUP_DIR})"
 
 # ── Unattended security upgrades ─────────────────────────────────────────────
