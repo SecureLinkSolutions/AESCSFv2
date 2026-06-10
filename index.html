@@ -2449,10 +2449,14 @@
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <select id="responseDomainFilter" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.85rem;"><option value="">All domains</option></select>
               <select id="responseObjectiveFilter" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.85rem;"><option value="">All objectives</option></select>
-              <button class="secondary" id="responseLoadBtn">Load responses</button>
+              <label style="display:flex;align-items:center;gap:6px;font-size:.84rem;color:var(--text-soft);cursor:pointer;white-space:nowrap;">
+                <input type="checkbox" id="responsePendingOnly" checked style="accent-color:var(--primary);width:15px;height:15px;">
+                Pending review only
+              </label>
+              <button class="secondary" id="responseLoadBtn">↺ Refresh</button>
             </div>
           </div>
-          <div id="responsesContainer"><div class="audit-empty">Select filters and click Load to view multi-respondent responses.</div></div>
+          <div id="responsesContainer"><div class="audit-empty">Loading…</div></div>
         </section>
     </div>
 
@@ -5339,9 +5343,10 @@ function buildPdfDomainRows(rows) {
     }
 
     function renderResponses(data) {
-      const domainF    = document.getElementById("responseDomainFilter")?.value    || "";
-      const objectiveF = document.getElementById("responseObjectiveFilter")?.value || "";
-      const container  = document.getElementById("responsesContainer");
+      const domainF       = document.getElementById("responseDomainFilter")?.value    || "";
+      const objectiveF    = document.getElementById("responseObjectiveFilter")?.value || "";
+      const pendingOnly   = document.getElementById("responsePendingOnly")?.checked ?? true;
+      const container     = document.getElementById("responsesContainer");
       if (!container) return;
 
       const practiceMap = Object.fromEntries(PRACTICES.map(p => [p.practiceId, p]));
@@ -5351,12 +5356,20 @@ function buildPdfDomainRows(rows) {
           if (!p) return false;
           if (domainF    && p.domain      !== domainF)    return false;
           if (objectiveF && p.objectiveId !== objectiveF) return false;
+          if (pendingOnly) {
+            const end = window.__AESCSF_ENDORSEMENTS__?.[pid];
+            /* Hide practices that are endorsed and haven't changed since */
+            if (end && !end.changed_since) return false;
+          }
           return true;
         })
         .sort(([a], [b]) => a.localeCompare(b));
 
       if (!entries.length) {
-        container.innerHTML = `<div class="audit-empty">No responses found. Assign objectives to users and ask them to complete their assessment.</div>`;
+        const msg = pendingOnly
+          ? "No practices pending review. All submitted responses have been endorsed and are up to date."
+          : "No responses found.";
+        container.innerHTML = `<div class="audit-empty">${escapeHtml(msg)}</div>`;
         return;
       }
 
@@ -5700,9 +5713,9 @@ function buildPdfDomainRows(rows) {
 
     document.getElementById("adminRefreshBtn")?.addEventListener("click", renderAdminPanel);
     document.getElementById("responseLoadBtn")?.addEventListener("click", loadAndRenderResponses);
-    document.getElementById("responseDomainFilter")?.addEventListener("change", () => {
-      document.getElementById("responsesContainer").innerHTML = `<div class="audit-empty">Click Load to view responses.</div>`;
-    });
+    document.getElementById("responseDomainFilter")?.addEventListener("change", loadAndRenderResponses);
+    document.getElementById("responseObjectiveFilter")?.addEventListener("change", loadAndRenderResponses);
+    document.getElementById("responsePendingOnly")?.addEventListener("change", loadAndRenderResponses);
 
     /* ═══════════════════════════════════════════════════════════════════
        AUDIT LOG
