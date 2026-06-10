@@ -991,55 +991,67 @@ app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegiste
  * Admin only.
  */
 app.post("/api/admin/users/:oid/endorse-contributions", requireAuth, autoRegister, requireAdmin, (req, res) => {
-  const { practiceIds } = req.body || {};
-  const target = stmtGetUser.get(req.params.oid);
-  if (!target) return res.status(404).json({ error: "User not found" });
+  try {
+    const { practiceIds } = req.body || {};
+    const target = stmtGetUser.get(req.params.oid);
+    if (!target) return res.status(404).json({ error: "User not found" });
 
-  const endorsedBy  = req.dbUser.display_name || req.user.username || "";
-  const displayName = target.display_name || target.username || req.params.oid;
+    const endorsedBy  = req.dbUser.display_name || req.user.username || "";
+    const displayName = target.display_name || target.username || req.params.oid;
 
-  const assessmentRow = stmtGetAssessment.get(req.params.oid, req.user.tenant);
-  if (!assessmentRow) return res.status(404).json({ error: "No assessment data found for this user" });
-  let allAssessments;
-  try { allAssessments = JSON.parse(assessmentRow.data)?.assessments || {}; } catch { allAssessments = {}; }
+    const assessmentRow = stmtGetAssessment.get(req.params.oid, req.user.tenant);
+    if (!assessmentRow) return res.status(404).json({ error: "No assessment data found for this user" });
+    let allAssessments;
+    try { allAssessments = JSON.parse(assessmentRow.data)?.assessments || {}; } catch { allAssessments = {}; }
 
-  const toEndorse = Array.isArray(practiceIds) && practiceIds.length
-    ? practiceIds
-    : Object.keys(allAssessments);
+    const toEndorse = Array.isArray(practiceIds) && practiceIds.length
+      ? practiceIds
+      : Object.keys(allAssessments);
 
-  let endorsed = 0;
-  const endorseTx = db.transaction(() => {
-    for (const pid of toEndorse) {
-      const assessData = allAssessments[pid];
-      if (!assessData) continue;
+    const endorsedIds = [];
+    const stmtFindLatestVersion = db.prepare(
+      "SELECT MAX(id) AS id FROM practice_versions WHERE practice_id = ? AND user_oid = ? AND tenant_id = ?"
+    );
 
-      /* Find the latest existing version for this user/practice */
-      const existing = db.prepare(
-        "SELECT MAX(id) AS id FROM practice_versions WHERE practice_id = ? AND user_oid = ? AND tenant_id = ?"
-      ).get(pid, req.params.oid, req.user.tenant);
+    const endorseTx = db.transaction(() => {
+      for (const pid of toEndorse) {
+        const assessData = allAssessments[pid];
+        if (!assessData) continue;
 
-      let versionId;
-      if (existing?.id) {
-        versionId = existing.id;
-      } else {
-        /* No version yet — create one from current assessment data */
-        const ins = stmtInsertPracticeVersion.run(pid, req.params.oid, displayName, req.user.tenant, JSON.stringify(assessData));
-        versionId = ins.lastInsertRowid;
+        /* Find the latest existing version for this user/practice */
+        const existing = stmtFindLatestVersion.get(pid, req.params.oid, req.user.tenant);
+
+        let versionId;
+        if (existing?.id) {
+          versionId = existing.id;
+        } else {
+          /* No version yet — create one from current assessment data */
+          const ins = stmtInsertPracticeVersion.run(
+            pid, req.params.oid, displayName, req.user.tenant, JSON.stringify(assessData)
+          );
+          versionId = Number(ins.lastInsertRowid);
+        }
+
+        stmtUpsertEndorsement.run(pid, req.user.tenant, Number(versionId), endorsedBy);
+        endorsedIds.push(pid);
       }
+    });
 
-      stmtUpsertEndorsement.run(pid, req.user.tenant, versionId, endorsedBy);
-      endorsed++;
-    }
-  });
-  endorseTx();
+    endorseTx();
 
-  stmtInsertAudit.run(
-    req.user.oid, req.user.username, req.dbUser.display_name,
-    `USER:${target.username || req.params.oid}`, "endorse_contributions",
-    "", `${endorsed} practices`
-  );
+    try {
+      stmtInsertAudit.run(
+        req.user.oid, req.user.username, req.dbUser.display_name,
+        `USER:${target.username || req.params.oid}`, "endorse_contributions",
+        "", `${endorsedIds.length} practices`
+      );
+    } catch { /* audit failure is non-fatal */ }
 
-  res.json({ endorsed });
+    res.json({ endorsed: endorsedIds.length, practiceIds: endorsedIds });
+  } catch (err) {
+    console.error("[AESCSF API] endorse-contributions error:", err);
+    res.status(500).json({ error: err.message || "Endorsement failed" });
+  }
 });
 
 /* ── Endorsement routes ──────────────────────────────────────────────────── */

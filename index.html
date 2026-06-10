@@ -5287,10 +5287,19 @@ function buildPdfDomainRows(rows) {
           alert(`Endorsement failed: ${data.error || resp.status}`);
           return;
         }
-        /* Refresh endorsement cache so the Responses view reflects the change on reload */
-        const endResp = await adminFetch("/endorsements");
-        if (endResp.ok) window.__AESCSF_ENDORSEMENTS__ = await endResp.json();
-        /* Reload the responses panel so endorsed status is immediately visible */
+        /* Optimistically mark endorsed practices as up-to-date in the local cache
+           so the pending-review filter hides them immediately on re-render, even
+           before the server round-trip confirms the new changed_since value. */
+        if (Array.isArray(data.practiceIds)) {
+          window.__AESCSF_ENDORSEMENTS__ = window.__AESCSF_ENDORSEMENTS__ || {};
+          for (const pid of data.practiceIds) {
+            window.__AESCSF_ENDORSEMENTS__[pid] = {
+              ...(window.__AESCSF_ENDORSEMENTS__[pid] || {}),
+              changed_since: false
+            };
+          }
+        }
+        /* Reload the responses panel (also re-fetches endorsements for confirmation) */
         await loadAndRenderResponses();
       } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Endorse" : "Endorse all"; }
