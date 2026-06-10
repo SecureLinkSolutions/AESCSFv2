@@ -2424,17 +2424,7 @@
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <button class="secondary" id="adminRefreshBtn">Refresh</button>
-            <button class="secondary" id="adminLoadMergedBtn">Load Merged View</button>
-            <button class="secondary" id="adminLoadApprovedBtn">Load Approved View</button>
           </div>
-        </div>
-        <div id="adminMergedBanner" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(181,71,8,.08);border:1px solid rgba(181,71,8,.2);border-radius:12px;font-size:.875rem;color:#b54708;display:flex;align-items:center;gap:10px;">
-          <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path fill="#b54708" d="M12 2a10 10 0 1 1 0 20A10 10 0 0 1 12 2zm0 5v6m0 2v2"/></svg>
-          Merged view loaded — showing combined data from all contributors. <button onclick="adminRestoreOwnView()" style="margin-left:auto;padding:4px 12px;background:transparent;border:1px solid rgba(181,71,8,.4);border-radius:8px;font-size:.8rem;font-weight:500;color:#b54708;cursor:pointer;">Restore my view</button>
-        </div>
-        <div id="adminApprovedBanner" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.2);border-radius:12px;font-size:.875rem;color:#166534;display:flex;align-items:center;gap:10px;">
-          <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path fill="#166534" d="M9 12l2 2 4-4m5 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke="#166534" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Approved assessment loaded — showing officially approved data. <button onclick="adminRestoreOwnView()" style="margin-left:auto;padding:4px 12px;background:transparent;border:1px solid rgba(22,163,74,.4);border-radius:8px;font-size:.8rem;font-weight:500;color:#166534;cursor:pointer;">Restore my view</button>
         </div>
       <div id="assignmentIncompleteBanner" class="merged-banner" style="display:none;background:rgba(234,179,8,.12);border-color:rgba(234,179,8,.4);">
         <span id="assignmentIncompleteBannerMsg"></span>
@@ -5113,31 +5103,9 @@ function buildPdfDomainRows(rows) {
           /* Re-apply confidence data now that cards are rendered */
           if (window.__AESCSF_RBAC__?.role === "admin") await loadConfidenceRatings();
 
-          /* Re-enter merged or approved mode if it was active when the page was last refreshed */
-          const _savedMode = sessionStorage.getItem("aescsf_merged_mode");
-          if (window.__AESCSF_RBAC__?.role === "admin" && _savedMode) {
-            const ownStr = sessionStorage.getItem("aescsf_own_state");
-            try { _adminStateBeforeMerge = ownStr ? JSON.parse(ownStr) : buildPersistableState(state); } catch {}
-            try {
-              const _path = _savedMode === "approved" ? "/admin/assessment/approved" : "/admin/assessment/merged";
-              const mResp = await adminFetch(_path);
-              if (mResp.ok) {
-                const viewData = await mResp.json();
-                if (_savedMode === "approved") {
-                  // Overlay approved data on top of the admin's own state
-                  const _reloadMerged = buildPersistableState(state);
-                  _reloadMerged.assessments = { ..._reloadMerged.assessments, ...(viewData.assessments || {}) };
-                  replaceState(_reloadMerged, { persist: false });
-                } else {
-                  replaceState(viewData, { persist: false });
-                }
-                render(); renderDashboard();
-                const bannerId = _savedMode === "approved" ? "adminApprovedBanner" : "adminMergedBanner";
-                const banner = document.getElementById(bannerId);
-                if (banner) banner.style.display = "flex";
-              }
-            } catch {}
-          }
+          /* Clean up any stale merged-mode session state from older versions */
+          sessionStorage.removeItem("aescsf_merged_mode");
+          sessionStorage.removeItem("aescsf_own_state");
         }
       } catch (err) {
         console.warn("[AESCSF] Could not load from API, using cached local state:", err);
@@ -5235,7 +5203,6 @@ function buildPdfDomainRows(rows) {
     ──────────────────────────────────────────────────────────────────── */
     const ALL_DOMAINS = [...new Set(PRACTICES.map(p => p.domain))].sort();
     let _adminUsers = [];
-    let _adminStateBeforeMerge = null;
 
     /* ── Assignment completion banner ────────────────────────────────────────── */
     function prefillOwnerForAssignedPractices() {
@@ -5729,61 +5696,7 @@ function buildPdfDomainRows(rows) {
       }
     }
 
-    async function adminLoadMergedView() {
-      const banner = document.getElementById("adminMergedBanner");
-      try {
-        const resp = await adminFetch("/admin/assessment/merged");
-        if (!resp.ok) { alert(`Failed to load merged view: ${resp.status}`); return; }
-        const merged = await resp.json();
-        _adminStateBeforeMerge = buildPersistableState(state);
-        sessionStorage.setItem("aescsf_merged_mode", "1");
-        sessionStorage.setItem("aescsf_own_state", JSON.stringify(_adminStateBeforeMerge));
-        replaceState(merged, { persist: false });
-        render(); renderDashboard();
-        if (banner) banner.style.display = "flex";
-        setActivePage("dashboard");
-      } catch (err) { alert(err.message); }
-    }
-
-    async function adminLoadApprovedView() {
-      const banner = document.getElementById("adminApprovedBanner");
-      const mergedBanner = document.getElementById("adminMergedBanner");
-      try {
-        const resp = await adminFetch("/admin/assessment/approved");
-        if (resp.status === 404) { alert("No approved assessment yet. Use the Responses section to approve contributor data."); return; }
-        if (!resp.ok) { alert(`Failed to load approved view: ${resp.status}`); return; }
-        const approved = await resp.json();
-        _adminStateBeforeMerge = buildPersistableState(state);
-        sessionStorage.setItem("aescsf_merged_mode", "approved");
-        sessionStorage.setItem("aescsf_own_state", JSON.stringify(_adminStateBeforeMerge));
-        // Overlay approved data on top of admin's own state so unapproved practices still show
-        const _approvedMerged = buildPersistableState(state);
-        _approvedMerged.assessments = { ..._approvedMerged.assessments, ...(approved.assessments || {}) };
-        replaceState(_approvedMerged, { persist: false });
-        render(); renderDashboard();
-        if (mergedBanner) mergedBanner.style.display = "none";
-        if (banner) banner.style.display = "flex";
-        setActivePage("dashboard");
-      } catch (err) { alert(err.message); }
-    }
-
-    function adminRestoreOwnView() {
-      sessionStorage.removeItem("aescsf_merged_mode");
-      sessionStorage.removeItem("aescsf_own_state");
-      const ownState = _adminStateBeforeMerge;
-      _adminStateBeforeMerge = null;
-      if (ownState) replaceState(ownState, { persist: false });
-      render(); renderDashboard();
-      ["adminMergedBanner","adminApprovedBanner"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = "none";
-      });
-      setActivePage("dashboard");
-    }
-
     document.getElementById("adminRefreshBtn")?.addEventListener("click", renderAdminPanel);
-    document.getElementById("adminLoadMergedBtn")?.addEventListener("click", adminLoadMergedView);
-    document.getElementById("adminLoadApprovedBtn")?.addEventListener("click", adminLoadApprovedView);
     document.getElementById("responseLoadBtn")?.addEventListener("click", loadAndRenderResponses);
     document.getElementById("responseDomainFilter")?.addEventListener("change", () => {
       document.getElementById("responsesContainer").innerHTML = `<div class="audit-empty">Click Load to view responses.</div>`;
