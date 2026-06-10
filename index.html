@@ -2074,10 +2074,10 @@
           <div class="panel-header">
             <div>
               <h3>Security Profile Maturity <span class="confidence-admin-badge" style="vertical-align:middle;margin-left:6px;">Admin Only</span></h3>
-              <div class="footer-note">Average maturity score by domain for each Security Profile — SP-1 (Foundational), SP-2 (Intermediate), SP-3 (Advanced) — overlaid on a single radar for direct comparison.</div>
+              <div class="footer-note">Average maturity score (0–3) per domain broken down by Security Profile — SP-1 (Foundational), SP-2 (Intermediate), SP-3 (Advanced).</div>
             </div>
           </div>
-          <div class="chart-wrap" style="height:360px;"><canvas id="spBreakdownRadarChart"></canvas></div>
+          <div class="chart-wrap" style="height:460px;"><canvas id="spBreakdownRadarChart"></canvas></div>
         </section>
         <section class="dashboard-panel dashboard-panel-span">
           <div class="panel-header">
@@ -3560,8 +3560,9 @@
 
       if (window.Chart) {
         if (spBreakdownChart) spBreakdownChart.destroy();
+        const c = getChartColors();
         spBreakdownChart = new Chart(document.getElementById("spBreakdownRadarChart"), {
-          type: "radar",
+          type: "bar",
           data: {
             labels: domains,
             datasets: SPS.map(sp => ({
@@ -3570,18 +3571,34 @@
                 const rows = Presentrics.rows.filter(r => r.practice.domain === domain && r.practice.securityProfile === sp);
                 return rows.length ? averageScoreForGroup(rows) : 0;
               }),
-              fill: true,
-              backgroundColor:    SP_COLORS[sp].bg,
-              borderColor:        SP_COLORS[sp].border,
-              pointBackgroundColor: SP_COLORS[sp].point,
-              borderWidth: 2
+              backgroundColor: SP_COLORS[sp].bg,
+              borderColor:     SP_COLORS[sp].border,
+              borderWidth: 1.5,
+              borderRadius: 3,
             }))
           },
           options: {
+            indexAxis: "y",
             responsive: true,
             maintainAspectRatio: false,
-            scales: radarScaleOpts(3),
-            plugins: { legend: { display: true, ...legendOpts("bottom") } }
+            plugins: {
+              legend: { display: true, ...legendOpts("bottom") },
+              tooltip: {
+                callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.x.toFixed(2)} / 3` }
+              }
+            },
+            scales: {
+              x: {
+                beginAtZero: true, max: 3,
+                ticks: { stepSize: 1, color: c.tickColor },
+                grid: { color: c.barGrid },
+                title: { display: true, text: "Average Maturity Score (0 – 3)", color: c.legend, font: { size: 11 } }
+              },
+              y: {
+                ticks: { color: c.tickColor, font: { size: 11 } },
+                grid: { display: false }
+              }
+            }
           }
         });
       }
