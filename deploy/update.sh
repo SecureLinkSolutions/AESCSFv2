@@ -84,7 +84,7 @@ sudo -u "$APP_USER" docker compose up -d --no-deps api
 # Wait for API health
 info "Waiting for API health check…"
 HEALTHY=false
-for i in $(seq 1 30); do
+for i in $(seq 1 50); do
   if sudo -u "$APP_USER" docker compose ps --format json 2>/dev/null | python3 -c "
 import sys, json
 data = sys.stdin.read()
@@ -98,11 +98,11 @@ except: sys.exit(1)
     success "API is healthy"
     break
   fi
-  [[ $i -lt 30 ]] && sleep 3
+  [[ $i -lt 50 ]] && sleep 3
 done
 
 if ! $HEALTHY; then
-  die "API failed to become healthy after 90 s. Check logs: docker compose logs api"
+  die "API failed to become healthy after 150 s. Check logs: docker compose logs api"
 fi
 
 # Restart nginx and oauth2-proxy (very fast — no data)
