@@ -685,13 +685,14 @@ app.put("/api/assessment", requireAuth, autoRegister, (req, res) => {
   if (!isAdmin) {
     const allowedDomains    = new Set(getUserAssignments(req.user.oid));
     const allowedObjectives = new Set(getUserObjectiveAssignments(req.user.oid));
-    if ((allowedDomains.size > 0 || allowedObjectives.size > 0) && payload.assessments) {
+    if (payload.assessments) {
       const filtered = {};
       for (const [practiceId, data] of Object.entries(payload.assessments)) {
         const pDomain    = practiceDomain(practiceId);
         const pObjective = practiceObjectiveId(practiceId);
-        if (!allowedDomains.has(pDomain) && !allowedObjectives.has(pObjective)) continue;
-        filtered[practiceId] = data;
+        if (allowedDomains.has(pDomain) || allowedObjectives.has(pObjective)) {
+          filtered[practiceId] = data;
+        }
       }
       payload = { ...payload, assessments: filtered };
     }
@@ -1285,7 +1286,7 @@ app.delete("/api/files/:id", requireAuth, autoRegister, (req, res) => {
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`[AESCSF API] Listening on port ${PORT}`);
   console.log(`[AESCSF API] SSO: ${SSO_ENABLED ? "EntraID (oauth2-proxy)" : "DISABLED"}`);
-  console.log(`[AESCSF API] Admin OIDs: ${ADMIN_OIDS.length ? ADMIN_OIDS.join(", ") : "(first user will become admin)"}`);
+  console.log(`[AESCSF API] Admin OIDs: ${ADMIN_OIDS.length ? `${ADMIN_OIDS.length} configured` : "(first user will become admin)"}`);
   console.log(`[AESCSF API] DB:      ${path.join(DATA_DIR, "aescsf.db")}`);
   console.log(`[AESCSF API] Uploads: ${UPLOAD_DIR}`);
 });

@@ -3,8 +3,9 @@
 # then hands off to the default CMD (nginx).
 
 CONFIG_FILE="/usr/share/nginx/html/config.js"
-STORAGE_MODE="${AESCSF_STORAGE_MODE:-api}"
-TENANT_ID="${AESCSF_TENANT_ID:-}"
+# Strip characters that would break JS string literals
+STORAGE_MODE=$(printf '%s' "${AESCSF_STORAGE_MODE:-api}" | tr -d '"\\')
+TENANT_ID=$(printf '%s' "${AESCSF_TENANT_ID:-}" | tr -d '"\\')
 
 cat > "$CONFIG_FILE" <<EOF
 /* Auto-generated at container start — do not edit manually */

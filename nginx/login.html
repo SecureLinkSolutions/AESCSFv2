@@ -117,8 +117,9 @@
   </div>
 
   <script>
-    // Forward the rd (redirect-after-login) parameter from the URL
-    const rd = new URLSearchParams(window.location.search).get("rd") || "/";
+    // Forward the rd (redirect-after-login) parameter — reject external URLs
+    const rawRd = new URLSearchParams(window.location.search).get("rd") || "/";
+    const rd = /^\/(?!\/)/.test(rawRd) ? rawRd : "/";
     document.getElementById("signInBtn").href = "/oauth2/sign_in?rd=" + encodeURIComponent(rd);
   </script>
 </body>
