@@ -1723,6 +1723,61 @@
     .file-btn:hover { background: var(--neutral-soft); }
     .file-btn.danger { color: var(--danger); border-color: rgba(192,16,72,.3); }
     .file-btn.danger:hover { background: var(--danger-soft); }
+    /* ── Endorsement / versioning UI ───────────────────────────────────────── */
+    .prefill-notice {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 9px 12px; margin-bottom: 14px;
+      background: rgba(59,130,246,.07); border: 1px solid rgba(59,130,246,.2);
+      border-radius: 10px; font-size: .8rem; color: var(--primary);
+    }
+    .prefill-notice svg { flex-shrink: 0; margin-top: 1px; }
+    .endorsement-changed-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 600;
+      background: rgba(217,119,6,.12); color: #92400e; border: 1px solid rgba(217,119,6,.25);
+      margin-left: 8px; vertical-align: middle;
+    }
+    html[data-theme="dark"] .endorsement-changed-badge { color: #fbbf24; background: rgba(217,119,6,.18); }
+    .version-history-panel {
+      margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px;
+    }
+    .version-card {
+      padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+      margin-bottom: 8px; font-size: .82rem; background: var(--bg);
+    }
+    .version-card.endorsed {
+      border-color: rgba(22,163,74,.4); background: rgba(22,163,74,.06);
+    }
+    .version-card-header {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;
+    }
+    .version-endorsed-label {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 600;
+      background: rgba(22,163,74,.15); color: #166534; border: 1px solid rgba(22,163,74,.3);
+    }
+    html[data-theme="dark"] .version-endorsed-label { color: #4ade80; }
+    .endorse-btn {
+      padding: 2px 10px; border-radius: 6px; font-size: .78rem; font-weight: 600;
+      background: transparent; border: 1px solid rgba(22,163,74,.4); color: #166534; cursor: pointer;
+      transition: background .12s;
+    }
+    .endorse-btn:hover { background: rgba(22,163,74,.12); }
+    html[data-theme="dark"] .endorse-btn { color: #4ade80; border-color: rgba(74,222,128,.35); }
+    .remove-endorse-btn {
+      padding: 2px 10px; border-radius: 6px; font-size: .78rem; font-weight: 600;
+      background: transparent; border: 1px solid rgba(239,68,68,.3); color: var(--danger); cursor: pointer;
+      transition: background .12s;
+    }
+    .remove-endorse-btn:hover { background: var(--danger-soft); }
+    .version-field-summary {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;
+    }
+    .version-field-chip {
+      padding: 1px 7px; border-radius: 999px; font-size: .72rem;
+      background: var(--surface); border: 1px solid var(--border); color: var(--text-soft);
+    }
+
     .file-history-btn {
       padding: 3px 9px; border-radius: 6px; border: 1px solid var(--border-strong);
       background: transparent; cursor: pointer; font-size: .73rem; font-weight: 600;
@@ -3114,12 +3169,17 @@
     }
 
     function renderPracticeCard(practice) {
-      const a = state.assessments[practice.practiceId] || defaultAssessment();
+      const userOwn      = state.assessments[practice.practiceId];
+      const endorsed     = window.__AESCSF_ENDORSEMENTS__?.[practice.practiceId];
+      const isPrefilled  = !userOwn && !!endorsed;
+      const a            = userOwn || (endorsed ? { ...defaultAssessment(), ...endorsed.data } : defaultAssessment());
+      const isAdmin      = window.__AESCSF_RBAC__?.role === "admin";
+      const changedSince = isAdmin && endorsed?.changed_since;
       return `
         <article class="practice-card ${statusClass(a.status)}" data-practice-id="${escapeHtml(practice.practiceId)}">
           <div class="practice-top">
             <div>
-              <h3 class="practice-title">${escapeHtml(practice.practiceId)} — ${escapeHtml(practice.practice)}</h3>
+              <h3 class="practice-title">${escapeHtml(practice.practiceId)} — ${escapeHtml(practice.practice)}${changedSince ? `<span class="endorsement-changed-badge">↑ Updated since endorsement</span>` : ""}</h3>
               <div class="badges">
                 <span class="badge">${escapeHtml(practice.domain)}</span>
                 <span class="badge">${escapeHtml(practice.objectiveId)}</span>
@@ -3136,6 +3196,8 @@
           </div>
 
           <div class="context">${escapeHtml(practice.context)}</div>
+
+          ${isPrefilled ? `<div class="prefill-notice"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Pre-filled from endorsed version (${escapeHtml(endorsed.endorsed_by || "admin")}, ${new Date(endorsed.endorsed_at * 1000).toLocaleDateString("en-AU")}). Edit and save to record your own assessment.</div>` : ""}
 
           <div class="grid-3">
             <div class="field">
@@ -4947,11 +5009,14 @@ function buildPdfDomainRows(rows) {
         showAuthErrorBar(0);
       }
 
-      /* Step 2: load assessment data and confidence ratings from API in parallel */
+      /* Step 2: load assessment data, endorsements, and confidence ratings from API in parallel */
       try {
         const [remoteState] = await Promise.all([
           storageAdapter.loadRemote(),
-          loadConfidenceRatings()
+          loadConfidenceRatings(),
+          adminFetch("/endorsements").then(r => r.ok ? r.json() : {}).then(data => {
+            window.__AESCSF_ENDORSEMENTS__ = data;
+          }).catch(() => {})
         ]);
         if (remoteState) {
           state = remoteState;
@@ -5265,6 +5330,16 @@ function buildPdfDomainRows(rows) {
 
       container.innerHTML = _contributorSummary + entries.map(([practiceId, respondents]) => {
         const p = practiceMap[practiceId];
+        const endorsement = window.__AESCSF_ENDORSEMENTS__?.[practiceId];
+        const changedBadge = endorsement?.changed_since
+          ? `<span class="endorsement-changed-badge" style="margin-left:8px;">↑ Updated since endorsement</span>` : "";
+        const endorsedNote = endorsement
+          ? `<div style="font-size:.78rem;color:var(--muted);margin-top:4px;">
+               ✔ Endorsed version recorded by <strong>${escapeHtml(endorsement.endorsed_by || "admin")}</strong>
+               on ${new Date(endorsement.endorsed_at * 1000).toLocaleDateString("en-AU")} —
+               Status: <em>${escapeHtml(endorsement.data?.status || "—")}</em>
+             </div>`
+          : `<div style="font-size:.78rem;color:var(--muted);margin-top:4px;">No endorsed version yet.</div>`;
         const rows = respondents.map(r => {
           const sc = statusClass(r.assessment?.status || "");
           return `<tr>
@@ -5281,10 +5356,15 @@ function buildPdfDomainRows(rows) {
           </tr>`;
         }).join("");
         return `<div class="dashboard-panel" style="margin-bottom:14px;">
-          <div style="margin-bottom:10px;">
-            <strong>${escapeHtml(practiceId)}</strong>
-            <span class="badge" style="margin-left:6px;">${escapeHtml(p?.objectiveId || "")}</span>
-            <div style="font-size:.83rem;color:var(--text-soft);margin-top:3px;">${escapeHtml(p?.practice || "")}</div>
+          <div style="margin-bottom:10px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <strong>${escapeHtml(practiceId)}</strong>${changedBadge}
+              <span class="badge" style="margin-left:6px;">${escapeHtml(p?.objectiveId || "")}</span>
+              <div style="font-size:.83rem;color:var(--text-soft);margin-top:3px;">${escapeHtml(p?.practice || "")}</div>
+              ${endorsedNote}
+            </div>
+            <button class="secondary" onclick="toggleVersionHistory('${escapeHtml(practiceId)}', this)"
+              style="padding:3px 10px;font-size:.78rem;flex-shrink:0;">📋 Version History</button>
           </div>
           <div class="audit-table-wrap">
             <table class="audit-table">
@@ -5292,8 +5372,97 @@ function buildPdfDomainRows(rows) {
               <tbody>${rows}</tbody>
             </table>
           </div>
+          <div id="vhpanel-${escapeHtml(practiceId)}" class="version-history-panel" style="display:none;">
+            <div style="color:var(--muted);font-size:.82rem;padding:8px 0;">Loading versions…</div>
+          </div>
         </div>`;
       }).join("");
+    }
+
+    async function toggleVersionHistory(practiceId, btn) {
+      const panel = document.getElementById(`vhpanel-${practiceId}`);
+      if (!panel) return;
+      if (panel.style.display !== "none") {
+        panel.style.display = "none";
+        btn.textContent = "📋 Version History";
+        return;
+      }
+      panel.style.display = "";
+      btn.textContent = "▲ Hide History";
+      panel.innerHTML = `<div style="color:var(--muted);font-size:.82rem;padding:8px 0;">Loading versions…</div>`;
+      try {
+        const resp = await adminFetch(`/admin/practices/${encodeURIComponent(practiceId)}/versions`);
+        if (!resp.ok) { panel.innerHTML = `<div style="color:var(--danger);font-size:.82rem;">Failed to load (${resp.status})</div>`; return; }
+        const versions = await resp.json();
+        if (!versions.length) {
+          panel.innerHTML = `<div style="color:var(--muted);font-size:.82rem;padding:8px 0;">No versions recorded yet. Versions are created automatically each time a practice is saved.</div>`;
+          return;
+        }
+        panel.innerHTML = `
+          <div style="font-size:.82rem;font-weight:600;margin-bottom:10px;color:var(--text-soft);">
+            ${versions.length} version${versions.length===1?"":"s"} — most recent first
+          </div>
+          ${versions.map(v => {
+            const date = new Date(v.created_at * 1000).toLocaleString("en-AU");
+            const sc   = statusClass(v.data?.status || "");
+            const endorsedMark = v.is_endorsed
+              ? `<span class="version-endorsed-label">✔ Endorsed</span>` : "";
+            const fields = ["evidence","owner","notes","gap"].filter(f => v.data?.[f]?.trim()).map(f =>
+              `<span class="version-field-chip">${escapeHtml(f)}</span>`
+            ).join("");
+            const endorseAction = v.is_endorsed
+              ? `<button class="remove-endorse-btn" onclick="removeEndorsement('${escapeHtml(practiceId)}')">Remove endorsement</button>`
+              : `<button class="endorse-btn" onclick="endorseVersion('${escapeHtml(practiceId)}', ${v.id})">Endorse this version</button>`;
+            return `<div class="version-card ${v.is_endorsed ? "endorsed" : ""}" id="vc-${v.id}">
+              <div class="version-card-header">
+                ${endorsedMark}
+                <span class="status-select ${sc}" style="padding:2px 8px;border-radius:6px;font-size:.78rem;">${escapeHtml(v.data?.status || "Not Assessed")}</span>
+                <strong style="font-size:.82rem;">${escapeHtml(v.display_name || v.user_oid)}</strong>
+                <span style="color:var(--muted);font-size:.76rem;">${date}</span>
+                <span style="margin-left:auto;">${endorseAction}</span>
+              </div>
+              ${fields ? `<div class="version-field-summary">${fields}</div>` : ""}
+              ${v.data?.evidence ? `<div style="font-size:.78rem;color:var(--text-soft);margin-top:6px;white-space:pre-wrap;">${escapeHtml(v.data.evidence.slice(0,200))}${v.data.evidence.length>200?"…":""}</div>` : ""}
+            </div>`;
+          }).join("")}`;
+      } catch (err) {
+        panel.innerHTML = `<div style="color:var(--danger);font-size:.82rem;">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function endorseVersion(practiceId, versionId) {
+      try {
+        const resp = await adminFetch(`/admin/practices/${encodeURIComponent(practiceId)}/endorse`, {
+          method: "POST",
+          body: JSON.stringify({ versionId })
+        });
+        if (!resp.ok) { alert(`Failed to endorse (${resp.status})`); return; }
+        /* Refresh endorsements cache and re-render the open panel */
+        const endResp = await adminFetch("/endorsements");
+        if (endResp.ok) window.__AESCSF_ENDORSEMENTS__ = await endResp.json();
+        /* Re-open the history panel to reflect the change */
+        const panel = document.getElementById(`vhpanel-${practiceId}`);
+        const btn   = panel?.closest(".dashboard-panel")?.querySelector(`[onclick*="toggleVersionHistory"]`);
+        if (panel && btn) {
+          panel.style.display = "none";
+          await toggleVersionHistory(practiceId, btn);
+        }
+        /* Refresh the whole responses panel so endorsement notes update */
+        const refreshBtn = document.getElementById("adminRefreshBtn");
+        refreshBtn?.click();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function removeEndorsement(practiceId) {
+      if (!confirm(`Remove endorsement for ${practiceId}?\n\nThe versions will remain — this just clears the official marker.`)) return;
+      try {
+        const resp = await adminFetch(`/admin/practices/${encodeURIComponent(practiceId)}/endorsement`, { method: "DELETE" });
+        if (!resp.ok) { alert(`Failed to remove endorsement (${resp.status})`); return; }
+        const endResp = await adminFetch("/endorsements");
+        if (endResp.ok) window.__AESCSF_ENDORSEMENTS__ = await endResp.json();
+        const refreshBtn = document.getElementById("adminRefreshBtn");
+        refreshBtn?.click();
+      } catch (err) { alert(err.message); }
     }
 
         async function adminFetch(path, options = {}) {

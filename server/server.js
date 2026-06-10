@@ -177,6 +177,27 @@ db.exec(`
     updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
     updated_by TEXT    NOT NULL DEFAULT ''
   );
+
+  CREATE TABLE IF NOT EXISTS practice_versions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    practice_id  TEXT    NOT NULL,
+    user_oid     TEXT    NOT NULL,
+    display_name TEXT    NOT NULL DEFAULT '',
+    tenant_id    TEXT    NOT NULL DEFAULT '',
+    data         TEXT    NOT NULL,
+    created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+  CREATE INDEX IF NOT EXISTS idx_pv_practice ON practice_versions(practice_id, tenant_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_pv_user     ON practice_versions(user_oid, tenant_id);
+
+  CREATE TABLE IF NOT EXISTS endorsements (
+    practice_id  TEXT    NOT NULL,
+    tenant_id    TEXT    NOT NULL DEFAULT '',
+    version_id   INTEGER NOT NULL,
+    endorsed_by  TEXT    NOT NULL DEFAULT '',
+    endorsed_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    PRIMARY KEY (practice_id, tenant_id)
+  );
 `);
 
 /* Migration: add scope column to snapshots if it doesn't exist yet */
@@ -300,6 +321,41 @@ const stmtUpsertApproved = db.prepare(`
     updated_at = excluded.updated_at,
     updated_by = excluded.updated_by
 `);
+
+/* Practice versions & endorsements */
+const stmtInsertPracticeVersion = db.prepare(
+  "INSERT INTO practice_versions (practice_id, user_oid, display_name, tenant_id, data) VALUES (?, ?, ?, ?, ?)"
+);
+const stmtGetPracticeVersions = db.prepare(`
+  SELECT pv.id, pv.practice_id, pv.user_oid, pv.display_name, pv.created_at, pv.data,
+         CASE WHEN e.version_id = pv.id THEN 1 ELSE 0 END AS is_endorsed
+  FROM   practice_versions pv
+  LEFT   JOIN endorsements e ON e.practice_id = pv.practice_id AND e.tenant_id = pv.tenant_id
+  WHERE  pv.practice_id = ? AND pv.tenant_id = ?
+  ORDER  BY pv.created_at DESC LIMIT 100
+`);
+const stmtGetAllEndorsements = db.prepare(`
+  SELECT e.practice_id, e.version_id, e.endorsed_by, e.endorsed_at, pv.data,
+         (SELECT COUNT(*) FROM practice_versions x
+          WHERE x.practice_id = e.practice_id AND x.tenant_id = e.tenant_id AND x.id > e.version_id) AS changed_since
+  FROM   endorsements e
+  JOIN   practice_versions pv ON pv.id = e.version_id
+  WHERE  e.tenant_id = ?
+`);
+const stmtUpsertEndorsement = db.prepare(`
+  INSERT INTO endorsements (practice_id, tenant_id, version_id, endorsed_by, endorsed_at)
+  VALUES (?, ?, ?, ?, unixepoch())
+  ON CONFLICT(practice_id, tenant_id) DO UPDATE SET
+    version_id  = excluded.version_id,
+    endorsed_by = excluded.endorsed_by,
+    endorsed_at = excluded.endorsed_at
+`);
+const stmtDeleteEndorsement = db.prepare(
+  "DELETE FROM endorsements WHERE practice_id = ? AND tenant_id = ?"
+);
+const stmtVerifyVersion = db.prepare(
+  "SELECT id FROM practice_versions WHERE id = ? AND tenant_id = ? AND practice_id = ?"
+);
 
 const stmtGetAllConfidence = db.prepare(
   "SELECT practice_id, rating, notes, updated_at FROM confidence_ratings WHERE tenant_id = ?"
@@ -552,6 +608,21 @@ function diffAndLog(user, oldData, newData) {
   return rows.length;
 }
 
+/** Record a practice_versions row for each practice whose audited fields changed. */
+function insertPracticeVersions(userOid, displayName, tenant, oldData, newData) {
+  const oldAssessments = oldData?.assessments || {};
+  const newAssessments = newData?.assessments || {};
+  for (const [practiceId, newP] of Object.entries(newAssessments)) {
+    const oldP = oldAssessments[practiceId] || {};
+    const changed = AUDITED_FIELDS.some(
+      f => String(newP[f] ?? "").trim() !== String(oldP[f] ?? "").trim()
+    );
+    if (changed) {
+      stmtInsertPracticeVersion.run(practiceId, userOid, displayName, tenant, JSON.stringify(newP));
+    }
+  }
+}
+
 /** Build an audit query dynamically based on supplied filter params. */
 function queryAudit(filters) {
   const conditions = [];
@@ -733,9 +804,11 @@ app.put("/api/assessment", requireAuth, autoRegister, (req, res) => {
     return res.status(500).json({ error: "Failed to save assessment" });
   }
 
-  /* Write audit log entries for any changed fields (best-effort) */
+  /* Write audit log entries and practice versions for any changed fields (best-effort) */
   try {
+    const displayName = req.dbUser?.display_name || req.user.username || "";
     const changes = diffAndLog(req.user, oldData, payload);
+    insertPracticeVersions(req.user.oid, displayName, req.user.tenant, oldData, payload);
     res.json({ saved: true, changes });
   } catch (auditErr) {
     console.error("[AESCSF API] Audit log error (non-fatal):", auditErr);
@@ -906,6 +979,52 @@ app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegiste
   );
 
   res.json({ approved: approvedCount, userOid: req.params.oid });
+});
+
+/* ── Endorsement routes ──────────────────────────────────────────────────── */
+
+/* All authenticated users: fetch current endorsements for pre-fill */
+app.get("/api/endorsements", requireAuth, autoRegister, (req, res) => {
+  const rows = stmtGetAllEndorsements.all(req.user.tenant);
+  const result = {};
+  for (const row of rows) {
+    try {
+      result[row.practice_id] = {
+        version_id:    row.version_id,
+        endorsed_by:   row.endorsed_by,
+        endorsed_at:   row.endorsed_at,
+        data:          JSON.parse(row.data),
+        changed_since: row.changed_since > 0
+      };
+    } catch { /* skip corrupt row */ }
+  }
+  res.json(result);
+});
+
+/* Admin: get version history for a specific practice */
+app.get("/api/admin/practices/:id/versions", requireAuth, autoRegister, (req, res) => {
+  if (req.dbUser.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const rows = stmtGetPracticeVersions.all(req.params.id, req.user.tenant);
+  res.json(rows.map(r => { try { return { ...r, data: JSON.parse(r.data) }; } catch { return r; } }));
+});
+
+/* Admin: endorse a specific version of a practice */
+app.post("/api/admin/practices/:id/endorse", requireAuth, autoRegister, (req, res) => {
+  if (req.dbUser.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const versionId = parseInt(req.body?.versionId);
+  if (!versionId) return res.status(400).json({ error: "versionId required" });
+  const version = stmtVerifyVersion.get(versionId, req.user.tenant, req.params.id);
+  if (!version) return res.status(404).json({ error: "Version not found" });
+  const endorsedBy = req.dbUser.display_name || req.user.username || "";
+  stmtUpsertEndorsement.run(req.params.id, req.user.tenant, versionId, endorsedBy);
+  res.json({ endorsed: true, practiceId: req.params.id, versionId });
+});
+
+/* Admin: remove endorsement for a practice */
+app.delete("/api/admin/practices/:id/endorsement", requireAuth, autoRegister, (req, res) => {
+  if (req.dbUser.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  stmtDeleteEndorsement.run(req.params.id, req.user.tenant);
+  res.json({ removed: true });
 });
 
 /* ── Golden snapshot routes (tenant-wide; admin-write, all-read) ────────── */
