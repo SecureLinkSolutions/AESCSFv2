@@ -1075,6 +1075,19 @@ app.delete("/api/snapshots/golden/:id", requireAuth, autoRegister, (req, res) =>
 /* ── Snapshot routes ─────────────────────────────────────────────────────── */
 
 app.get("/api/snapshots", requireAuth, autoRegister, (req, res) => {
+  if (req.dbUser.role === "admin") {
+    /* Admins see all personal snapshots from any admin in the same tenant */
+    const rows = db.prepare(`
+      SELECT s.id, s.label, s.created_at,
+             COALESCE(u.display_name, u.username, s.user_oid) AS created_by
+      FROM   snapshots s
+      LEFT   JOIN users u ON u.oid = s.user_oid
+      WHERE  s.tenant_id = ? AND s.scope = 'personal'
+        AND  (u.role = 'admin' OR u.oid IS NULL)
+      ORDER  BY s.created_at DESC
+    `).all(req.user.tenant);
+    return res.json(rows);
+  }
   res.json(stmtListSnapshots.all(req.user.oid, req.user.tenant));
 });
 
@@ -1099,7 +1112,10 @@ app.post("/api/snapshots", requireAuth, autoRegister, (req, res) => {
 });
 
 app.get("/api/snapshots/:id", requireAuth, autoRegister, (req, res) => {
-  const row = stmtGetSnapshot.get(req.params.id, req.user.oid, req.user.tenant);
+  /* Admins can load any personal snapshot in their tenant; users only their own */
+  const row = req.dbUser.role === "admin"
+    ? db.prepare("SELECT id, label, data, created_at FROM snapshots WHERE id = ? AND tenant_id = ? AND scope = 'personal'").get(req.params.id, req.user.tenant)
+    : stmtGetSnapshot.get(req.params.id, req.user.oid, req.user.tenant);
   if (!row) return res.status(404).json({ error: "Snapshot not found" });
   try {
     const parsed = JSON.parse(row.data);
@@ -1110,7 +1126,10 @@ app.get("/api/snapshots/:id", requireAuth, autoRegister, (req, res) => {
 });
 
 app.delete("/api/snapshots/:id", requireAuth, autoRegister, (req, res) => {
-  const info = stmtDeleteSnapshot.run(req.params.id, req.user.oid, req.user.tenant);
+  /* Admins can delete any personal snapshot in their tenant */
+  const info = req.dbUser.role === "admin"
+    ? db.prepare("DELETE FROM snapshots WHERE id = ? AND tenant_id = ? AND scope = 'personal'").run(req.params.id, req.user.tenant)
+    : stmtDeleteSnapshot.run(req.params.id, req.user.oid, req.user.tenant);
   if (info.changes === 0) return res.status(404).json({ error: "Snapshot not found" });
   res.json({ deleted: true });
 });
