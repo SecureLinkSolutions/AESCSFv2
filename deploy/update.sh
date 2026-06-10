@@ -81,18 +81,16 @@ section "Rolling Restart"
 info "Restarting API service…"
 sudo -u "$APP_USER" docker compose up -d --no-deps api
 
-# Wait for API health using docker inspect (works across all Compose versions)
+# Wait for API health — poll the health endpoint directly
 info "Waiting for API health check…"
 HEALTHY=false
 for i in $(seq 1 50); do
-  CONTAINER_ID=$(sudo -u "$APP_USER" docker compose ps -q api 2>/dev/null | head -1)
-  if [[ -n "$CONTAINER_ID" ]]; then
-    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_ID" 2>/dev/null || true)
-    if [[ "$STATUS" == "healthy" ]]; then
-      HEALTHY=true
-      success "API is healthy"
-      break
-    fi
+  if docker exec aescsf-api-1 \
+      node -e "require('http').get('http://localhost:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))" \
+      2>/dev/null; then
+    HEALTHY=true
+    success "API is healthy"
+    break
   fi
   [[ $i -lt 50 ]] && sleep 3
 done
