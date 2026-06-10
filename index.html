@@ -1777,6 +1777,54 @@
       padding: 1px 7px; border-radius: 999px; font-size: .72rem;
       background: var(--surface); border: 1px solid var(--border); color: var(--text-soft);
     }
+    .version-diff {
+      margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 5px;
+    }
+    .version-diff-row {
+      display: flex; align-items: flex-start; gap: 6px; font-size: .76rem; flex-wrap: wrap;
+    }
+    .version-diff-field {
+      font-weight: 700; color: var(--text-soft); min-width: 90px; flex-shrink: 0; text-transform: capitalize;
+    }
+    .version-diff-old {
+      color: var(--danger); background: rgba(220,38,38,.08); border-radius: 4px; padding: 1px 5px;
+      text-decoration: line-through; word-break: break-word; max-width: 280px;
+    }
+    .version-diff-new {
+      color: #166534; background: rgba(22,163,74,.08); border-radius: 4px; padding: 1px 5px;
+      word-break: break-word; max-width: 280px;
+    }
+    html[data-theme="dark"] .version-diff-new { color: #4ade80; }
+    .version-diff-arrow { color: var(--muted); flex-shrink: 0; align-self: center; }
+    .version-diff-none { font-size: .74rem; color: var(--muted); margin-top: 6px; font-style: italic; }
+    .version-diff-new-only { color: #166534; background: rgba(22,163,74,.08); border-radius: 4px; padding: 1px 5px; word-break: break-word; max-width: 280px; }
+    html[data-theme="dark"] .version-diff-new-only { color: #4ade80; }
+
+    /* ── Collapsible assignment sections inside user cards ──────────── */
+    .admin-assignment-details {
+      border-top: 1px solid var(--border); margin-top: 14px;
+    }
+    .admin-assignment-summary {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; cursor: pointer; list-style: none;
+      font-size: .8rem; font-weight: 600; color: var(--text-soft);
+      text-transform: uppercase; letter-spacing: .04em;
+      user-select: none;
+    }
+    .admin-assignment-summary::-webkit-details-marker { display: none; }
+    .admin-assignment-summary::after {
+      content: "▸"; font-size: .75rem; color: var(--muted); transition: transform .15s; flex-shrink: 0;
+    }
+    .admin-assignment-details[open] > .admin-assignment-summary::after { transform: rotate(90deg); }
+    .admin-assignment-count {
+      font-size: .72rem; font-weight: 500; color: var(--muted);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 999px; padding: 1px 8px; margin-right: 6px;
+      text-transform: none; letter-spacing: 0;
+    }
+    .admin-assignment-details > .admin-domains-section { padding-bottom: 6px; }
+    .admin-assignment-details > .admin-domains-section > .admin-save-row { margin-top: 10px; }
+    .admin-assignment-details > .admin-domains-section > .save-row { margin-top: 10px; }
 
     .file-history-btn {
       padding: 3px 9px; border-radius: 6px; border: 1px solid var(--border-strong);
@@ -5400,21 +5448,43 @@ function buildPdfDomainRows(rows) {
           panel.innerHTML = `<div style="color:var(--muted);font-size:.82rem;padding:8px 0;">No versions recorded yet. Versions are created automatically each time a practice is saved.</div>`;
           return;
         }
+        const DIFF_FIELDS = ["status","owner","targetDate","lastReviewed","evidence","gap","notes"];
+        const fieldLabel = { status:"Status", owner:"Owner", targetDate:"Target Date", lastReviewed:"Last Reviewed", evidence:"Evidence", gap:"Gap / Remediation", notes:"Notes" };
+        function versionDiff(vNew, vOld) {
+          return DIFF_FIELDS.map(f => {
+            const a = String(vOld?.data?.[f] || "").trim();
+            const b = String(vNew?.data?.[f] || "").trim();
+            return a !== b ? { field: f, old: a, new: b } : null;
+          }).filter(Boolean);
+        }
+        function truncate(s, n) { return s.length > n ? s.slice(0, n) + "…" : s; }
+
         panel.innerHTML = `
           <div style="font-size:.82rem;font-weight:600;margin-bottom:10px;color:var(--text-soft);">
             ${versions.length} version${versions.length===1?"":"s"} — most recent first
           </div>
-          ${versions.map(v => {
+          ${versions.map((v, idx) => {
             const date = new Date(v.created_at * 1000).toLocaleString("en-AU");
             const sc   = statusClass(v.data?.status || "");
             const endorsedMark = v.is_endorsed
               ? `<span class="version-endorsed-label">✔ Endorsed</span>` : "";
-            const fields = ["evidence","owner","notes","gap"].filter(f => v.data?.[f]?.trim()).map(f =>
-              `<span class="version-field-chip">${escapeHtml(f)}</span>`
-            ).join("");
             const endorseAction = v.is_endorsed
               ? `<button class="remove-endorse-btn" onclick="removeEndorsement('${escapeHtml(practiceId)}')">Remove endorsement</button>`
               : `<button class="endorse-btn" onclick="endorseVersion('${escapeHtml(practiceId)}', ${v.id})">Endorse this version</button>`;
+            const prevV = versions[idx + 1] || null;
+            const diffs = versionDiff(v, prevV);
+            let diffHtml = "";
+            if (diffs.length) {
+              diffHtml = `<div class="version-diff">${diffs.map(d => {
+                const oldPart = d.old ? `<span class="version-diff-old">${escapeHtml(truncate(d.old, 150))}</span><span class="version-diff-arrow">→</span>` : "";
+                const newPart = d.new ? `<span class="${d.old ? "version-diff-new" : "version-diff-new-only"}">${escapeHtml(truncate(d.new, 150))}</span>` : `<span class="version-diff-old"><em>(cleared)</em></span>`;
+                return `<div class="version-diff-row"><span class="version-diff-field">${escapeHtml(fieldLabel[d.field] || d.field)}</span>${oldPart}${newPart}</div>`;
+              }).join("")}</div>`;
+            } else if (prevV) {
+              diffHtml = `<div class="version-diff-none">No field changes from previous save</div>`;
+            } else {
+              diffHtml = `<div class="version-diff-none">First recorded version</div>`;
+            }
             return `<div class="version-card ${v.is_endorsed ? "endorsed" : ""}" id="vc-${v.id}">
               <div class="version-card-header">
                 ${endorsedMark}
@@ -5423,8 +5493,7 @@ function buildPdfDomainRows(rows) {
                 <span style="color:var(--muted);font-size:.76rem;">${date}</span>
                 <span style="margin-left:auto;">${endorseAction}</span>
               </div>
-              ${fields ? `<div class="version-field-summary">${fields}</div>` : ""}
-              ${v.data?.evidence ? `<div style="font-size:.78rem;color:var(--text-soft);margin-top:6px;white-space:pre-wrap;">${escapeHtml(v.data.evidence.slice(0,200))}${v.data.evidence.length>200?"…":""}</div>` : ""}
+              ${diffHtml}
             </div>`;
           }).join("")}`;
       } catch (err) {
@@ -5528,49 +5597,56 @@ function buildPdfDomainRows(rows) {
                       onclick="adminSetRole('${escapeHtml(user.oid)}','user',this)">User</button>
             </div>`}
           </div>
-          <div class="admin-domains-section">
-            <div class="admin-domains-label">Assigned Domains</div>
-            <div class="admin-domain-grid">${domainChips}</div>
-            <div class="admin-save-row">
-              <button onclick="adminSaveAssignments('${escapeHtml(user.oid)}')" class="secondary">Save assignments</button>
-              <span class="admin-save-status" id="save-status-${escapeHtml(user.oid)}"></span>
+          <details class="admin-assignment-details" open>
+            <summary class="admin-assignment-summary">
+              Domain Assignments
+              <span class="admin-assignment-count">${user.domains?.length || 0} assigned</span>
+            </summary>
+            <div class="admin-domains-section">
+              <div class="admin-domain-grid">${domainChips}</div>
+              <div class="admin-save-row">
+                <button onclick="adminSaveAssignments('${escapeHtml(user.oid)}')" class="secondary">Save assignments</button>
+                <span class="admin-save-status" id="save-status-${escapeHtml(user.oid)}"></span>
+              </div>
             </div>
-          </div>
-        <div class="admin-domains-section" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
-          <label style="font-size:.8rem;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.04em;">
-            Objective Assignments
-            <span class="footer-note" style="text-transform:none;letter-spacing:0;font-weight:400;">&nbsp;— assign specific objectives to this user (finer than domain)</span>
-          </label>
-          <div class="obj-accordion">
-            ${(() => {
-              const objAssignedSet = new Set(user.objectives || []);
-              const objectivesByDomain = new Map();
-              for (const p of PRACTICES) {
-                if (!objectivesByDomain.has(p.domain)) objectivesByDomain.set(p.domain, new Map());
-                objectivesByDomain.get(p.domain).set(p.objectiveId, p.objective);
-              }
-              return [...objectivesByDomain.entries()].map(([domain, objMap]) => {
-                const domainHasAssigned = [...objMap.keys()].some(oid => objAssignedSet.has(oid));
-                const chips = [...objMap.entries()].map(([objId, objLabel]) =>
-                  `<label class="admin-domain-chip${objAssignedSet.has(objId) ? " checked" : ""}" id="objchip-${escapeHtml(user.oid)}-${escapeHtml(objId)}" title="${escapeHtml(objLabel)}">
-                    <input type="checkbox" ${objAssignedSet.has(objId) ? "checked" : ""}
-                           onchange="adminToggleObjectiveChip('${escapeHtml(user.oid)}','${escapeHtml(objId)}',this)"
-                           style="pointer-events:none;">
-                    ${escapeHtml(objId)}
-                  </label>`
-                ).join("");
-                return `<details class="obj-domain-group"${domainHasAssigned ? " open" : ""}>
-                  <summary class="obj-domain-summary">${escapeHtml(domain)}</summary>
-                  <div class="admin-domain-grid">${chips}</div>
-                </details>`;
-              }).join("");
-            })()}
-          </div>
-          <div class="save-row">
-            <button class="secondary" onclick="adminSaveObjectiveAssignments('${escapeHtml(user.oid)}')">Save objectives</button>
-            <span id="obj-save-status-${escapeHtml(user.oid)}" class="save-status"></span>
-          </div>
-        </div>
+          </details>
+          <details class="admin-assignment-details"${(user.objectives?.length || 0) > 0 ? " open" : ""}>
+            <summary class="admin-assignment-summary">
+              Objective Assignments
+              <span class="admin-assignment-count">${user.objectives?.length || 0} assigned</span>
+            </summary>
+            <div class="admin-domains-section">
+              <div class="obj-accordion">
+                ${(() => {
+                  const objAssignedSet = new Set(user.objectives || []);
+                  const objectivesByDomain = new Map();
+                  for (const p of PRACTICES) {
+                    if (!objectivesByDomain.has(p.domain)) objectivesByDomain.set(p.domain, new Map());
+                    objectivesByDomain.get(p.domain).set(p.objectiveId, p.objective);
+                  }
+                  return [...objectivesByDomain.entries()].map(([domain, objMap]) => {
+                    const domainHasAssigned = [...objMap.keys()].some(oid => objAssignedSet.has(oid));
+                    const chips = [...objMap.entries()].map(([objId, objLabel]) =>
+                      `<label class="admin-domain-chip${objAssignedSet.has(objId) ? " checked" : ""}" id="objchip-${escapeHtml(user.oid)}-${escapeHtml(objId)}" title="${escapeHtml(objLabel)}">
+                        <input type="checkbox" ${objAssignedSet.has(objId) ? "checked" : ""}
+                               onchange="adminToggleObjectiveChip('${escapeHtml(user.oid)}','${escapeHtml(objId)}',this)"
+                               style="pointer-events:none;">
+                        ${escapeHtml(objId)}
+                      </label>`
+                    ).join("");
+                    return `<details class="obj-domain-group"${domainHasAssigned ? " open" : ""}>
+                      <summary class="obj-domain-summary">${escapeHtml(domain)}</summary>
+                      <div class="admin-domain-grid">${chips}</div>
+                    </details>`;
+                  }).join("");
+                })()}
+              </div>
+              <div class="save-row">
+                <button class="secondary" onclick="adminSaveObjectiveAssignments('${escapeHtml(user.oid)}')">Save objectives</button>
+                <span id="obj-save-status-${escapeHtml(user.oid)}" class="save-status"></span>
+              </div>
+            </div>
+          </details>
         </article>`;
     }
 
