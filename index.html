@@ -2715,7 +2715,7 @@
     }
 
     function setActivePage(page) {
-      const ADMIN_ONLY_PAGES = new Set(["dashboard", "comparison", "admin", "audit"]);
+      const ADMIN_ONLY_PAGES = new Set(["dashboard", "admin", "audit"]);
       if (ADMIN_ONLY_PAGES.has(page) && window.__AESCSF_RBAC__?.role !== "admin") {
         page = "assessment";
       }
@@ -5274,9 +5274,14 @@ function buildPdfDomainRows(rows) {
       if (!container) return;
       container.innerHTML = `<div class="audit-empty">Loading…</div>`;
       try {
-        const resp = await adminFetch("/admin/responses");
-        if (!resp.ok) { container.innerHTML = `<div class="audit-empty">Failed to load responses (${resp.status})</div>`; return; }
-        const data = await resp.json();
+        /* Refresh endorsements so changed_since badges are current */
+        const [respResp, endResp] = await Promise.all([
+          adminFetch("/admin/responses"),
+          adminFetch("/endorsements")
+        ]);
+        if (endResp.ok) window.__AESCSF_ENDORSEMENTS__ = await endResp.json();
+        if (!respResp.ok) { container.innerHTML = `<div class="audit-empty">Failed to load responses (${respResp.status})</div>`; return; }
+        const data = await respResp.json();
         renderResponses(data);
       } catch (err) {
         container.innerHTML = `<div class="audit-empty">${escapeHtml(err.message)}</div>`;
@@ -5487,6 +5492,8 @@ function buildPdfDomainRows(rows) {
         _adminUsers = await resp.json();
         container.innerHTML = _adminUsers.map(u => buildUserCard(u)).join("");
         initResponseFilters();
+        /* Auto-load responses so admin sees the section immediately */
+        loadAndRenderResponses();
       } catch (err) {
         container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger);">${escapeHtml(err.message)}</div>`;
       }
