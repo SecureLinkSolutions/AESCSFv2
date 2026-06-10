@@ -62,7 +62,7 @@ prompt AUDIT_DAYS     "Audit log retention days" "365"
 
 REDIRECT_URL="https://${DOMAIN}/oauth2/callback"
 OIDC_ISSUER="https://login.microsoftonline.com/${TENANT_ID}/v2.0"
-COOKIE_SECRET=$(openssl rand -base64 32 | tr -d '\n')
+COOKIE_SECRET=$(openssl rand -hex 16)
 
 echo ""
 info "Domain:       ${DOMAIN}"
