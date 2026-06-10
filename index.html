@@ -4543,24 +4543,58 @@ function buildPdfDomainRows(rows) {
        database. They replace the need to manually export and re-import JSON
        for year-on-year comparison.
     ──────────────────────────────────────────────────────────────────────── */
-    let _snapshotCache = [];
+    let _snapshotCache = [];        /* personal snapshots (admin only) */
+    let _goldenSnapshotCache = [];  /* golden snapshots (all users) */
 
     function formatSnapshotDate(unixSecs) {
       return new Date(unixSecs * 1000).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
     }
 
+    /* Returns the snapshot object from whichever cache contains id */
+    function findSnapshot(id) {
+      return _goldenSnapshotCache.find(s => s.id == id) || _snapshotCache.find(s => s.id == id) || null;
+    }
+
+    /* True if the given id belongs to a golden snapshot */
+    function isGoldenId(id) { return !!_goldenSnapshotCache.find(s => s.id == id); }
+
     async function loadSnapshotList() {
       if (APP_CONFIG.storageMode !== "api") return;
       try {
-        const resp = await adminFetch("/snapshots");
-        if (!resp.ok) return;
-        _snapshotCache = await resp.json();
+        /* Golden snapshots are visible to everyone */
+        const gResp = await adminFetch("/snapshots/golden");
+        _goldenSnapshotCache = gResp.ok ? await gResp.json() : [];
+
+        /* Personal snapshots are only relevant for admins */
+        const isAdmin = (window.__AESCSF_RBAC__?.role === "admin");
+        if (isAdmin) {
+          const pResp = await adminFetch("/snapshots");
+          _snapshotCache = pResp.ok ? await pResp.json() : [];
+        } else {
+          _snapshotCache = [];
+        }
+
         const placeholder = '<option value="">— Select a snapshot —</option>';
-        const options = _snapshotCache.length
-          ? placeholder + _snapshotCache.map(s =>
-              `<option value="${s.id}">${escapeHtml(s.label)} — ${formatSnapshotDate(s.created_at)}</option>`
-            ).join("")
-          : '<option value="">No snapshots saved yet</option>';
+        const goldenOpts  = _goldenSnapshotCache.map(s =>
+          `<option value="${s.id}">★ ${escapeHtml(s.label)} — ${formatSnapshotDate(s.created_at)}</option>`
+        );
+        const personalOpts = _snapshotCache.map(s =>
+          `<option value="${s.id}">${escapeHtml(s.label)} — ${formatSnapshotDate(s.created_at)}</option>`
+        );
+
+        let options;
+        if (!goldenOpts.length && !personalOpts.length) {
+          options = '<option value="">No snapshots saved yet</option>';
+        } else {
+          options = placeholder;
+          if (goldenOpts.length) {
+            options += `<optgroup label="★ Shared (Golden)">${goldenOpts.join("")}</optgroup>`;
+          }
+          if (personalOpts.length) {
+            options += `<optgroup label="My Snapshots">${personalOpts.join("")}</optgroup>`;
+          }
+        }
+
         ["comparisonPreviousSelect", "comparisonCurrentSelect"].forEach(id => {
           const el = document.getElementById(id);
           if (el) el.innerHTML = options;
@@ -4576,10 +4610,13 @@ function buildPdfDomainRows(rows) {
       const id       = select?.value;
       if (!id) return;
       try {
-        const resp = await adminFetch(`/snapshots/${encodeURIComponent(id)}`);
+        const endpoint = isGoldenId(id)
+          ? `/snapshots/golden/${encodeURIComponent(id)}`
+          : `/snapshots/${encodeURIComponent(id)}`;
+        const resp = await adminFetch(endpoint);
         if (!resp.ok) { alert(`Failed to load snapshot (${resp.status})`); return; }
         const data  = await resp.json();
-        const label = data.label || _snapshotCache.find(s => s.id == id)?.label || "Snapshot";
+        const label = data.label || findSnapshot(id)?.label || "Snapshot";
         comparisonState[side]            = buildSnapshotFromAssessments(data.assessments, label, label);
         comparisonState[side + "Label"]  = label;
         renderComparison();
@@ -4593,8 +4630,22 @@ function buildPdfDomainRows(rows) {
       }
       const label = prompt("Enter a name for this snapshot\n(e.g. FY2024, Q1 2025, Pre-Audit 2025):");
       if (!label || !label.trim()) return;
+
+      /* Admins choose: golden (shared with all users) or personal */
+      const isAdmin = (window.__AESCSF_RBAC__?.role === "admin");
+      let golden = false;
+      if (isAdmin) {
+        golden = confirm(
+          `Save "${label.trim()}" as a Golden Snapshot?\n\n` +
+          "★ Golden — shared with all users (visible in their Comparison view)\n" +
+          "   Personal — visible only to you\n\n" +
+          "Click OK for Golden, Cancel for Personal."
+        );
+      }
+
+      const endpoint = golden ? "/snapshots/golden" : "/snapshots";
       try {
-        const resp = await adminFetch("/snapshots", {
+        const resp = await adminFetch(endpoint, {
           method: "POST",
           body: JSON.stringify({ label: label.trim(), data: buildPersistableState(state) })
         });
@@ -4612,13 +4663,22 @@ function buildPdfDomainRows(rows) {
       const select   = document.getElementById(selectId);
       const id       = select?.value;
       if (!id) return;
-      const snap = _snapshotCache.find(s => s.id == id);
-      if (!snap || !confirm(`Delete snapshot "${snap.label}"?\n\nThis cannot be undone.`)) return;
+      const golden = isGoldenId(id);
+      const snap   = findSnapshot(id);
+      if (!snap) return;
+      if (golden && window.__AESCSF_RBAC__?.role !== "admin") {
+        alert("Only admins can delete shared (golden) snapshots.");
+        return;
+      }
+      if (!confirm(`Delete ${golden ? "shared (golden) " : ""}snapshot "${snap.label}"?\n\nThis cannot be undone.`)) return;
       try {
-        const resp = await adminFetch(`/snapshots/${encodeURIComponent(id)}`, { method: "DELETE" });
+        const endpoint = golden
+          ? `/snapshots/golden/${encodeURIComponent(id)}`
+          : `/snapshots/${encodeURIComponent(id)}`;
+        const resp = await adminFetch(endpoint, { method: "DELETE" });
         if (!resp.ok) { alert(`Failed to delete snapshot (${resp.status})`); return; }
         /* Clear the comparison side if it was showing the deleted snapshot */
-        if (comparisonState[side]?.fileName === snap.label || comparisonState[side + "Label"] === snap.label) {
+        if (comparisonState[side + "Label"] === snap.label) {
           comparisonState[side] = null;
           comparisonState[side + "Label"] = side === "previous" ? "Previous Assessment" : "Current Assessment";
           updateComparisonMeta();
@@ -4937,21 +4997,25 @@ function buildPdfDomainRows(rows) {
     function applyRbacUI(me) {
       const isAdmin = me.role === "admin";
       /* Show/hide admin-only tabs */
-      const adminOnlyTabs = ["dashboardPageTab", "comparisonPageTab", "adminPageTab", "auditPageTab"];
-      adminOnlyTabs.forEach(id => {
+      /* Dashboard, Admin, Audit — admin only. Comparison — all users (golden snapshots are shared). */
+      ["dashboardPageTab", "adminPageTab", "auditPageTab"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = isAdmin ? "" : "none";
       });
-      /* Sync sidebar admin-only items */
-      ["sidebarDashboardTab","sidebarComparisonTab","sidebarAdminTab","sidebarAuditTab"].forEach(id => {
+      const comparisonPageTab = document.getElementById("comparisonPageTab");
+      if (comparisonPageTab) comparisonPageTab.style.display = "";
+      /* Sync sidebar items */
+      ["sidebarDashboardTab","sidebarAdminTab","sidebarAuditTab"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = isAdmin ? "" : "none";
       });
+      const sidebarComparisonTab = document.getElementById("sidebarComparisonTab");
+      if (sidebarComparisonTab) sidebarComparisonTab.style.display = "";
       const sidebarAdminLabel = document.getElementById("sidebarAdminLabel");
       if (sidebarAdminLabel) sidebarAdminLabel.style.display = isAdmin ? "" : "none";
       /* If a non-admin somehow lands on a restricted page, send them to assessment */
       if (!isAdmin) {
-        const restricted = new Set(["dashboard", "comparison", "admin", "audit"]);
+        const restricted = new Set(["dashboard", "admin", "audit"]);
         const activeTab = document.querySelector(".page-tab.active");
         if (activeTab && restricted.has(activeTab.dataset.pageTab)) {
           setActivePage("assessment");

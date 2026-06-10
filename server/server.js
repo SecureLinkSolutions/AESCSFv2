@@ -179,6 +179,10 @@ db.exec(`
   );
 `);
 
+/* Migration: add scope column to snapshots if it doesn't exist yet */
+try { db.exec(`ALTER TABLE snapshots ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`); } catch {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_golden ON snapshots(tenant_id, scope)`); } catch {}
+
 /* ── Prepared statements ─────────────────────────────────────────────────── */
 const stmtGetAssessment = db.prepare(
   "SELECT data FROM assessments WHERE user_oid = ? AND tenant_id = ?"
@@ -237,6 +241,20 @@ const stmtInsertSnapshot = db.prepare(
 );
 const stmtDeleteSnapshot = db.prepare(
   "DELETE FROM snapshots WHERE id = ? AND user_oid = ? AND tenant_id = ?"
+);
+
+/* Golden (shared) snapshots — tenant-scoped, admin-write, all-read */
+const stmtListGoldenSnapshots = db.prepare(
+  "SELECT id, label, created_at FROM snapshots WHERE tenant_id = ? AND scope = 'golden' ORDER BY created_at DESC"
+);
+const stmtGetGoldenSnapshot = db.prepare(
+  "SELECT id, label, data, created_at FROM snapshots WHERE id = ? AND tenant_id = ? AND scope = 'golden'"
+);
+const stmtInsertGoldenSnapshot = db.prepare(
+  "INSERT INTO snapshots (user_oid, tenant_id, label, data, scope) VALUES (?, ?, ?, ?, 'golden')"
+);
+const stmtDeleteGoldenSnapshot = db.prepare(
+  "DELETE FROM snapshots WHERE id = ? AND tenant_id = ? AND scope = 'golden'"
 );
 
 /* Audit log — statements use positional params */
@@ -888,6 +906,51 @@ app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegiste
   );
 
   res.json({ approved: approvedCount, userOid: req.params.oid });
+});
+
+/* ── Golden snapshot routes (tenant-wide; admin-write, all-read) ────────── */
+
+app.get("/api/snapshots/golden", requireAuth, autoRegister, (req, res) => {
+  res.json(stmtListGoldenSnapshots.all(req.user.tenant));
+});
+
+app.get("/api/snapshots/golden/:id", requireAuth, autoRegister, (req, res) => {
+  const row = stmtGetGoldenSnapshot.get(req.params.id, req.user.tenant);
+  if (!row) return res.status(404).json({ error: "Golden snapshot not found" });
+  try {
+    const parsed = JSON.parse(row.data);
+    res.json({ id: row.id, label: row.label, created_at: row.created_at, golden: true, ...parsed });
+  } catch {
+    res.status(500).json({ error: "Corrupt snapshot data" });
+  }
+});
+
+app.post("/api/snapshots/golden", requireAuth, autoRegister, (req, res) => {
+  if (req.dbUser.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const label = (req.body?.label || "").trim();
+  if (!label) return res.status(400).json({ error: "label is required" });
+
+  let payload = req.body?.data;
+  if (!payload || typeof payload !== "object") {
+    const row = stmtGetAssessment.get(req.user.oid, req.user.tenant);
+    if (!row) return res.status(404).json({ error: "No assessment to snapshot — save your assessment first" });
+    try { payload = JSON.parse(row.data); } catch { return res.status(500).json({ error: "Corrupt assessment data" }); }
+  }
+
+  try {
+    const result = stmtInsertGoldenSnapshot.run(req.user.oid, req.user.tenant, label, JSON.stringify(payload));
+    res.status(201).json({ id: result.lastInsertRowid, label, created_at: Math.floor(Date.now() / 1000), golden: true });
+  } catch (err) {
+    console.error("[AESCSF API] Golden snapshot insert error:", err);
+    res.status(500).json({ error: "Failed to save golden snapshot" });
+  }
+});
+
+app.delete("/api/snapshots/golden/:id", requireAuth, autoRegister, (req, res) => {
+  if (req.dbUser.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const info = stmtDeleteGoldenSnapshot.run(req.params.id, req.user.tenant);
+  if (info.changes === 0) return res.status(404).json({ error: "Golden snapshot not found" });
+  res.json({ deleted: true });
 });
 
 /* ── Snapshot routes ─────────────────────────────────────────────────────── */
