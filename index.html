@@ -310,11 +310,17 @@
     .theme-btn {
       min-height: unset; padding: 4px 9px; font-size: .95rem;
       background: transparent; border-color: transparent;
-      color: rgba(255,255,255,0.65); box-shadow: none; border-radius: 6px;
+      color: var(--text-soft); box-shadow: none; border-radius: 6px;
       line-height: 1; font-weight: 400;
     }
-    .theme-btn:hover { background: rgba(255,255,255,0.15) !important; transform: none !important; box-shadow: none !important; color: #fff; }
-    .theme-btn.active { background: rgba(255,255,255,0.22) !important; color: #fff; }
+    .theme-btn:hover { background: var(--surface-muted) !important; transform: none !important; box-shadow: none !important; color: var(--text); }
+    .theme-btn.active { background: var(--primary-soft) !important; color: var(--primary); }
+    html[data-theme="dark"] .theme-btn { color: rgba(226,232,240,0.65); }
+    html[data-theme="dark"] .theme-btn:hover { background: rgba(255,255,255,0.10) !important; color: #fff; }
+    html[data-theme="dark"] .theme-btn.active { background: rgba(255,255,255,0.18) !important; color: #fff; }
+    html[data-theme="cyber"] .theme-btn { color: rgba(0,229,160,0.65); }
+    html[data-theme="cyber"] .theme-btn:hover { background: rgba(0,229,160,0.10) !important; color: #00e5a0; }
+    html[data-theme="cyber"] .theme-btn.active { background: rgba(0,229,160,0.18) !important; color: #00e5a0; }
 
     /* ── App shell layout ────────────────────────────────────────────── */
     body { overflow-x: hidden; }
@@ -671,7 +677,7 @@
 
     .toolbar-grid {
       display: grid;
-      grid-template-columns: minmax(260px, 2fr) repeat(4, minmax(140px, 1fr)) auto auto auto;
+      grid-template-columns: minmax(260px, 2fr) repeat(4, minmax(140px, 1fr)) auto;
       gap: 12px;
       align-items: end;
     }
@@ -2044,7 +2050,6 @@
           <div class="progress-shell"><div class="progress-bar" id="completionBar"></div></div>
         </div>
       </div>
-      <div class="footer-note">Export file contents include only your assessment data and Presentadata. The AESCSF v2 practice library is embedded in this HTML file.</div>
     </section>
 
     <section class="toolbar">
@@ -2091,9 +2096,11 @@
             <option value="N/A">N/A</option>
           </select>
         </div>
-        <button class="secondary" id="expandAllBtn">Expand All</button>
-        <button class="secondary" id="collapseAllBtn">Collapse All</button>
-        <button class="ghost" id="clearFiltersBtn">Clear Filters</button>
+        <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;">
+          <button class="secondary" id="expandAllBtn">Expand All</button>
+          <button class="secondary" id="collapseAllBtn">Collapse All</button>
+          <button class="ghost" id="clearFiltersBtn">Clear Filters</button>
+        </div>
       </div>
     </section>
 
@@ -2539,6 +2546,7 @@
               signal: controller.signal,
               credentials: "same-origin"
             });
+            if (response.status === 404) return null; // new user — no assessment saved yet
             if (!response.ok) throw new Error(`Load failed with status ${response.status}`);
             return hydrateState(await response.json());
           } finally {
@@ -4679,11 +4687,11 @@ function buildPdfDomainRows(rows) {
         { type:"page", label:"Audit Log",  page:"audit",      icon:"file",   adminOnly:true },
       ];
       const ACTION_COMMANDS = [
-        { type:"action", label:"Export JSON",         fn: exportJson },
-        { type:"action", label:"AEMO Export (CSV)",   fn: exportTemplateCsv },
-        { type:"action", label:"Gap Register PDF",    fn: exportGapRegister },
-        { type:"action", label:"Full Report PDF",     fn: generatePdfReport },
-        { type:"action", label:"Save Snapshot",       fn: saveCurrentSnapshot },
+        { type:"action", label:"Export JSON",         fn: exportJson,           adminOnly: true },
+        { type:"action", label:"AEMO Export (CSV)",   fn: exportTemplateCsv,    adminOnly: true },
+        { type:"action", label:"Gap Register PDF",    fn: exportGapRegister,    adminOnly: true },
+        { type:"action", label:"Full Report PDF",     fn: generatePdfReport,    adminOnly: true },
+        { type:"action", label:"Save Snapshot",       fn: saveCurrentSnapshot,  adminOnly: true },
       ];
 
       const ICONS = {
@@ -4718,7 +4726,7 @@ function buildPdfDomainRows(rows) {
         const pageMatches = PAGE_COMMANDS.filter(c => (!c.adminOnly || isAdmin) && fuzzyScore(c.label, q) > 0)
           .map(c => ({...c, score: fuzzyScore(c.label, q), icon: c.icon}))
           .sort((a,b) => b.score - a.score).slice(0,4);
-        const actionMatches = ACTION_COMMANDS.filter(c => fuzzyScore(c.label, q) > 0)
+        const actionMatches = ACTION_COMMANDS.filter(c => (!c.adminOnly || isAdmin) && fuzzyScore(c.label, q) > 0)
           .map(c => ({...c, score: fuzzyScore(c.label, q), icon:"action"}))
           .sort((a,b) => b.score - a.score).slice(0,4);
         const practMatches = !q.trim() ? [] : (typeof PRACTICES !== "undefined" ? PRACTICES : [])
@@ -4868,6 +4876,8 @@ function buildPdfDomainRows(rows) {
           const me = await meResp.json();
           window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], objectives: me.objectives || [], _oid: me.oid || "", displayName: me.displayName || me.username || "" };
           applyRbacUI(me);
+          populateDomains();
+          render();
           if (me.objectives && me.objectives.length) checkAssignmentCompletion(me.objectives);
         } else {
           showAuthErrorBar(meResp.status);
