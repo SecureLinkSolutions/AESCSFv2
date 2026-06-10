@@ -1261,44 +1261,38 @@ app.put("/api/admin/users/:oid/objective-assignments", requireAuth, autoRegister
 
 /**
  * GET /api/admin/responses
- * Returns per-practice responses from all objective-assigned users.
- * Shape: { [practiceId]: [{ user_oid, display_name, username, objective_id, assessment }] }
+ * Returns per-practice responses from all non-admin users who have saved data.
+ * Shape: { [practiceId]: [{ user_oid, display_name, username, assessment }] }
  * Admin only.
  */
 app.get("/api/admin/responses", requireAuth, autoRegister, requireAdmin, (req, res) => {
   try {
-    const allObjAssignments = stmtGetAllObjectiveAssignments.all();
-    const objToUsers = {};
-    for (const { user_oid, objective_id } of allObjAssignments) {
-      if (!objToUsers[objective_id]) objToUsers[objective_id] = [];
-      objToUsers[objective_id].push(user_oid);
-    }
+    const allUsers = db.prepare(
+      "SELECT oid, username, display_name, role FROM users WHERE tenant_id = ?"
+    ).all(req.user.tenant);
+    const usersByOid = Object.fromEntries(allUsers.map(u => [u.oid, u]));
+    const nonAdminOids = new Set(allUsers.filter(u => u.role !== "admin").map(u => u.oid));
 
-    const allRows = stmtGetAllAssessments.all();
-    const assessmentsByOid = {};
-    for (const row of allRows) {
-      try { assessmentsByOid[row.user_oid] = JSON.parse(row.data)?.assessments || {}; } catch {}
-    }
-    const usersByOid = {};
-    for (const u of stmtGetAllUsers.all()) usersByOid[u.oid] = u;
+    const allRows = db.prepare(
+      "SELECT user_oid, data FROM assessments WHERE tenant_id = ?"
+    ).all(req.user.tenant);
 
     const responses = {};
-    for (const [objectiveId, userOids] of Object.entries(objToUsers)) {
-      for (const userOid of userOids) {
-        const userAssessments = assessmentsByOid[userOid] || {};
-        const user = usersByOid[userOid];
-        for (const [practiceId, assessment] of Object.entries(userAssessments)) {
-          if (practiceObjectiveId(practiceId) !== objectiveId) continue;
+    for (const row of allRows) {
+      if (!nonAdminOids.has(row.user_oid)) continue;
+      const user = usersByOid[row.user_oid];
+      try {
+        const assessments = JSON.parse(row.data)?.assessments || {};
+        for (const [practiceId, assessment] of Object.entries(assessments)) {
           if (!responses[practiceId]) responses[practiceId] = [];
           responses[practiceId].push({
-            user_oid:     userOid,
-            display_name: user?.display_name || userOid,
-            username:     user?.username     || userOid,
-            objective_id: objectiveId,
+            user_oid:     row.user_oid,
+            display_name: user?.display_name || row.user_oid,
+            username:     user?.username     || row.user_oid,
             assessment
           });
         }
-      }
+      } catch { /* skip corrupt row */ }
     }
     res.json(responses);
   } catch (err) {
