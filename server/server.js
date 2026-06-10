@@ -981,6 +981,46 @@ app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegiste
   res.json({ approved: approvedCount, userOid: req.params.oid });
 });
 
+/**
+ * POST /api/admin/users/:oid/endorse-contributions
+ * Endorses the latest saved version of each practice for a given user.
+ * Body: { practiceIds: ["ACCESS-1a", ...] } — omit to endorse all practices the user has saved.
+ * Admin only.
+ */
+app.post("/api/admin/users/:oid/endorse-contributions", requireAuth, autoRegister, requireAdmin, (req, res) => {
+  const { practiceIds } = req.body || {};
+  const target = stmtGetUser.get(req.params.oid);
+  if (!target) return res.status(404).json({ error: "User not found" });
+
+  const endorsedBy = req.dbUser.display_name || req.user.username || "";
+  let endorsed = 0;
+
+  if (Array.isArray(practiceIds) && practiceIds.length) {
+    for (const pid of practiceIds) {
+      const row = db.prepare(
+        "SELECT MAX(id) AS id FROM practice_versions WHERE practice_id = ? AND user_oid = ? AND tenant_id = ?"
+      ).get(pid, req.params.oid, req.user.tenant);
+      if (row?.id) { stmtUpsertEndorsement.run(pid, req.user.tenant, row.id, endorsedBy); endorsed++; }
+    }
+  } else {
+    const rows = db.prepare(
+      "SELECT MAX(id) AS id, practice_id FROM practice_versions WHERE user_oid = ? AND tenant_id = ? GROUP BY practice_id"
+    ).all(req.params.oid, req.user.tenant);
+    for (const row of rows) {
+      stmtUpsertEndorsement.run(row.practice_id, req.user.tenant, row.id, endorsedBy);
+      endorsed++;
+    }
+  }
+
+  stmtInsertAudit.run(
+    req.user.oid, req.user.username, req.dbUser.display_name,
+    `USER:${target.username || req.params.oid}`, "endorse_contributions",
+    "", `${endorsed} practices`
+  );
+
+  res.json({ endorsed });
+});
+
 /* ── Endorsement routes ──────────────────────────────────────────────────── */
 
 /* All authenticated users: fetch current endorsements for pre-fill */

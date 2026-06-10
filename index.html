@@ -5271,24 +5271,25 @@ function buildPdfDomainRows(rows) {
     async function approveContributions(userOid, practiceIds) {
       const btnId = practiceIds ? `approve-${userOid}-${practiceIds[0]}` : `approve-all-${userOid}`;
       const btn = document.getElementById(btnId);
-      if (btn) { btn.disabled = true; btn.textContent = "Approving…"; }
+      if (btn) { btn.disabled = true; btn.textContent = "Endorsing…"; }
       try {
         const body = practiceIds ? { practiceIds } : {};
-        const resp = await adminFetch(`/admin/users/${encodeURIComponent(userOid)}/approve-contributions`, {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(userOid)}/endorse-contributions`, {
           method: "POST", body: JSON.stringify(body)
         });
         const data = await resp.json();
         if (!resp.ok) {
-          if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Approve" : "Approve all"; }
-          alert(`Approval failed: ${data.error || resp.status}`);
+          if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Endorse" : "Endorse all"; }
+          alert(`Endorsement failed: ${data.error || resp.status}`);
           return;
         }
-        if (btn) {
-          btn.textContent = `✓ Approved (${data.approved})`;
-          btn.style.cssText += ";background:rgba(22,163,74,.12);color:#166534;border-color:rgba(22,163,74,.4);";
-        }
+        /* Refresh endorsement cache so the Responses view reflects the change on reload */
+        const endResp = await adminFetch("/endorsements");
+        if (endResp.ok) window.__AESCSF_ENDORSEMENTS__ = await endResp.json();
+        /* Reload the responses panel so endorsed status is immediately visible */
+        await loadAndRenderResponses();
       } catch (err) {
-        if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Approve" : "Approve all"; }
+        if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Endorse" : "Endorse all"; }
         alert(err.message);
       }
     }
@@ -5377,7 +5378,7 @@ function buildPdfDomainRows(rows) {
                 <span class="footer-note">${u.count} practice${u.count===1?"":"s"}</span>
                 <button class="secondary" id="approve-all-${escapeHtml(u.user_oid)}"
                   onclick="approveContributions('${escapeHtml(u.user_oid)}', null)"
-                  style="padding:3px 10px;font-size:.8rem;">Approve all</button>
+                  style="padding:3px 10px;font-size:.8rem;">Endorse all</button>
               </div>`).join("")}
           </div>
         </div>` : "";
@@ -5396,6 +5397,7 @@ function buildPdfDomainRows(rows) {
           : `<div style="font-size:.78rem;color:var(--muted);margin-top:4px;">No endorsed version yet.</div>`;
         const rows = respondents.map(r => {
           const sc = statusClass(r.assessment?.status || "");
+          const btnLabel = endorsement ? "Re-endorse" : "Endorse";
           return `<tr>
             <td><strong>${escapeHtml(r.display_name)}</strong><br><span style="color:var(--muted);font-size:.75rem;">${escapeHtml(r.username)}</span></td>
             <td><span class="status-select ${sc}" style="padding:3px 8px;border-radius:6px;font-size:.8rem;">${escapeHtml(r.assessment?.status || "Not Assessed")}</span></td>
@@ -5406,7 +5408,7 @@ function buildPdfDomainRows(rows) {
             <td><button class="secondary"
               id="approve-${escapeHtml(r.user_oid)}-${escapeHtml(practiceId)}"
               onclick="approveContributions('${escapeHtml(r.user_oid)}', ['${escapeHtml(practiceId)}'])"
-              style="padding:2px 8px;font-size:.78rem;">Approve</button></td>
+              style="padding:2px 8px;font-size:.78rem;">${btnLabel}</button></td>
           </tr>`;
         }).join("");
         return `<div class="dashboard-panel" style="margin-bottom:14px;">
