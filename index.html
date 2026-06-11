@@ -1495,16 +1495,15 @@
     .admin-user-name { font-weight: 700; font-size: .95rem; color: var(--text); }
     .admin-user-email { font-size: .8rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .role-badge { padding: 3px 12px; border-radius: 999px; font-size: .75rem; font-weight: 700; letter-spacing: .02em; }
-    .role-badge.admin { background: rgba(192,16,72,.1); color: #c01048; }
-    .role-badge.user  { background: rgba(6,118,71,.1);  color: #067647; }
-    .admin-role-toggle { display: flex; gap: 6px; }
-    .admin-role-toggle button {
-      padding: 5px 14px; border-radius: 8px; border: 1px solid var(--border-strong);
-      background: transparent; font-size: .8rem; font-weight: 600;
-      cursor: pointer; color: var(--text-soft); font-family: inherit;
-      transition: background .15s, color .15s;
+    .role-badge.admin     { background: rgba(192,16,72,.1);   color: #c01048; }
+    .role-badge.user      { background: rgba(6,118,71,.1);    color: #067647; }
+    .role-badge.assessor  { background: rgba(168,85,247,.15); color: #a855f7; }
+    .role-badge.dashboard { background: rgba(20,184,166,.15); color: #14b8a6; }
+    .role-select {
+      font-size: .8rem; padding: 4px 8px; border-radius: 6px;
+      border: 1px solid var(--border-strong); background: var(--surface);
+      color: var(--text); cursor: pointer; font-family: inherit;
     }
-    .admin-role-toggle button.active-role { background: #155eef; color: #fff; border-color: #155eef; }
     .admin-domains-section { margin-top: 16px; }
     .admin-domains-label { font-size: .8rem; font-weight: 600; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .04em; }
     .admin-domain-grid { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2777,10 +2776,15 @@
     }
 
     function setActivePage(page) {
-      const ADMIN_ONLY_PAGES = new Set(["dashboard", "comparison", "admin", "audit"]);
-      if (ADMIN_ONLY_PAGES.has(page) && window.__AESCSF_RBAC__?.role !== "admin") {
-        page = "assessment";
-      }
+      const role = window.__AESCSF_RBAC__?.role || "user";
+      const PAGE_ACCESS = {
+        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit"]),
+        assessor:  new Set(["assessment","timeline"]),
+        user:      new Set(["assessment","timeline"]),
+        dashboard: new Set(["dashboard","comparison"]),
+      };
+      const allowed = PAGE_ACCESS[role] || PAGE_ACCESS["user"];
+      if (!allowed.has(page)) page = allowed.values().next().value;
       dashboardPage.classList.toggle("active", page === "dashboard");
       assessmentPage.classList.toggle("active", page === "assessment");
       timelinePage.classList.toggle("active", page === "timeline");
@@ -2835,7 +2839,8 @@
     function populateDomains() {
       const rbac = window.__AESCSF_RBAC__;
       const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
-      const domains = (rbac && rbac.role !== "admin" && rbac.domains.length)
+      const bypassFilter = !rbac || rbac.role === "admin" || rbac.role === "assessor";
+      const domains = (!bypassFilter && rbac.domains.length)
         ? allDomains.filter(d => rbac.domains.includes(d))
         : allDomains;
       domainFilter.innerHTML = `<option value="">All</option>${domains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("")}`;
@@ -2922,7 +2927,7 @@
         const matchesSp = !spFilter.value || practice.securityProfile === spFilter.value;
         const matchesStatus = !statusFilter.value || assessment.status === statusFilter.value;
         const rbac = window.__AESCSF_RBAC__;
-        const matchesRbac = !rbac || rbac.role === "admin"
+        const matchesRbac = !rbac || rbac.role === "admin" || rbac.role === "assessor"
           || rbac.domains.includes(practice.domain)
           || (rbac.objectives || []).includes(practice.objectiveId);
         return matchesSearch && matchesDomain && matchesMil && matchesSp && matchesStatus && matchesRbac;
@@ -2984,7 +2989,7 @@
     function getAllRows() {
       const rbac = window.__AESCSF_RBAC__;
       return PRACTICES
-        .filter(p => !rbac || rbac.role === "admin" || !rbac.domains.length || rbac.domains.includes(p.domain))
+        .filter(p => !rbac || rbac.role === "admin" || rbac.role === "assessor" || !rbac.domains.length || rbac.domains.includes(p.domain))
         .map(practice => ({
           practice,
           assessment: state.assessments[practice.practiceId] || defaultAssessment()
@@ -5118,36 +5123,65 @@ function buildPdfDomainRows(rows) {
     window.initializeFromApi = initializeFromApi;
 
     function applyRbacUI(me) {
-      const isAdmin = me.role === "admin";
-      /* Show/hide admin-only tabs */
-      /* Dashboard, Comparison, Admin, Audit — admin only */
-      ["dashboardPageTab", "comparisonPageTab", "adminPageTab", "auditPageTab"].forEach(id => {
+      const role       = me.role || "user";
+      const isAdmin    = role === "admin";
+      const isDashOnly = role === "dashboard";
+      const canEdit    = role === "admin" || role === "assessor" || role === "user";
+
+      /* Sidebar items visibility per role */
+      const sidebarShow = {
+        sidebarAssessmentTab:  canEdit,
+        sidebarTimelineTab:    canEdit,
+        sidebarDashboardTab:   isAdmin || isDashOnly,
+        sidebarComparisonTab:  isAdmin || isDashOnly,
+        sidebarAdminTab:       isAdmin,
+        sidebarAuditTab:       isAdmin,
+      };
+      Object.entries(sidebarShow).forEach(([id, vis]) => {
         const el = document.getElementById(id);
-        if (el) el.style.display = isAdmin ? "" : "none";
-      });
-      /* Sync sidebar items */
-      ["sidebarDashboardTab","sidebarComparisonTab","sidebarAdminTab","sidebarAuditTab"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = isAdmin ? "" : "none";
+        if (el) el.style.display = vis ? "" : "none";
       });
       const sidebarAdminLabel = document.getElementById("sidebarAdminLabel");
       if (sidebarAdminLabel) sidebarAdminLabel.style.display = isAdmin ? "" : "none";
-      /* If a non-admin somehow lands on a restricted page, send them to assessment */
-      if (!isAdmin) {
-        const restricted = new Set(["dashboard", "comparison", "admin", "audit"]);
-        const activeTab = document.querySelector(".page-tab.active");
-        if (activeTab && restricted.has(activeTab.dataset.pageTab)) {
-          setActivePage("assessment");
-        }
+
+      /* Old top tab buttons (backward compat — may be in DOM) */
+      ["dashboardPageTab", "comparisonPageTab"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (isAdmin || isDashOnly) ? "" : "none";
+      });
+      ["adminPageTab", "auditPageTab"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isAdmin ? "" : "none";
+      });
+
+      /* Redirect to first allowed page if current page is not permitted */
+      const PAGE_ACCESS = {
+        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit"]),
+        assessor:  new Set(["assessment","timeline"]),
+        user:      new Set(["assessment","timeline"]),
+        dashboard: new Set(["dashboard","comparison"]),
+      };
+      const allowed = PAGE_ACCESS[role] || PAGE_ACCESS["user"];
+      const activeTab = document.querySelector(".page-tab.active");
+      if (activeTab && !allowed.has(activeTab.dataset.pageTab)) {
+        setActivePage(allowed.values().next().value);
+      } else if (isDashOnly && !activeTab) {
+        setActivePage("dashboard");
       }
 
-      /* Show action toolbar (export/import/reset) for admins only */
+      /* Show action toolbar (export/import/reset) — replaced by Actions menu */
       const topActions = document.getElementById("topActionsBar");
-      if (topActions) topActions.style.display = "none"; /* replaced by Actions menu */
+      if (topActions) topActions.style.display = "none";
 
-      /* Show/hide Assessment page actions menu based on admin status */
+      /* Actions menu: visible for edit roles; admin-only items hidden for non-admins */
       const actionsMenuWrapper = document.getElementById("actionsMenuWrapper");
-      if (actionsMenuWrapper) actionsMenuWrapper.style.display = isAdmin ? "" : "none";
+      if (actionsMenuWrapper) actionsMenuWrapper.style.display = canEdit ? "" : "none";
+      ["actionsReset"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isAdmin ? "" : "none";
+      });
+      const importLabel = document.querySelector("label.actions-menu-item[for='importFile']");
+      if (importLabel) importLabel.style.display = isAdmin ? "" : "none";
 
       /* Update topbar user display */
       const topbarUserBtn  = document.getElementById("topbarUserBtn");
@@ -5186,7 +5220,8 @@ function buildPdfDomainRows(rows) {
       const roleBadge = document.getElementById("user-role-badge");
       if (nameSpan) nameSpan.textContent = me.displayName || me.username || "";
       if (roleBadge) {
-        roleBadge.textContent = me.role === "admin" ? "Admin" : "User";
+        const roleLabels = { admin: "Admin", assessor: "Assessor", dashboard: "Dashboard", user: "User" };
+        roleBadge.textContent = roleLabels[me.role] || me.role;
         roleBadge.style.background = "rgba(255,255,255,.2)";
         roleBadge.style.color      = "#fff";
         roleBadge.style.display    = "inline-block";
@@ -5211,7 +5246,7 @@ function buildPdfDomainRows(rows) {
     /* ── Assignment completion banner ────────────────────────────────────────── */
     function prefillOwnerForAssignedPractices() {
       const rbac = window.__AESCSF_RBAC__;
-      if (!rbac || rbac.role === "admin") return;
+      if (!rbac || rbac.role === "admin" || rbac.role === "assessor") return;
       const name = rbac.displayName || "";
       if (!name) return;
       const domains    = new Set(rbac.domains    || []);
@@ -5618,12 +5653,12 @@ function buildPdfDomainRows(rows) {
             </div>
             <span class="role-badge ${user.role}">${escapeHtml(user.role)}</span>
             ${isSelf ? "" : `
-            <div class="admin-role-toggle">
-              <button class="${user.role === "admin" ? "active-role" : ""}"
-                      onclick="adminSetRole('${escapeHtml(user.oid)}','admin',this)">Admin</button>
-              <button class="${user.role === "user"  ? "active-role" : ""}"
-                      onclick="adminSetRole('${escapeHtml(user.oid)}','user',this)">User</button>
-            </div>`}
+            <select class="role-select" onchange="adminSetRole('${escapeHtml(user.oid)}',this.value,this)">
+              <option value="user"      ${user.role==="user"      ? "selected" : ""}>User</option>
+              <option value="assessor"  ${user.role==="assessor"  ? "selected" : ""}>Assessor</option>
+              <option value="dashboard" ${user.role==="dashboard" ? "selected" : ""}>Dashboard</option>
+              <option value="admin"     ${user.role==="admin"     ? "selected" : ""}>Admin</option>
+            </select>`}
           </div>
           <details class="admin-assignment-details" open>
             <summary class="admin-assignment-summary">
@@ -5683,22 +5718,20 @@ function buildPdfDomainRows(rows) {
       if (chip) chip.classList.toggle("checked", checkbox.checked);
     }
 
-    async function adminSetRole(oid, role, btn) {
+    async function adminSetRole(oid, role, el) {
+      const roleLabels = { admin: "Admin", assessor: "Assessor", dashboard: "Dashboard", user: "User" };
       try {
         const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/role`, {
           method: "PUT", body: JSON.stringify({ role })
         });
-        if (!resp.ok) { alert(`Failed to set role: ${resp.status}`); return; }
-        /* Update badge + toggle buttons */
+        if (!resp.ok) { alert(`Failed to set role: ${resp.status}`); if (el?.tagName === "SELECT") { await loadAdminPanel(); } return; }
+        /* Update badge */
         const card = document.getElementById(`user-card-${oid}`);
         if (card) {
-          card.querySelector(".role-badge").textContent = role;
-          card.querySelector(".role-badge").className = `role-badge ${role}`;
-          card.querySelectorAll(".admin-role-toggle button").forEach(b => {
-            b.classList.toggle("active-role", b.textContent.toLowerCase() === role);
-          });
+          const badge = card.querySelector(".role-badge");
+          if (badge) { badge.textContent = roleLabels[role] || role; badge.className = `role-badge ${role}`; }
         }
-      } catch (err) { alert(err.message); }
+      } catch (err) { alert(err.message); if (el?.tagName === "SELECT") { await loadAdminPanel(); } }
     }
 
     async function adminSaveAssignments(oid) {

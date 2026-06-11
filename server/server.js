@@ -204,6 +204,33 @@ db.exec(`
 try { db.exec(`ALTER TABLE snapshots ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_golden ON snapshots(tenant_id, scope)`); } catch {}
 
+/* Migration: expand users role constraint from 2 to 4 values */
+try {
+  const userTableSQL = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+  ).get()?.sql || "";
+  if (!userTableSQL.includes("assessor")) {
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+      ALTER TABLE users RENAME TO _users_old;
+      CREATE TABLE users (
+        oid          TEXT    PRIMARY KEY,
+        tenant_id    TEXT    NOT NULL DEFAULT '',
+        username     TEXT    NOT NULL DEFAULT '',
+        display_name TEXT    NOT NULL DEFAULT '',
+        role         TEXT    NOT NULL DEFAULT 'user'
+                             CHECK(role IN ('admin','user','assessor','dashboard')),
+        created_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+        last_seen    INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      INSERT INTO users SELECT * FROM _users_old;
+      DROP TABLE _users_old;
+      PRAGMA foreign_keys = ON;
+    `);
+    console.log("[AESCSF API] Migrated users table to 4-role schema");
+  }
+} catch (e) { console.error("[AESCSF API] Role migration failed:", e.message); }
+
 /* ── Prepared statements ─────────────────────────────────────────────────── */
 const stmtGetAssessment = db.prepare(
   "SELECT data FROM assessments WHERE user_oid = ? AND tenant_id = ?"
@@ -768,7 +795,10 @@ app.put("/api/assessment", requireAuth, autoRegister, (req, res) => {
     return res.status(400).json({ error: "Body must be a JSON object" });
   }
 
-  const isAdmin = req.dbUser.role === "admin";
+  if (req.dbUser.role === "dashboard") {
+    return res.status(403).json({ error: "Read-only access" });
+  }
+  const isAdmin = req.dbUser.role === "admin" || req.dbUser.role === "assessor";
   let payload   = req.body;
 
   if (!isAdmin) {
@@ -843,8 +873,9 @@ app.get("/api/admin/users", requireAuth, autoRegister, requireAdmin, (_req, res)
 
 app.put("/api/admin/users/:oid/role", requireAuth, autoRegister, requireAdmin, (req, res) => {
   const { role } = req.body || {};
-  if (!["admin", "user"].includes(role)) {
-    return res.status(400).json({ error: "role must be 'admin' or 'user'" });
+  const VALID_ROLES = new Set(["admin", "user", "assessor", "dashboard"]);
+  if (!VALID_ROLES.has(role)) {
+    return res.status(400).json({ error: "role must be 'admin', 'user', 'assessor', or 'dashboard'" });
   }
   const target = stmtGetUser.get(req.params.oid);
   if (!target) return res.status(404).json({ error: "User not found" });
