@@ -198,6 +198,15 @@ db.exec(`
     endorsed_at  INTEGER NOT NULL DEFAULT (unixepoch()),
     PRIMARY KEY (practice_id, tenant_id)
   );
+
+  CREATE TABLE IF NOT EXISTS domain_targets (
+    tenant_id   TEXT    NOT NULL DEFAULT '',
+    domain      TEXT    NOT NULL,
+    target_date TEXT    NOT NULL DEFAULT '',
+    updated_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_by  TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (tenant_id, domain)
+  );
 `);
 
 /* Migration: add scope column to snapshots if it doesn't exist yet */
@@ -210,10 +219,13 @@ try {
     "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
   ).get()?.sql || "";
   if (!userTableSQL.includes("assessor")) {
+    /* Create users_v2 with new constraint, copy data, drop old, rename.
+       We avoid renaming the existing 'users' table to prevent SQLite 3.26+
+       from rewriting foreign-key references in other tables (assignments). */
+    db.exec(`PRAGMA foreign_keys = OFF`);
+    db.exec(`DROP TABLE IF EXISTS _users_v2`);
     db.exec(`
-      PRAGMA foreign_keys = OFF;
-      ALTER TABLE users RENAME TO _users_old;
-      CREATE TABLE users (
+      CREATE TABLE _users_v2 (
         oid          TEXT    PRIMARY KEY,
         tenant_id    TEXT    NOT NULL DEFAULT '',
         username     TEXT    NOT NULL DEFAULT '',
@@ -222,14 +234,57 @@ try {
                              CHECK(role IN ('admin','user','assessor','dashboard')),
         created_at   INTEGER NOT NULL DEFAULT (unixepoch()),
         last_seen    INTEGER NOT NULL DEFAULT (unixepoch())
-      );
-      INSERT INTO users SELECT * FROM _users_old;
-      DROP TABLE _users_old;
-      PRAGMA foreign_keys = ON;
+      )
     `);
+    db.exec(`INSERT INTO _users_v2 SELECT * FROM users`);
+    db.exec(`DROP TABLE users`);
+    db.exec(`ALTER TABLE _users_v2 RENAME TO users`);
+    db.exec(`PRAGMA foreign_keys = ON`);
     console.log("[AESCSF API] Migrated users table to 4-role schema");
   }
 } catch (e) { console.error("[AESCSF API] Role migration failed:", e.message); }
+
+/* Migration: repair FK references broken by earlier rename-based migration */
+try {
+  const asgnDDL = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='assignments'"
+  ).get()?.sql || "";
+  if (asgnDDL.includes("_users_old")) {
+    db.exec(`PRAGMA foreign_keys = OFF`);
+    db.exec(`CREATE TABLE _asgn_tmp AS SELECT * FROM assignments`);
+    db.exec(`DROP TABLE assignments`);
+    db.exec(`
+      CREATE TABLE assignments (
+        user_oid    TEXT    NOT NULL REFERENCES users(oid) ON DELETE CASCADE,
+        domain      TEXT    NOT NULL,
+        assigned_by TEXT    NOT NULL DEFAULT '',
+        assigned_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY (user_oid, domain)
+      )
+    `);
+    db.exec(`INSERT OR IGNORE INTO assignments SELECT * FROM _asgn_tmp`);
+    db.exec(`DROP TABLE _asgn_tmp`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_assignments_user ON assignments(user_oid)`);
+
+    db.exec(`CREATE TABLE _oasgn_tmp AS SELECT * FROM objective_assignments`);
+    db.exec(`DROP TABLE objective_assignments`);
+    db.exec(`
+      CREATE TABLE objective_assignments (
+        user_oid     TEXT    NOT NULL REFERENCES users(oid) ON DELETE CASCADE,
+        objective_id TEXT    NOT NULL,
+        assigned_by  TEXT    NOT NULL DEFAULT '',
+        assigned_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY (user_oid, objective_id)
+      )
+    `);
+    db.exec(`INSERT OR IGNORE INTO objective_assignments SELECT * FROM _oasgn_tmp`);
+    db.exec(`DROP TABLE _oasgn_tmp`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_obj_assign_user ON objective_assignments(user_oid)`);
+    db.exec(`DROP TABLE IF EXISTS _users_old`);
+    db.exec(`PRAGMA foreign_keys = ON`);
+    console.log("[AESCSF API] Repaired FK references in assignments tables");
+  }
+} catch (e) { console.error("[AESCSF API] FK repair failed:", e.message); }
 
 /* ── Prepared statements ─────────────────────────────────────────────────── */
 const stmtGetAssessment = db.prepare(
@@ -384,6 +439,21 @@ const stmtVerifyVersion = db.prepare(
   "SELECT id FROM practice_versions WHERE id = ? AND tenant_id = ? AND practice_id = ?"
 );
 
+const stmtGetDomainTargets = db.prepare(
+  "SELECT domain, target_date FROM domain_targets WHERE tenant_id = ? ORDER BY domain"
+);
+const stmtUpsertDomainTarget = db.prepare(`
+  INSERT INTO domain_targets (tenant_id, domain, target_date, updated_at, updated_by)
+  VALUES (?, ?, ?, unixepoch(), ?)
+  ON CONFLICT(tenant_id, domain) DO UPDATE SET
+    target_date = excluded.target_date,
+    updated_at  = excluded.updated_at,
+    updated_by  = excluded.updated_by
+`);
+const stmtDeleteDomainTarget = db.prepare(
+  "DELETE FROM domain_targets WHERE tenant_id = ? AND domain = ?"
+);
+
 const stmtGetAllConfidence = db.prepare(
   "SELECT practice_id, rating, notes, updated_at FROM confidence_ratings WHERE tenant_id = ?"
 );
@@ -497,6 +567,13 @@ function autoRegister(req, res, next) {
 function requireAdmin(req, res, next) {
   if (!req.dbUser || req.dbUser.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+}
+
+function requireAdminOrAssessor(req, res, next) {
+  if (!req.dbUser || !["admin", "assessor"].includes(req.dbUser.role)) {
+    return res.status(403).json({ error: "Admin or assessor access required" });
   }
   next();
 }
@@ -844,6 +921,35 @@ app.put("/api/assessment", requireAuth, autoRegister, (req, res) => {
     console.error("[AESCSF API] Audit log error (non-fatal):", auditErr);
     res.json({ saved: true, changes: 0 });
   }
+});
+
+/* ── Domain target dates ─────────────────────────────────────────────────── */
+
+app.get("/api/domain-targets", requireAuth, autoRegister, (req, res) => {
+  const rows = stmtGetDomainTargets.all(req.user.tenant);
+  const targets = {};
+  for (const row of rows) {
+    if (row.target_date) targets[row.domain] = row.target_date;
+  }
+  res.json(targets);
+});
+
+app.put("/api/domain-targets", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const body = req.body;
+  if (typeof body !== "object" || Array.isArray(body)) {
+    return res.status(400).json({ error: "Body must be an object mapping domain to date string" });
+  }
+  const upsertTx = db.transaction(() => {
+    for (const [domain, date] of Object.entries(body)) {
+      if (!date || date.trim() === "") {
+        stmtDeleteDomainTarget.run(req.user.tenant, domain);
+      } else {
+        stmtUpsertDomainTarget.run(req.user.tenant, domain, date.trim(), req.user.oid);
+      }
+    }
+  });
+  upsertTx();
+  res.json({ ok: true });
 });
 
 /* ── Admin routes ────────────────────────────────────────────────────────── */
