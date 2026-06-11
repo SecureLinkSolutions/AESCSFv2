@@ -6783,12 +6783,18 @@ function buildPdfDomainRows(rows) {
         </div>
         ${allUsers.length ? `
         <div class="group-section-title" style="margin-top:16px">Add / remove members</div>
+        <p style="font-size:.78rem;color:var(--muted);margin:0 0 8px">Each user can belong to only one group. Selecting a user who is already in another group will move them here.</p>
         <div class="group-member-user-select" id="gdUserSelect">
-          ${allUsers.filter(u => u.role !== "dashboard").map(u => `
+          ${allUsers.filter(u => u.role !== "dashboard").map(u => {
+            const inThisGroup  = memberOids.has(u.oid);
+            const inOtherGroup = !inThisGroup && u.group_id && u.group_id !== group.id;
+            const groupHint    = inOtherGroup ? ` — <span style="color:var(--warning);font-size:.75rem">in ${escapeHtml(u.group_name)}</span>` : "";
+            return `
             <div class="group-member-user-row">
-              <input type="checkbox" id="gdUser_${escapeHtml(u.oid)}" value="${escapeHtml(u.oid)}" ${memberOids.has(u.oid) ? "checked" : ""}>
-              <label for="gdUser_${escapeHtml(u.oid)}">${escapeHtml(u.display_name || u.username)} <span style="color:var(--muted);font-size:.78rem">(${escapeHtml(u.role)})</span></label>
-            </div>`).join("")}
+              <input type="checkbox" id="gdUser_${escapeHtml(u.oid)}" value="${escapeHtml(u.oid)}" ${inThisGroup ? "checked" : ""}>
+              <label for="gdUser_${escapeHtml(u.oid)}">${escapeHtml(u.display_name || u.username)} <span style="color:var(--muted);font-size:.78rem">(${escapeHtml(u.role)})</span>${groupHint}</label>
+            </div>`;
+          }).join("")}
         </div>
         <button class="primary" style="font-size:.85rem" id="gdSaveMembersBtn">Save Members</button>` : ""}`;
 
@@ -6929,6 +6935,8 @@ function buildPdfDomainRows(rows) {
           method: "PUT", body: JSON.stringify({ members: oids })
         });
         if (!r.ok) throw new Error(await r.text());
+        // Invalidate user cache — group memberships may have changed for other users
+        window.__AESCSF_ALL_USERS__ = null;
         await _refreshGroup(groupId);
         _showGroupToast("Members saved");
       } catch (e) { alert("Failed to save members: " + e.message); }

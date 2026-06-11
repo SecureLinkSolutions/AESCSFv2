@@ -506,7 +506,7 @@ const stmtDeleteGroup = db.prepare(
   "DELETE FROM groups WHERE id = ? AND tenant_id = ?"
 );
 const stmtGetGroupMembers = db.prepare(`
-  SELECT gm.user_oid, u.display_name, u.username, u.role
+  SELECT gm.user_oid AS oid, u.display_name, u.username, u.role
   FROM group_members gm
   LEFT JOIN users u ON gm.user_oid = u.oid
   WHERE gm.group_id = ?
@@ -517,6 +517,9 @@ const stmtClearGroupMembers = db.prepare(
 );
 const stmtInsertGroupMember = db.prepare(
   "INSERT OR IGNORE INTO group_members (group_id, user_oid, tenant_id, added_by) VALUES (?, ?, ?, ?)"
+);
+const stmtRemoveUserFromAllGroups = db.prepare(
+  "DELETE FROM group_members WHERE user_oid = ? AND tenant_id = ?"
 );
 const stmtGetGroupDomains = db.prepare(
   "SELECT domain FROM group_domain_assignments WHERE group_id = ? ORDER BY domain"
@@ -1068,9 +1071,15 @@ app.put("/api/domain-targets", requireAuth, autoRegister, requireAdminOrAssessor
 
 /* Lightweight user list for group management — accessible to admin + assessor */
 app.get("/api/groups/users", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
-  const users = db.prepare(
-    "SELECT oid, username, display_name, role FROM users WHERE tenant_id = ? ORDER BY display_name, username"
-  ).all(req.user.tenant);
+  const users = db.prepare(`
+    SELECT u.oid, u.username, u.display_name, u.role,
+           g.id AS group_id, g.name AS group_name
+    FROM users u
+    LEFT JOIN group_members gm ON gm.user_oid = u.oid AND gm.tenant_id = u.tenant_id
+    LEFT JOIN groups g ON g.id = gm.group_id
+    WHERE u.tenant_id = ?
+    ORDER BY u.display_name, u.username
+  `).all(req.user.tenant);
   res.json(users);
 });
 
@@ -1124,7 +1133,11 @@ app.put("/api/groups/:id/members", requireAuth, autoRegister, requireAdminOrAsse
   const oids = Array.isArray(req.body.members) ? req.body.members : [];
   db.transaction(() => {
     stmtClearGroupMembers.run(id);
-    for (const oid of oids) stmtInsertGroupMember.run(id, oid, req.user.tenant, req.user.oid);
+    for (const oid of oids) {
+      // Enforce one-to-one: remove user from any other group before adding here
+      stmtRemoveUserFromAllGroups.run(oid, req.user.tenant);
+      stmtInsertGroupMember.run(id, oid, req.user.tenant, req.user.oid);
+    }
   })();
   res.json({ ok: true });
 });
