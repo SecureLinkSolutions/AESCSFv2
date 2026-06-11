@@ -207,6 +207,41 @@ db.exec(`
     updated_by  TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (tenant_id, domain)
   );
+
+  CREATE TABLE IF NOT EXISTS groups (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id   TEXT    NOT NULL DEFAULT '',
+    name        TEXT    NOT NULL,
+    description TEXT    NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    created_by  TEXT    NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS idx_groups_tenant ON groups(tenant_id);
+
+  CREATE TABLE IF NOT EXISTS group_members (
+    group_id  INTEGER NOT NULL,
+    user_oid  TEXT    NOT NULL,
+    tenant_id TEXT    NOT NULL DEFAULT '',
+    added_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    added_by  TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (group_id, user_oid)
+  );
+  CREATE INDEX IF NOT EXISTS idx_gm_group ON group_members(group_id);
+  CREATE INDEX IF NOT EXISTS idx_gm_user  ON group_members(user_oid, tenant_id);
+
+  CREATE TABLE IF NOT EXISTS group_domain_assignments (
+    group_id  INTEGER NOT NULL,
+    domain    TEXT    NOT NULL,
+    tenant_id TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (group_id, domain)
+  );
+
+  CREATE TABLE IF NOT EXISTS group_objective_assignments (
+    group_id     INTEGER NOT NULL,
+    objective_id TEXT    NOT NULL,
+    tenant_id    TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (group_id, objective_id)
+  );
 `);
 
 /* Migration: add scope column to snapshots if it doesn't exist yet */
@@ -454,6 +489,76 @@ const stmtDeleteDomainTarget = db.prepare(
   "DELETE FROM domain_targets WHERE tenant_id = ? AND domain = ?"
 );
 
+/* Groups */
+const stmtListGroups = db.prepare(
+  "SELECT id, name, description, created_at FROM groups WHERE tenant_id = ? ORDER BY name"
+);
+const stmtGetGroup = db.prepare(
+  "SELECT id, name, description, created_at, created_by FROM groups WHERE id = ? AND tenant_id = ?"
+);
+const stmtInsertGroup = db.prepare(
+  "INSERT INTO groups (tenant_id, name, description, created_by) VALUES (?, ?, ?, ?)"
+);
+const stmtUpdateGroup = db.prepare(
+  "UPDATE groups SET name = ?, description = ? WHERE id = ? AND tenant_id = ?"
+);
+const stmtDeleteGroup = db.prepare(
+  "DELETE FROM groups WHERE id = ? AND tenant_id = ?"
+);
+const stmtGetGroupMembers = db.prepare(`
+  SELECT gm.user_oid, u.display_name, u.username, u.role
+  FROM group_members gm
+  LEFT JOIN users u ON gm.user_oid = u.oid
+  WHERE gm.group_id = ?
+  ORDER BY u.display_name
+`);
+const stmtClearGroupMembers = db.prepare(
+  "DELETE FROM group_members WHERE group_id = ?"
+);
+const stmtInsertGroupMember = db.prepare(
+  "INSERT OR IGNORE INTO group_members (group_id, user_oid, tenant_id, added_by) VALUES (?, ?, ?, ?)"
+);
+const stmtGetGroupDomains = db.prepare(
+  "SELECT domain FROM group_domain_assignments WHERE group_id = ? ORDER BY domain"
+);
+const stmtClearGroupDomains = db.prepare(
+  "DELETE FROM group_domain_assignments WHERE group_id = ?"
+);
+const stmtInsertGroupDomain = db.prepare(
+  "INSERT OR IGNORE INTO group_domain_assignments (group_id, domain, tenant_id) VALUES (?, ?, ?)"
+);
+const stmtGetGroupObjectives = db.prepare(
+  "SELECT objective_id FROM group_objective_assignments WHERE group_id = ? ORDER BY objective_id"
+);
+const stmtClearGroupObjectives = db.prepare(
+  "DELETE FROM group_objective_assignments WHERE group_id = ?"
+);
+const stmtInsertGroupObjective = db.prepare(
+  "INSERT OR IGNORE INTO group_objective_assignments (group_id, objective_id, tenant_id) VALUES (?, ?, ?)"
+);
+const stmtGetGroupDomainsByUser = db.prepare(`
+  SELECT DISTINCT gda.domain
+  FROM group_members gm
+  JOIN group_domain_assignments gda ON gm.group_id = gda.group_id
+  WHERE gm.user_oid = ?
+`);
+const stmtGetGroupObjectivesByUser = db.prepare(`
+  SELECT DISTINCT goa.objective_id
+  FROM group_members gm
+  JOIN group_objective_assignments goa ON gm.group_id = goa.group_id
+  WHERE gm.user_oid = ?
+`);
+const stmtGetUserGroups = db.prepare(`
+  SELECT g.id, g.name
+  FROM groups g
+  JOIN group_members gm ON g.id = gm.group_id
+  WHERE gm.user_oid = ? AND g.tenant_id = ?
+  ORDER BY g.name
+`);
+const stmtGetGroupMemberCount = db.prepare(
+  "SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?"
+);
+
 const stmtGetAllConfidence = db.prepare(
   "SELECT practice_id, rating, notes, updated_at FROM confidence_ratings WHERE tenant_id = ?"
 );
@@ -596,11 +701,15 @@ function practiceObjectiveId(practiceId) {
 }
 
 function getUserObjectiveAssignments(oid) {
-  return stmtGetObjectiveAssignments.all(oid).map(r => r.objective_id);
+  const personal = stmtGetObjectiveAssignments.all(oid).map(r => r.objective_id);
+  const fromGroups = stmtGetGroupObjectivesByUser.all(oid).map(r => r.objective_id);
+  return [...new Set([...personal, ...fromGroups])];
 }
 
 function getUserAssignments(oid) {
-  return stmtGetAssignments.all(oid).map(r => r.domain);
+  const personal = stmtGetAssignments.all(oid).map(r => r.domain);
+  const fromGroups = stmtGetGroupDomainsByUser.all(oid).map(r => r.domain);
+  return [...new Set([...personal, ...fromGroups])];
 }
 
 function buildMergedAssessment() {
@@ -847,13 +956,16 @@ app.get("/api/health", (_req, res) => {
 app.get("/api/me", requireAuth, autoRegister, (req, res) => {
   const domains    = getUserAssignments(req.user.oid);
   const objectives = getUserObjectiveAssignments(req.user.oid);
+  const groups     = stmtGetUserGroups.all(req.user.oid, req.user.tenant)
+    .map(g => ({ id: g.id, name: g.name }));
   res.json({
     oid:         req.dbUser.oid,
     username:    req.dbUser.username,
     displayName: req.dbUser.display_name,
     role:        req.dbUser.role,
     domains,
-    objectives
+    objectives,
+    groups
   });
 });
 
@@ -950,6 +1062,119 @@ app.put("/api/domain-targets", requireAuth, autoRegister, requireAdminOrAssessor
   });
   upsertTx();
   res.json({ ok: true });
+});
+
+/* ── Groups (Business Units) ─────────────────────────────────────────────── */
+
+/* Lightweight user list for group management — accessible to admin + assessor */
+app.get("/api/groups/users", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const users = db.prepare(
+    "SELECT oid, username, display_name, role FROM users WHERE tenant_id = ? ORDER BY display_name, username"
+  ).all(req.user.tenant);
+  res.json(users);
+});
+
+app.get("/api/groups", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const groups = stmtListGroups.all(req.user.tenant);
+  res.json(groups.map(g => ({
+    ...g,
+    memberCount: stmtGetGroupMemberCount.get(g.id)?.n || 0,
+    domains:     stmtGetGroupDomains.all(g.id).map(r => r.domain),
+    objectives:  stmtGetGroupObjectives.all(g.id).map(r => r.objective_id)
+  })));
+});
+
+app.post("/api/groups", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const { name, description = "" } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: "Name is required" });
+  const info = stmtInsertGroup.run(req.user.tenant, name.trim(), description.trim(), req.user.oid);
+  res.json({ id: Number(info.lastInsertRowid), name: name.trim(), description: description.trim() });
+});
+
+app.get("/api/groups/:id", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const id    = parseInt(req.params.id);
+  const group = stmtGetGroup.get(id, req.user.tenant);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+  res.json({
+    ...group,
+    members:    stmtGetGroupMembers.all(id),
+    domains:    stmtGetGroupDomains.all(id).map(r => r.domain),
+    objectives: stmtGetGroupObjectives.all(id).map(r => r.objective_id)
+  });
+});
+
+app.put("/api/groups/:id", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const id    = parseInt(req.params.id);
+  const { name, description = "" } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: "Name is required" });
+  const info = stmtUpdateGroup.run(name.trim(), description.trim(), id, req.user.tenant);
+  if (info.changes === 0) return res.status(404).json({ error: "Group not found" });
+  res.json({ ok: true });
+});
+
+app.delete("/api/groups/:id", requireAuth, autoRegister, requireAdmin, (req, res) => {
+  stmtDeleteGroup.run(parseInt(req.params.id), req.user.tenant);
+  res.json({ ok: true });
+});
+
+app.put("/api/groups/:id/members", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const id    = parseInt(req.params.id);
+  const group = stmtGetGroup.get(id, req.user.tenant);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+  const oids = Array.isArray(req.body.oids) ? req.body.oids : [];
+  db.transaction(() => {
+    stmtClearGroupMembers.run(id);
+    for (const oid of oids) stmtInsertGroupMember.run(id, oid, req.user.tenant, req.user.oid);
+  })();
+  res.json({ ok: true });
+});
+
+app.put("/api/groups/:id/domains", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const id    = parseInt(req.params.id);
+  const group = stmtGetGroup.get(id, req.user.tenant);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+  const domains = Array.isArray(req.body.domains) ? req.body.domains : [];
+  db.transaction(() => {
+    stmtClearGroupDomains.run(id);
+    for (const d of domains) stmtInsertGroupDomain.run(id, d, req.user.tenant);
+  })();
+  res.json({ ok: true });
+});
+
+app.put("/api/groups/:id/objectives", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const id    = parseInt(req.params.id);
+  const group = stmtGetGroup.get(id, req.user.tenant);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+  const objectives = Array.isArray(req.body.objectives) ? req.body.objectives : [];
+  db.transaction(() => {
+    stmtClearGroupObjectives.run(id);
+    for (const o of objectives) stmtInsertGroupObjective.run(id, o, req.user.tenant);
+  })();
+  res.json({ ok: true });
+});
+
+app.get("/api/groups/:id/results", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const id    = parseInt(req.params.id);
+  const group = stmtGetGroup.get(id, req.user.tenant);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+  const members = stmtGetGroupMembers.all(id);
+  const memberAssessments = {};
+  for (const m of members) {
+    const row = stmtGetAssessment.get(m.user_oid, req.user.tenant);
+    memberAssessments[m.user_oid] = {
+      displayName: m.display_name || m.username || m.user_oid,
+      data: row ? (JSON.parse(row.data)?.assessments || {}) : {}
+    };
+  }
+  res.json({
+    id:           group.id,
+    name:         group.name,
+    description:  group.description,
+    members:      members.map(m => ({ oid: m.user_oid, displayName: m.display_name || m.username })),
+    domains:      stmtGetGroupDomains.all(id).map(r => r.domain),
+    objectives:   stmtGetGroupObjectives.all(id).map(r => r.objective_id),
+    assessments:  memberAssessments
+  });
 });
 
 /* ── Admin routes ────────────────────────────────────────────────────────── */

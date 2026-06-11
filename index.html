@@ -1393,6 +1393,158 @@
       font-size: 0.7rem;
     }
 
+    /* ── Groups page ──────────────────────────────────────────────────── */
+    .groups-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .groups-layout { grid-template-columns: 1fr; }
+    }
+    .groups-list-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .group-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .group-card:hover { border-color: var(--primary); background: var(--primary-soft); }
+    .group-card.selected { border-color: var(--primary); background: var(--primary-soft); box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+    .group-card-name { font-size: 0.9rem; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .group-card-meta { font-size: 0.78rem; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+    .group-card-meta span { display: flex; align-items: center; gap: 4px; }
+    .groups-detail-col { min-width: 0; }
+    .group-detail-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .group-detail-header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .group-detail-title { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+    .group-detail-desc  { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+    .group-detail-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .group-detail-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      gap: 0;
+    }
+    .group-detail-tab {
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--muted);
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.12s, border-color 0.12s;
+    }
+    .group-detail-tab:hover { color: var(--text); }
+    .group-detail-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .group-detail-body { padding: 20px; }
+    .group-section-title { font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+    .group-member-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .group-member-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.875rem;
+    }
+    .group-member-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--primary-2));
+      color: #fff; font-size: 0.75rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .group-member-name { flex: 1; font-weight: 500; color: var(--text); }
+    .group-member-role { font-size: 0.72rem; color: var(--muted); }
+    .group-assignment-grid {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;
+    }
+    .group-assignment-chip {
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 0.78rem; font-weight: 500;
+      background: var(--primary-soft); color: var(--primary);
+      border: 1px solid rgba(59,130,246,0.2);
+    }
+    .group-assignment-chip.objective {
+      background: rgba(168,85,247,0.1); color: #a855f7;
+      border-color: rgba(168,85,247,0.2);
+    }
+    .group-results-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .group-results-table th {
+      text-align: left; padding: 8px 12px; font-size: 0.75rem; font-weight: 600;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border); background: var(--bg);
+    }
+    .group-results-table td {
+      padding: 9px 12px; border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .group-results-table tr:last-child td { border-bottom: none; }
+    .group-results-table tr:hover td { background: var(--primary-soft); }
+    .group-results-domain-header td {
+      background: var(--bg); font-weight: 700; color: var(--text);
+      font-size: 0.8rem; padding: 10px 12px 6px;
+    }
+    .group-member-user-select {
+      width: 100%; max-height: 220px; overflow-y: auto;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--bg); margin-bottom: 12px;
+    }
+    .group-member-user-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 14px; cursor: pointer;
+      transition: background 0.1s;
+    }
+    .group-member-user-row:hover { background: var(--primary-soft); }
+    .group-member-user-row label { flex: 1; cursor: pointer; font-size: 0.875rem; }
+    .group-domain-checkbox-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 6px; margin-bottom: 12px;
+    }
+    .group-domain-check-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; border-radius: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+      cursor: pointer; font-size: 0.85rem;
+      transition: background 0.1s;
+    }
+    .group-domain-check-item:hover { background: var(--primary-soft); }
+    .groups-loading { padding: 28px; text-align: center; color: var(--muted); font-size: 0.875rem; }
+    .groups-empty-detail { padding: 60px 20px; text-align: center; }
+    .group-edit-form { display: flex; flex-direction: column; gap: 12px; }
+    .group-edit-form .field input, .group-edit-form .field textarea {
+      width: 100%; box-sizing: border-box;
+    }
+
+    /* Dark/cyber overrides for groups */
+    html[data-theme="dark"]  .group-card                 { background: var(--surface); }
+    html[data-theme="dark"]  .group-detail-panel         { background: var(--surface); }
+    html[data-theme="cyber"] .group-card:hover           { border-color: #00e5a0; background: rgba(0,229,160,0.06); }
+    html[data-theme="cyber"] .group-card.selected        { border-color: #00e5a0; background: rgba(0,229,160,0.08); }
+
     .empty {
       padding: 28px;
       text-align: center;
@@ -2115,6 +2267,10 @@
         Comparison
       </button>
       <div class="sidebar-section-label" id="sidebarAdminLabel" style="display:none;">Admin</div>
+      <button class="sidebar-nav-item" data-page-tab="groups" id="sidebarGroupsTab" style="display:none;" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="6" height="14" rx="1"/><rect x="9" y="3" width="6" height="18" rx="1"/><rect x="16" y="10" width="6" height="11" rx="1"/></svg>
+        Groups
+      </button>
       <button class="sidebar-nav-item" data-page-tab="admin" id="sidebarAdminTab" style="display:none;" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         Admin
@@ -2742,6 +2898,34 @@
     </div>
 
   </div>
+
+    <!-- ── Groups / Business Units page ──────────────────────────────── -->
+    <div id="groupsPage" class="page">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1>Groups</h1>
+          <p>Manage business units, assign domains and objectives, and view aggregated assessment results.</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="primary" id="createGroupBtn" type="button">+ Create Group</button>
+        </div>
+      </div>
+      <div class="groups-layout">
+        <div class="groups-list-col" id="groupsListCol">
+          <div class="groups-loading">Loading groups…</div>
+        </div>
+        <div class="groups-detail-col" id="groupsDetailCol">
+          <div class="groups-empty-detail">
+            <div class="empty-state">
+              <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="6" height="14" rx="1"/><rect x="9" y="3" width="6" height="18" rx="1"/><rect x="16" y="10" width="6" height="11" rx="1"/></svg></div>
+              <h3 class="empty-state-title">Select a group</h3>
+              <p class="empty-state-body">Choose a group from the list to manage members, assignments, and view results.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /#main-app -->
 
   <!-- ── Command Palette ──────────────────────────────────────────────── -->
@@ -2987,8 +3171,8 @@
     function setActivePage(page) {
       const role = window.__AESCSF_RBAC__?.role || "user";
       const PAGE_ACCESS = {
-        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit"]),
-        assessor:  new Set(["assessment","timeline"]),
+        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups"]),
+        assessor:  new Set(["assessment","timeline","groups"]),
         user:      new Set(["assessment","timeline"]),
         dashboard: new Set(["dashboard","comparison"]),
       };
@@ -3002,6 +3186,8 @@
       if (adminPage) adminPage.classList.toggle("active", page === "admin");
       const auditPage = document.getElementById("auditPage");
       if (auditPage) auditPage.classList.toggle("active", page === "audit");
+      const groupsPage = document.getElementById("groupsPage");
+      if (groupsPage) groupsPage.classList.toggle("active", page === "groups");
       pageTabs.forEach(tab => {
         tab.classList.toggle("active", tab.dataset.pageTab === page);
       });
@@ -3018,6 +3204,7 @@
       if (page === "comparison") renderComparison();
       if (page === "admin")      renderAdminPanel();
       if (page === "audit")      renderAuditLog();
+      if (page === "groups")     renderGroupsPage();
     }
 
     function formatDate(dateString) {
@@ -3821,7 +4008,7 @@
         targets[input.dataset.domain] = input.value;
       });
       try {
-        const r = await apiFetch("/domain-targets", {
+        const r = await adminFetch("/domain-targets", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(targets)
@@ -5565,6 +5752,7 @@ function buildPdfDomainRows(rows) {
         sidebarTimelineTab:    canEdit,
         sidebarDashboardTab:   isAdmin || isDashOnly,
         sidebarComparisonTab:  isAdmin || isDashOnly,
+        sidebarGroupsTab:      isAdmin || role === "assessor",
         sidebarAdminTab:       isAdmin,
         sidebarAuditTab:       isAdmin,
       };
@@ -5587,8 +5775,8 @@ function buildPdfDomainRows(rows) {
 
       /* Redirect to first allowed page if current page is not permitted */
       const PAGE_ACCESS = {
-        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit"]),
-        assessor:  new Set(["assessment","timeline"]),
+        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups"]),
+        assessor:  new Set(["assessment","timeline","groups"]),
         user:      new Set(["assessment","timeline"]),
         dashboard: new Set(["dashboard","comparison"]),
       };
@@ -6429,6 +6617,455 @@ function buildPdfDomainRows(rows) {
         await uploadFile(practiceId, file);
       }
       event.target.value = "";
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       Groups / Business Units
+       ══════════════════════════════════════════════════════════════════ */
+
+    let _groupsState = { groups: [], selectedId: null, activeTab: "members" };
+
+    function _allDomains() {
+      return [...new Set(PRACTICES.map(p => p.domain))].sort();
+    }
+    function _allObjectives() {
+      const map = new Map();
+      PRACTICES.forEach(p => { if (!map.has(p.objectiveId)) map.set(p.objectiveId, p.objective); });
+      return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    }
+
+    async function renderGroupsPage() {
+      const listCol = document.getElementById("groupsListCol");
+      if (!listCol) return;
+      listCol.innerHTML = `<div class="groups-loading">Loading groups…</div>`;
+      try {
+        const r = await adminFetch("/groups");
+        if (!r.ok) throw new Error(await r.text());
+        _groupsState.groups = await r.json();
+      } catch (e) {
+        listCol.innerHTML = `<div class="groups-loading" style="color:var(--danger)">Failed to load groups: ${escapeHtml(e.message)}</div>`;
+        return;
+      }
+      _renderGroupList();
+      if (_groupsState.selectedId) {
+        _renderGroupDetail(_groupsState.selectedId);
+      } else {
+        document.getElementById("groupsDetailCol").innerHTML = `
+          <div class="groups-empty-detail">
+            <div class="empty-state">
+              <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="6" height="14" rx="1"/><rect x="9" y="3" width="6" height="18" rx="1"/><rect x="16" y="10" width="6" height="11" rx="1"/></svg></div>
+              <h3 class="empty-state-title">Select a group</h3>
+              <p class="empty-state-body">Choose a group from the list to manage members, assignments, and view results.</p>
+            </div>
+          </div>`;
+      }
+
+      document.getElementById("createGroupBtn")?.addEventListener("click", _openCreateGroupModal);
+    }
+
+    function _renderGroupList() {
+      const listCol = document.getElementById("groupsListCol");
+      if (!listCol) return;
+      const { groups, selectedId } = _groupsState;
+      if (!groups.length) {
+        listCol.innerHTML = `
+          <div class="empty-state" style="padding:40px 20px">
+            <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="6" height="14" rx="1"/><rect x="9" y="3" width="6" height="18" rx="1"/><rect x="16" y="10" width="6" height="11" rx="1"/></svg></div>
+            <h3 class="empty-state-title">No groups yet</h3>
+            <p class="empty-state-body">Create your first business unit to get started.</p>
+          </div>`;
+        return;
+      }
+      listCol.innerHTML = groups.map(g => `
+        <div class="group-card${g.id === selectedId ? " selected" : ""}" data-group-id="${g.id}" role="button" tabindex="0">
+          <div class="group-card-name">${escapeHtml(g.name)}</div>
+          <div class="group-card-meta">
+            <span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 00-16 0"/></svg>
+              ${g.memberCount} member${g.memberCount !== 1 ? "s" : ""}
+            </span>
+            <span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+              ${g.domains.length} domain${g.domains.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>`).join("");
+
+      listCol.querySelectorAll(".group-card").forEach(card => {
+        const handler = () => {
+          _groupsState.selectedId = parseInt(card.dataset.groupId, 10);
+          listCol.querySelectorAll(".group-card").forEach(c => c.classList.remove("selected"));
+          card.classList.add("selected");
+          _groupsState.activeTab = "members";
+          _renderGroupDetail(_groupsState.selectedId);
+        };
+        card.addEventListener("click", handler);
+        card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") handler(); });
+      });
+    }
+
+    async function _renderGroupDetail(groupId) {
+      const detailCol = document.getElementById("groupsDetailCol");
+      if (!detailCol) return;
+      detailCol.innerHTML = `<div class="groups-loading">Loading…</div>`;
+      let group;
+      try {
+        const r = await adminFetch(`/groups/${groupId}`);
+        if (!r.ok) throw new Error(await r.text());
+        group = await r.json();
+      } catch (e) {
+        detailCol.innerHTML = `<div class="groups-loading" style="color:var(--danger)">Failed: ${escapeHtml(e.message)}</div>`;
+        return;
+      }
+
+      const activeTab = _groupsState.activeTab || "members";
+      detailCol.innerHTML = `
+        <div class="group-detail-panel">
+          <div class="group-detail-header">
+            <div>
+              <div class="group-detail-title">${escapeHtml(group.name)}</div>
+              ${group.description ? `<div class="group-detail-desc">${escapeHtml(group.description)}</div>` : ""}
+            </div>
+            <div class="group-detail-actions">
+              <button class="secondary" style="font-size:0.8rem;padding:6px 12px" id="gdEditBtn">Edit</button>
+              <button class="secondary" style="font-size:0.8rem;padding:6px 12px;color:var(--danger);border-color:var(--danger)" id="gdDeleteBtn">Delete</button>
+            </div>
+          </div>
+          <div class="group-detail-tabs">
+            <button class="group-detail-tab${activeTab==="members"?" active":""}" data-gtab="members">Members (${group.members.length})</button>
+            <button class="group-detail-tab${activeTab==="domains"?" active":""}" data-gtab="domains">Domains</button>
+            <button class="group-detail-tab${activeTab==="objectives"?" active":""}" data-gtab="objectives">Objectives</button>
+            <button class="group-detail-tab${activeTab==="results"?" active":""}" data-gtab="results">Results</button>
+          </div>
+          <div class="group-detail-body" id="groupDetailBody"></div>
+        </div>`;
+
+      detailCol.querySelectorAll(".group-detail-tab").forEach(tab => {
+        tab.addEventListener("click", async () => {
+          _groupsState.activeTab = tab.dataset.gtab;
+          detailCol.querySelectorAll(".group-detail-tab").forEach(t => t.classList.toggle("active", t === tab));
+          await _renderGroupTabContent(group, _groupsState.activeTab);
+        });
+      });
+      detailCol.getElementById?.("gdEditBtn");
+      document.getElementById("gdEditBtn")?.addEventListener("click", () => _openEditGroupModal(group));
+      document.getElementById("gdDeleteBtn")?.addEventListener("click", () => _deleteGroup(group));
+      await _renderGroupTabContent(group, activeTab);
+    }
+
+    async function _renderGroupTabContent(group, tab) {
+      const body = document.getElementById("groupDetailBody");
+      if (!body) return;
+      if (tab === "members")         await _renderMembersTab(body, group);
+      else if (tab === "domains")    _renderDomainsTab(body, group);
+      else if (tab === "objectives") _renderObjectivesTab(body, group);
+      else if (tab === "results")    await _renderResultsTab(body, group);
+    }
+
+    async function _renderMembersTab(body, group) {
+      await _ensureAllUsersLoaded();
+      const memberOids = new Set(group.members.map(m => m.oid));
+      const allUsers   = window.__AESCSF_ALL_USERS__ || [];
+      body.innerHTML = `
+        <div class="group-section-title">Current members</div>
+        <div class="group-member-list" id="gdMemberList">
+          ${group.members.length ? group.members.map(m => `
+            <div class="group-member-item">
+              <div class="group-member-avatar">${escapeHtml((m.display_name || m.username || "?")[0].toUpperCase())}</div>
+              <div class="group-member-name">${escapeHtml(m.display_name || m.username)}</div>
+              <div class="group-member-role"><span class="badge role-badge ${escapeHtml(m.role)}">${escapeHtml(m.role)}</span></div>
+            </div>`).join("") : `<div class="groups-loading">No members yet.</div>`}
+        </div>
+        ${allUsers.length ? `
+        <div class="group-section-title" style="margin-top:16px">Add / remove members</div>
+        <div class="group-member-user-select" id="gdUserSelect">
+          ${allUsers.filter(u => u.role !== "dashboard").map(u => `
+            <div class="group-member-user-row">
+              <input type="checkbox" id="gdUser_${escapeHtml(u.oid)}" value="${escapeHtml(u.oid)}" ${memberOids.has(u.oid) ? "checked" : ""}>
+              <label for="gdUser_${escapeHtml(u.oid)}">${escapeHtml(u.display_name || u.username)} <span style="color:var(--muted);font-size:.78rem">(${escapeHtml(u.role)})</span></label>
+            </div>`).join("")}
+        </div>
+        <button class="primary" style="font-size:.85rem" id="gdSaveMembersBtn">Save Members</button>` : ""}`;
+
+      document.getElementById("gdSaveMembersBtn")?.addEventListener("click", async () => {
+        const checked = [...body.querySelectorAll("#gdUserSelect input:checked")].map(i => i.value);
+        await _saveGroupMembers(group.id, checked);
+      });
+    }
+
+    function _renderDomainsTab(body, group) {
+      const assignedDomains = new Set(group.domains);
+      body.innerHTML = `
+        <div class="group-section-title">Assigned domains</div>
+        <div class="group-domain-checkbox-grid" id="gdDomainGrid">
+          ${_allDomains().map(d => `
+            <label class="group-domain-check-item">
+              <input type="checkbox" value="${escapeHtml(d)}" ${assignedDomains.has(d) ? "checked" : ""}>
+              ${escapeHtml(d)}
+            </label>`).join("")}
+        </div>
+        <button class="primary" style="font-size:.85rem" id="gdSaveDomainsBtn">Save Domain Assignments</button>
+        <p style="font-size:.8rem;color:var(--muted);margin-top:8px">Members inherit these domain assignments for their assessment access.</p>`;
+
+      document.getElementById("gdSaveDomainsBtn")?.addEventListener("click", async () => {
+        const checked = [...body.querySelectorAll("#gdDomainGrid input:checked")].map(i => i.value);
+        await _saveGroupDomains(group.id, checked);
+      });
+    }
+
+    function _renderObjectivesTab(body, group) {
+      const assignedObj = new Set(group.objectives);
+      body.innerHTML = `
+        <div class="group-section-title">Assigned objectives (fine-grained)</div>
+        <div class="group-domain-checkbox-grid" id="gdObjGrid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">
+          ${_allObjectives().map(([id, label]) => `
+            <label class="group-domain-check-item" title="${escapeHtml(label)}">
+              <input type="checkbox" value="${escapeHtml(id)}" ${assignedObj.has(id) ? "checked" : ""}>
+              <span><strong>${escapeHtml(id)}</strong><br><span style="font-size:.75rem;color:var(--muted)">${escapeHtml(label.length > 50 ? label.slice(0, 50) + "…" : label)}</span></span>
+            </label>`).join("")}
+        </div>
+        <button class="primary" style="font-size:.85rem;margin-top:8px" id="gdSaveObjBtn">Save Objective Assignments</button>
+        <p style="font-size:.8rem;color:var(--muted);margin-top:8px">Objective assignments are additive to domain assignments.</p>`;
+
+      document.getElementById("gdSaveObjBtn")?.addEventListener("click", async () => {
+        const checked = [...body.querySelectorAll("#gdObjGrid input:checked")].map(i => i.value);
+        await _saveGroupObjectives(group.id, checked);
+      });
+    }
+
+    async function _renderResultsTab(body, group) {
+      body.innerHTML = `<div class="groups-loading">Loading results…</div>`;
+      let data;
+      try {
+        const r = await adminFetch(`/groups/${group.id}/results`);
+        if (!r.ok) throw new Error(await r.text());
+        data = await r.json();
+      } catch (e) {
+        body.innerHTML = `<div class="groups-loading" style="color:var(--danger)">Failed: ${escapeHtml(e.message)}</div>`;
+        return;
+      }
+
+      if (!data.members || !data.members.length) {
+        body.innerHTML = `<div class="groups-loading">No members with assessment data yet.</div>`;
+        return;
+      }
+
+      const memberNames = data.members.map(m => m.display_name || m.username);
+
+      /* Build per-domain sections with practices */
+      const domainMap = new Map();
+      PRACTICES.forEach(p => {
+        if (!domainMap.has(p.domain)) domainMap.set(p.domain, []);
+        domainMap.get(p.domain).push(p);
+      });
+
+      /* Only show domains assigned to this group (or all if none assigned) */
+      const relevantDomains = group.domains.length
+        ? group.domains
+        : [...domainMap.keys()].sort();
+
+      const statusColor = s => {
+        if (["Fully","Yes"].includes(s)) return "var(--success)";
+        if (s === "Largely") return "var(--primary)";
+        if (["Partially","Partial","Present"].includes(s)) return "var(--warning)";
+        return "var(--muted)";
+      };
+
+      let html = `
+        <div style="margin-bottom:12px;font-size:.85rem;color:var(--muted)">
+          Showing aggregated results across <strong>${data.members.length}</strong> member${data.members.length !== 1?"s":""}.
+          Worst-case status shown where members differ.
+        </div>
+        <div style="overflow-x:auto">
+        <table class="group-results-table">
+          <thead>
+            <tr>
+              <th>Practice</th>
+              <th>Aggregated Status</th>
+              ${memberNames.map(n => `<th style="font-size:.72rem">${escapeHtml(n)}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>`;
+
+      const STATUS_RANK = { "Fully":6,"Yes":6,"Largely":5,"Partially":4,"Partial":3,"Present":2,"No":1,"Not":1,"Not Assessed":0 };
+      const worstStatus = statuses => statuses.reduce((worst, s) => {
+        const rank = STATUS_RANK[s] ?? 0;
+        return rank < (STATUS_RANK[worst] ?? 0) ? s : worst;
+      }, statuses[0] || "Not Assessed");
+
+      relevantDomains.forEach(domain => {
+        const practices = domainMap.get(domain) || [];
+        if (!practices.length) return;
+        html += `<tr class="group-results-domain-header"><td colspan="${2 + memberNames.length}">${escapeHtml(domain)}</td></tr>`;
+        practices.forEach(p => {
+          const memberStatuses = data.members.map(m => {
+            const a = (m.assessments || {})[p.practiceId];
+            return a?.status || "Not Assessed";
+          });
+          const aggregated = worstStatus(memberStatuses);
+          html += `<tr>
+            <td>
+              <strong style="font-size:.78rem">${escapeHtml(p.practiceId)}</strong><br>
+              <span style="font-size:.75rem;color:var(--muted)">${escapeHtml(p.practice.length > 80 ? p.practice.slice(0,80)+"…" : p.practice)}</span>
+            </td>
+            <td><span style="color:${statusColor(aggregated)};font-weight:600;font-size:.82rem">${escapeHtml(aggregated)}</span></td>
+            ${memberStatuses.map(s => `<td style="color:${statusColor(s)};font-size:.8rem">${escapeHtml(s)}</td>`).join("")}
+          </tr>`;
+        });
+      });
+
+      html += `</tbody></table></div>`;
+      body.innerHTML = html;
+    }
+
+    async function _saveGroupMembers(groupId, oids) {
+      try {
+        const r = await adminFetch(`/groups/${groupId}/members`, {
+          method: "PUT", body: JSON.stringify({ members: oids })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        await _refreshGroup(groupId);
+        _showGroupToast("Members saved");
+      } catch (e) { alert("Failed to save members: " + e.message); }
+    }
+
+    async function _saveGroupDomains(groupId, domains) {
+      try {
+        const r = await adminFetch(`/groups/${groupId}/domains`, {
+          method: "PUT", body: JSON.stringify({ domains })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        await _refreshGroup(groupId);
+        _showGroupToast("Domain assignments saved");
+      } catch (e) { alert("Failed to save domains: " + e.message); }
+    }
+
+    async function _saveGroupObjectives(groupId, objectives) {
+      try {
+        const r = await adminFetch(`/groups/${groupId}/objectives`, {
+          method: "PUT", body: JSON.stringify({ objectives })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        await _refreshGroup(groupId);
+        _showGroupToast("Objective assignments saved");
+      } catch (e) { alert("Failed to save objectives: " + e.message); }
+    }
+
+    async function _refreshGroup(groupId) {
+      try {
+        const r = await adminFetch("/groups");
+        if (r.ok) _groupsState.groups = await r.json();
+      } catch (_) {}
+      _renderGroupList();
+      await _renderGroupDetail(groupId);
+    }
+
+    async function _deleteGroup(group) {
+      if (!confirm(`Delete group "${group.name}"? This will remove all member assignments. This cannot be undone.`)) return;
+      try {
+        const r = await adminFetch(`/groups/${group.id}`, { method: "DELETE" });
+        if (!r.ok) throw new Error(await r.text());
+        _groupsState.selectedId = null;
+        await renderGroupsPage();
+      } catch (e) { alert("Failed to delete group: " + e.message); }
+    }
+
+    function _openCreateGroupModal() {
+      const existing = document.getElementById("groupFormModal");
+      if (existing) existing.remove();
+      document.body.insertAdjacentHTML("beforeend", `
+        <div id="groupFormModal" style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9998;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
+          <div style="background:var(--surface-strong);border:1px solid var(--border);border-radius:var(--radius-md);width:min(440px,95vw);padding:24px;box-shadow:var(--shadow-lg)">
+            <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:16px">Create Group</h3>
+            <div class="field">
+              <label>Group Name</label>
+              <input type="text" id="gfName" placeholder="e.g. IT Operations" maxlength="80" style="width:100%;box-sizing:border-box">
+            </div>
+            <div class="field" style="margin-top:10px">
+              <label>Description <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+              <textarea id="gfDesc" rows="2" maxlength="300" style="width:100%;box-sizing:border-box"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+              <button class="secondary" id="gfCancelBtn">Cancel</button>
+              <button class="primary" id="gfSaveBtn">Create Group</button>
+            </div>
+          </div>
+        </div>`);
+
+      const modal = document.getElementById("groupFormModal");
+      document.getElementById("gfCancelBtn").addEventListener("click", () => modal.remove());
+      modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+      document.getElementById("gfSaveBtn").addEventListener("click", async () => {
+        const name = document.getElementById("gfName").value.trim();
+        const desc = document.getElementById("gfDesc").value.trim();
+        if (!name) { document.getElementById("gfName").focus(); return; }
+        try {
+          const r = await adminFetch("/groups", { method: "POST", body: JSON.stringify({ name, description: desc }) });
+          if (!r.ok) throw new Error(await r.text());
+          const created = await r.json();
+          modal.remove();
+          _groupsState.selectedId = created.id;
+          _groupsState.activeTab = "members";
+          await renderGroupsPage();
+        } catch (e) { alert("Failed to create group: " + e.message); }
+      });
+      document.getElementById("gfName").focus();
+    }
+
+    function _openEditGroupModal(group) {
+      const existing = document.getElementById("groupFormModal");
+      if (existing) existing.remove();
+      document.body.insertAdjacentHTML("beforeend", `
+        <div id="groupFormModal" style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9998;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
+          <div style="background:var(--surface-strong);border:1px solid var(--border);border-radius:var(--radius-md);width:min(440px,95vw);padding:24px;box-shadow:var(--shadow-lg)">
+            <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:16px">Edit Group</h3>
+            <div class="field">
+              <label>Group Name</label>
+              <input type="text" id="gfName" value="${escapeHtml(group.name)}" maxlength="80" style="width:100%;box-sizing:border-box">
+            </div>
+            <div class="field" style="margin-top:10px">
+              <label>Description</label>
+              <textarea id="gfDesc" rows="2" maxlength="300" style="width:100%;box-sizing:border-box">${escapeHtml(group.description || "")}</textarea>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+              <button class="secondary" id="gfCancelBtn">Cancel</button>
+              <button class="primary" id="gfSaveBtn">Save Changes</button>
+            </div>
+          </div>
+        </div>`);
+
+      const modal = document.getElementById("groupFormModal");
+      document.getElementById("gfCancelBtn").addEventListener("click", () => modal.remove());
+      modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+      document.getElementById("gfSaveBtn").addEventListener("click", async () => {
+        const name = document.getElementById("gfName").value.trim();
+        const desc = document.getElementById("gfDesc").value.trim();
+        if (!name) { document.getElementById("gfName").focus(); return; }
+        try {
+          const r = await adminFetch(`/groups/${group.id}`, { method: "PUT", body: JSON.stringify({ name, description: desc }) });
+          if (!r.ok) throw new Error(await r.text());
+          modal.remove();
+          await _refreshGroup(group.id);
+        } catch (e) { alert("Failed to update group: " + e.message); }
+      });
+      document.getElementById("gfName").focus();
+    }
+
+    function _showGroupToast(msg) {
+      const t = document.createElement("div");
+      t.style.cssText = "position:fixed;bottom:24px;right:24px;background:var(--success);color:#fff;padding:10px 18px;border-radius:8px;font-size:.875rem;font-weight:500;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,.2)";
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2500);
+    }
+
+    /* Load all users for the members tab — cache on window */
+    async function _ensureAllUsersLoaded() {
+      if (window.__AESCSF_ALL_USERS__) return;
+      try {
+        const r = await adminFetch("/groups/users");
+        if (r.ok) window.__AESCSF_ALL_USERS__ = await r.json();
+      } catch (_) {}
     }
 
     async function handleFileDrop(event, practiceId) {
