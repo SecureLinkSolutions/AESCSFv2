@@ -6855,7 +6855,7 @@ function buildPdfDomainRows(rows) {
         return;
       }
 
-      const memberNames = data.members.map(m => m.display_name || m.username);
+      const memberNames = data.members.map(m => m.displayName);
 
       /* Build per-domain sections with practices */
       const domainMap = new Map();
@@ -6904,7 +6904,7 @@ function buildPdfDomainRows(rows) {
         html += `<tr class="group-results-domain-header"><td colspan="${2 + memberNames.length}">${escapeHtml(domain)}</td></tr>`;
         practices.forEach(p => {
           const memberStatuses = data.members.map(m => {
-            const a = (m.assessments || {})[p.practiceId];
+            const a = (data.assessments[m.oid]?.data || {})[p.practiceId];
             return a?.status || "Not Assessed";
           });
           const aggregated = worstStatus(memberStatuses);

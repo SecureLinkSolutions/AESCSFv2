@@ -1121,7 +1121,7 @@ app.put("/api/groups/:id/members", requireAuth, autoRegister, requireAdminOrAsse
   const id    = parseInt(req.params.id);
   const group = stmtGetGroup.get(id, req.user.tenant);
   if (!group) return res.status(404).json({ error: "Group not found" });
-  const oids = Array.isArray(req.body.oids) ? req.body.oids : [];
+  const oids = Array.isArray(req.body.members) ? req.body.members : [];
   db.transaction(() => {
     stmtClearGroupMembers.run(id);
     for (const oid of oids) stmtInsertGroupMember.run(id, oid, req.user.tenant, req.user.oid);
@@ -1160,9 +1160,9 @@ app.get("/api/groups/:id/results", requireAuth, autoRegister, requireAdminOrAsse
   const members = stmtGetGroupMembers.all(id);
   const memberAssessments = {};
   for (const m of members) {
-    const row = stmtGetAssessment.get(m.user_oid, req.user.tenant);
-    memberAssessments[m.user_oid] = {
-      displayName: m.display_name || m.username || m.user_oid,
+    const row = stmtGetAssessment.get(m.oid, req.user.tenant);
+    memberAssessments[m.oid] = {
+      displayName: m.display_name || m.username || m.oid,
       data: row ? (JSON.parse(row.data)?.assessments || {}) : {}
     };
   }
@@ -1170,7 +1170,7 @@ app.get("/api/groups/:id/results", requireAuth, autoRegister, requireAdminOrAsse
     id:           group.id,
     name:         group.name,
     description:  group.description,
-    members:      members.map(m => ({ oid: m.user_oid, displayName: m.display_name || m.username })),
+    members:      members.map(m => ({ oid: m.oid, displayName: m.display_name || m.username })),
     domains:      stmtGetGroupDomains.all(id).map(r => r.domain),
     objectives:   stmtGetGroupObjectives.all(id).map(r => r.objective_id),
     assessments:  memberAssessments
