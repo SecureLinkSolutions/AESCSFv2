@@ -1201,6 +1201,121 @@
       background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(242,251,247,0.96));
     }
 
+    /* MIL criteria assessment panel */
+    .mil-criteria-section {
+      margin: 10px 0 4px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .mil-criteria-summary {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 14px;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      background: var(--surface);
+      color: var(--text);
+    }
+    .mil-criteria-summary::-webkit-details-marker { display: none; }
+    .mil-criteria-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .mil-criteria-hint {
+      font-size: 0.74rem;
+      color: var(--muted);
+      font-weight: 400;
+    }
+    .mil-criteria-body {
+      padding: 10px 14px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .mil-criteria-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .mil-criteria-group-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+    .mil-prereq-note {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .mil-check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 5px 8px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .mil-check-item:hover { background: var(--primary-soft); }
+    .mil-check-item input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+    .mil-check-item span {
+      font-size: 0.84rem;
+      line-height: 1.4;
+      color: var(--text-soft);
+    }
+    .mil-check-item.prereq {
+      background: rgba(245,158,11,0.06);
+      border: 1px solid rgba(245,158,11,0.18);
+    }
+    .mil-check-item.prereq:hover { background: rgba(245,158,11,0.12); }
+    .mil-check-item.prereq input[type="checkbox"] { accent-color: #f59e0b; }
+    .mil-anti-pattern-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 4px 0;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--border);
+    }
+    .mil-anti-pattern-label {
+      font-size: 0.79rem;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .mil-anti-pattern-select {
+      font-size: 0.8rem;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+    }
+    .mil-anti-pattern-badge {
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: #d97706;
+      background: rgba(245,158,11,0.10);
+      border: 1px solid rgba(245,158,11,0.25);
+      border-radius: 6px;
+      padding: 2px 8px;
+    }
+
     /* Domain target date editor */
     .domain-target-editor {
       background: var(--surface);
@@ -2684,7 +2799,9 @@
       gap: "",
       targetDate: "",
       lastReviewed: "",
-      attachments: ""
+      attachments: "",
+      milCriteria: {},
+      antiPattern: "not_present"
     });
 
     function buildInitialState() {
@@ -2953,6 +3070,133 @@
 
     function isCompletedStatus(status) {
       return status === "Fully" || status === "Yes" || status === "Not Present";
+    }
+
+    function calculateMilStatus(practice, mc) {
+      if (!mc || !mc.performed) {
+        return practice.mil === "MIL-1" ? "No" : "Not";
+      }
+      if (practice.mil === "MIL-1") return "Yes";
+      if (practice.mil === "MIL-2") {
+        const met = [mc.mc1, mc.mc2, mc.mc3, mc.mc4].filter(Boolean).length;
+        if (met >= 4) return "Fully";
+        if (met >= 3) return "Largely";
+        return "Partially";
+      }
+      if (practice.mil === "MIL-3") {
+        /* MIL-3 requires performed + all three prerequisites (MC1+MC2+MC3) */
+        if (!mc.mc1 || !mc.mc2 || !mc.mc3) return "Partially";
+        /* Fully = all MC1-9 satisfied */
+        if (mc.mc4 && mc.mc5 && mc.mc6 && mc.mc7 && mc.mc8 && mc.mc9) return "Fully";
+        /* Largely = prerequisites + 3 or more of MC5-9 */
+        const mil3Met = [mc.mc5, mc.mc6, mc.mc7, mc.mc8, mc.mc9].filter(Boolean).length;
+        if (mil3Met >= 3) return "Largely";
+        return "Partially";
+      }
+      return "Not Assessed";
+    }
+
+    function renderMilCriteria(practice, a) {
+      if (isAntiPractice(practice)) return "";
+      const mc = a.milCriteria || {};
+      const ap = a.antiPattern || "not_present";
+
+      const checkItem = (key, label, prereq) => `
+        <label class="mil-check-item${prereq ? " prereq" : ""}">
+          <input type="checkbox" data-mil-criteria="${key}"${mc[key] ? " checked" : ""}>
+          <span>${escapeHtml(label)}</span>
+        </label>`;
+
+      const apHtml = `
+        <div class="mil-anti-pattern-row">
+          <span class="mil-anti-pattern-label">Anti-Pattern:</span>
+          <select class="mil-anti-pattern-select" data-mil-criteria="antiPattern">
+            <option value="not_present"${ap === "not_present" ? " selected" : ""}>Not Present</option>
+            <option value="present_limited"${ap === "present_limited" ? " selected" : ""}>Present — Limited Context</option>
+            <option value="present_pervasive"${ap === "present_pervasive" ? " selected" : ""}>Present — Pervasive</option>
+          </select>
+          ${ap !== "not_present" ? `<span class="mil-anti-pattern-badge">&#9888; Anti-pattern flagged</span>` : ""}
+        </div>`;
+
+      if (practice.mil === "MIL-1") {
+        return `
+          <details class="mil-criteria-section">
+            <summary class="mil-criteria-summary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              <span class="mil-criteria-title">MIL-1 Criteria</span>
+              <span class="mil-criteria-hint">Binary — practice performed (even if ad-hoc)</span>
+            </summary>
+            <div class="mil-criteria-body">
+              <div class="mil-criteria-group">
+                ${checkItem("performed", "Practice is performed (even if ad-hoc and undocumented)")}
+              </div>
+              ${apHtml}
+            </div>
+          </details>`;
+      }
+
+      if (practice.mil === "MIL-2") {
+        return `
+          <details class="mil-criteria-section">
+            <summary class="mil-criteria-summary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              <span class="mil-criteria-title">MIL-2 Criteria</span>
+              <span class="mil-criteria-hint">Performed + Management Characteristics 1–4</span>
+            </summary>
+            <div class="mil-criteria-body">
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Performance</div>
+                ${checkItem("performed", "Practice is performed")}
+              </div>
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Management Characteristics</div>
+                ${checkItem("mc1", "1. The practice is documented")}
+                ${checkItem("mc2", "2. Stakeholders are identified and involved")}
+                ${checkItem("mc3", "3. Adequate resources are allocated (people, funding, tools)")}
+                ${checkItem("mc4", "4. Standards / guidelines have been identified to guide implementation")}
+              </div>
+              ${apHtml}
+            </div>
+          </details>`;
+      }
+
+      if (practice.mil === "MIL-3") {
+        return `
+          <details class="mil-criteria-section">
+            <summary class="mil-criteria-summary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              <span class="mil-criteria-title">MIL-3 Criteria</span>
+              <span class="mil-criteria-hint">Performed + MIL-2 prerequisites + Management Characteristics 5–9</span>
+            </summary>
+            <div class="mil-criteria-body">
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Performance</div>
+                ${checkItem("performed", "Practice is performed")}
+              </div>
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">MIL-2 Prerequisites <span class="mil-prereq-note">(all three required to reach MIL-3)</span></div>
+                ${checkItem("mc1", "1. The practice is documented", true)}
+                ${checkItem("mc2", "2. Stakeholders are identified and involved", true)}
+                ${checkItem("mc3", "3. Adequate resources are allocated (people, funding, tools)", true)}
+              </div>
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Management Characteristics — MIL-2</div>
+                ${checkItem("mc4", "4. Standards / guidelines have been identified")}
+              </div>
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Management Characteristics — MIL-3</div>
+                ${checkItem("mc5", "5. Activities are guided by policies or organisational directives")}
+                ${checkItem("mc6", "6. Personnel have adequate skills and knowledge")}
+                ${checkItem("mc7", "7. Policies include compliance requirements for specified standards")}
+                ${checkItem("mc8", "8. Responsibility and authority is formally assigned to personnel")}
+                ${checkItem("mc9", "9. Activities are periodically reviewed for policy conformance")}
+              </div>
+              ${apHtml}
+            </div>
+          </details>`;
+      }
+
+      return "";
     }
 
     function getStatusOptions(practice) {
@@ -3355,6 +3599,8 @@
           </div>
 
           <div class="context">${escapeHtml(practice.context)}</div>
+
+          ${renderMilCriteria(practice, a)}
 
           ${isPrefilled ? `<div class="prefill-notice"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Pre-filled from endorsed version (${escapeHtml(endorsed.endorsed_by || "admin")}, ${new Date(endorsed.endorsed_at * 1000).toLocaleDateString("en-AU")}). Edit and save to record your own assessment.</div>` : ""}
 
@@ -4397,6 +4643,45 @@ function buildPdfDomainRows(rows) {
           renderTimeline();
         }
         /* Text fields: handled by input event above */
+      });
+
+      /* MIL criteria checkboxes and anti-pattern select */
+      app.addEventListener("change", e => {
+        const criteriaEl = e.target.closest("[data-mil-criteria]");
+        if (!criteriaEl) return;
+        const card = criteriaEl.closest(".practice-card");
+        if (!card) return;
+        const practiceId = card.dataset.practiceId;
+        const practice   = PRACTICES.find(p => p.practiceId === practiceId);
+        if (!practice) return;
+        if (!state.assessments[practiceId]) state.assessments[practiceId] = defaultAssessment();
+        if (!state.assessments[practiceId].milCriteria) state.assessments[practiceId].milCriteria = {};
+
+        const key = criteriaEl.dataset.milCriteria;
+        if (key === "antiPattern") {
+          state.assessments[practiceId].antiPattern = criteriaEl.value;
+          /* Toggle badge live without re-rendering the whole card */
+          const row = criteriaEl.closest(".mil-anti-pattern-row");
+          const existingBadge = row?.querySelector(".mil-anti-pattern-badge");
+          if (criteriaEl.value !== "not_present") {
+            if (!existingBadge && row) row.insertAdjacentHTML("beforeend", `<span class="mil-anti-pattern-badge">&#9888; Anti-pattern flagged</span>`);
+          } else {
+            existingBadge?.remove();
+          }
+        } else {
+          state.assessments[practiceId].milCriteria[key] = criteriaEl.checked;
+          const newStatus = calculateMilStatus(practice, state.assessments[practiceId].milCriteria);
+          state.assessments[practiceId].status = newStatus;
+          const statusSel = card.querySelector("[data-field='status']");
+          if (statusSel) {
+            statusSel.value = newStatus;
+            statusSel.className = `status-select ${statusClass(newStatus)}`;
+          }
+          card.className = `practice-card ${statusClass(newStatus)}`;
+          updateSummary();
+          renderDashboard();
+        }
+        saveState();
       });
 
       app.addEventListener("focusout", e => {
