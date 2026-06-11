@@ -2813,7 +2813,7 @@
           <div class="timeline-toolbar">
             <div>
               <h2 style="margin:0 0 6px 0;">Multi-Respondent Responses</h2>
-              <div class="footer-note" style="margin-top:0;">Side-by-side view of all assigned users' independent responses per practice.</div>
+              <div class="footer-note" style="margin-top:0;">Group-aggregated view — worst-case compliance status per practice per business unit. Expand a group to see individual member responses.</div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <select id="responseDomainFilter" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.85rem;"><option value="">All domains</option></select>
@@ -6000,38 +6000,42 @@ function buildPdfDomainRows(rows) {
       if (!container) return;
       container.innerHTML = `<div class="audit-empty">Loading…</div>`;
       try {
-        /* Refresh endorsements so changed_since badges are current */
-        const [respResp, endResp] = await Promise.all([
-          adminFetch("/admin/responses"),
-          adminFetch("/endorsements")
+        const [grpResp, grpEndResp] = await Promise.all([
+          adminFetch("/admin/group-responses"),
+          adminFetch("/admin/group-endorsements")
         ]);
-        if (endResp.ok) window.__AESCSF_ENDORSEMENTS__ = await endResp.json();
-        if (!respResp.ok) { container.innerHTML = `<div class="audit-empty">Failed to load responses (${respResp.status})</div>`; return; }
-        const data = await respResp.json();
-        renderResponses(data);
+        if (grpEndResp.ok) window.__AESCSF_GROUP_ENDORSEMENTS__ = await grpEndResp.json();
+        if (!grpResp.ok) { container.innerHTML = `<div class="audit-empty">Failed to load responses (${grpResp.status})</div>`; return; }
+        const data = await grpResp.json();
+        renderGroupResponses(data);
       } catch (err) {
         container.innerHTML = `<div class="audit-empty">${escapeHtml(err.message)}</div>`;
       }
     }
 
-    function renderResponses(data) {
-      const domainF       = document.getElementById("responseDomainFilter")?.value    || "";
-      const objectiveF    = document.getElementById("responseObjectiveFilter")?.value || "";
-      const pendingOnly   = document.getElementById("responsePendingOnly")?.checked ?? true;
-      const container     = document.getElementById("responsesContainer");
+    function renderGroupResponses(data) {
+      const domainF     = document.getElementById("responseDomainFilter")?.value    || "";
+      const objectiveF  = document.getElementById("responseObjectiveFilter")?.value || "";
+      const pendingOnly = document.getElementById("responsePendingOnly")?.checked ?? true;
+      const container   = document.getElementById("responsesContainer");
       if (!container) return;
 
       const practiceMap = Object.fromEntries(PRACTICES.map(p => [p.practiceId, p]));
+      const endorsements = window.__AESCSF_GROUP_ENDORSEMENTS__ || {};
+
       const entries = Object.entries(data)
-        .filter(([pid]) => {
+        .filter(([pid, pData]) => {
           const p = practiceMap[pid];
           if (!p) return false;
           if (domainF    && p.domain      !== domainF)    return false;
           if (objectiveF && p.objectiveId !== objectiveF) return false;
           if (pendingOnly) {
-            const end = window.__AESCSF_ENDORSEMENTS__?.[pid];
-            /* Hide practices that are endorsed and haven't changed since */
-            if (end && !end.changed_since) return false;
+            // Show if any group has no endorsement or has changed since endorsement
+            const hasPending = pData.groups.some(g => {
+              const end = endorsements[`${pid}:${g.group_id}`];
+              return !end || end.changed_since;
+            });
+            if (!hasPending) return false;
           }
           return true;
         })
@@ -6039,78 +6043,126 @@ function buildPdfDomainRows(rows) {
 
       if (!entries.length) {
         const msg = pendingOnly
-          ? "No practices pending review. All submitted responses have been endorsed and are up to date."
-          : "No responses found.";
+          ? "No practices pending review. All group responses have been endorsed and are up to date."
+          : "No group responses found. Add users to groups to see aggregated responses here.";
         container.innerHTML = `<div class="audit-empty">${escapeHtml(msg)}</div>`;
         return;
       }
 
-      // Build per-user contributor summary for bulk approve
-      const _allUsers = {};
-      for (const respondents of Object.values(data)) {
-        for (const r of respondents) {
-          if (!_allUsers[r.user_oid]) _allUsers[r.user_oid] = { ...r, count: 0 };
-          _allUsers[r.user_oid].count++;
+      // Group summary bar — one chip per group with "Endorse all pending" button
+      const allGroups = {};
+      for (const [pid, pData] of entries) {
+        for (const g of pData.groups) {
+          if (!allGroups[g.group_id]) allGroups[g.group_id] = { group_id: g.group_id, group_name: g.group_name, pending: 0, total: 0 };
+          allGroups[g.group_id].total++;
+          const end = endorsements[`${pid}:${g.group_id}`];
+          if (!end || end.changed_since) allGroups[g.group_id].pending++;
         }
       }
-      const _contributorSummary = Object.keys(_allUsers).length ? `
+      const groupSummaryHtml = Object.values(allGroups).length ? `
         <div style="margin-bottom:18px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;">
-          <div style="font-weight:600;font-size:.88rem;margin-bottom:10px;">Contributors — Approve All</div>
+          <div style="font-weight:600;font-size:.88rem;margin-bottom:10px;">Groups — Endorse All Pending</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;">
-            ${Object.values(_allUsers).map(u => `
+            ${Object.values(allGroups).map(g => `
               <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;font-size:.84rem;">
-                <span><strong>${escapeHtml(u.display_name)}</strong> <span style="color:var(--muted)">${escapeHtml(u.username)}</span></span>
-                <span class="footer-note">${u.count} practice${u.count===1?"":"s"}</span>
-                <button class="secondary" id="approve-all-${escapeHtml(u.user_oid)}"
-                  onclick="approveContributions('${escapeHtml(u.user_oid)}', null)"
-                  style="padding:3px 10px;font-size:.8rem;">Endorse all</button>
+                <strong>${escapeHtml(g.group_name)}</strong>
+                <span style="color:var(--muted)">${g.pending} pending / ${g.total} practices</span>
+                <button class="secondary" id="endorse-all-grp-${g.group_id}"
+                  onclick="endorseGroupResponses(${g.group_id},'${escapeHtml(g.group_name)}',null)"
+                  style="padding:3px 10px;font-size:.8rem;">Endorse all pending</button>
               </div>`).join("")}
           </div>
         </div>` : "";
 
-      container.innerHTML = _contributorSummary + entries.map(([practiceId, respondents]) => {
+      container.innerHTML = groupSummaryHtml + entries.map(([practiceId, pData]) => {
         const p = practiceMap[practiceId];
-        const endorsement = window.__AESCSF_ENDORSEMENTS__?.[practiceId];
-        const changedBadge = endorsement?.changed_since
-          ? `<span class="endorsement-changed-badge" style="margin-left:8px;">↑ Updated since endorsement</span>` : "";
-        const endorsedNote = endorsement
-          ? `<div style="font-size:.78rem;color:var(--muted);margin-top:4px;">
-               ✔ Endorsed version recorded by <strong>${escapeHtml(endorsement.endorsed_by || "admin")}</strong>
-               on ${new Date(endorsement.endorsed_at * 1000).toLocaleDateString("en-AU")} —
-               Status: <em>${escapeHtml(endorsement.data?.status || "—")}</em>
-             </div>`
-          : `<div style="font-size:.78rem;color:var(--muted);margin-top:4px;">No endorsed version yet.</div>`;
-        const rows = respondents.map(r => {
+
+        // Per-group rows
+        const groupRows = pData.groups.map(g => {
+          const endKey     = `${practiceId}:${g.group_id}`;
+          const end        = endorsements[endKey];
+          const sc         = statusClass(g.aggregate_status);
+          const changed    = end?.changed_since;
+          const statusBadge = `<span class="status-select ${sc}" style="padding:3px 8px;border-radius:6px;font-size:.8rem;">${escapeHtml(g.aggregate_status)}</span>`;
+          const endorseNote = end
+            ? `<span style="font-size:.72rem;color:var(--muted);">✔ ${escapeHtml(end.endorsed_by)} ${new Date(end.endorsed_at * 1000).toLocaleDateString("en-AU")}</span>`
+            : `<span style="font-size:.72rem;color:var(--muted);">Not endorsed</span>`;
+          const changedBadge = changed ? `<span class="endorsement-changed-badge" style="margin-left:4px;font-size:.7rem;">↑ Updated</span>` : "";
+          const btnLabel = end ? "Re-endorse" : "Endorse";
+          const memberDetails = g.members.map(m => {
+            const msc = statusClass(m.assessment?.status || "");
+            return `<tr style="background:var(--bg);">
+              <td style="padding-left:28px;font-size:.8rem;color:var(--text-soft);">${escapeHtml(m.display_name)}</td>
+              <td><span class="status-select ${msc}" style="padding:2px 6px;border-radius:4px;font-size:.75rem;">${escapeHtml(m.assessment?.status || "Not Assessed")}</span></td>
+              <td class="wrap" style="font-size:.8rem;">${escapeHtml(m.assessment?.evidence || "—")}</td>
+              <td class="wrap" style="font-size:.8rem;">${escapeHtml(m.assessment?.gap      || "—")}</td>
+              <td class="wrap" style="font-size:.8rem;">${escapeHtml(m.assessment?.notes    || "—")}</td>
+              <td style="font-size:.8rem;">${escapeHtml(m.assessment?.owner || "—")}</td>
+              <td></td>
+            </tr>`;
+          }).join("");
+          return `<tr id="grp-row-${g.group_id}-${escapeHtml(practiceId)}">
+            <td>
+              <button onclick="toggleGroupDetail('${escapeHtml(practiceId)}',${g.group_id})"
+                style="background:none;border:none;cursor:pointer;padding:0;margin-right:6px;font-size:.85rem;color:var(--muted);" id="grp-toggle-${g.group_id}-${escapeHtml(practiceId)}">▶</button>
+              <strong>${escapeHtml(g.group_name)}</strong>
+              <span style="color:var(--muted);font-size:.78rem;margin-left:6px;">${g.members.length} member${g.members.length===1?"":"s"}</span>
+            </td>
+            <td>${statusBadge}</td>
+            <td colspan="3">${endorseNote}${changedBadge}</td>
+            <td></td>
+            <td><button class="secondary" id="endorse-grp-${g.group_id}-${escapeHtml(practiceId)}"
+              onclick="endorseGroupResponses(${g.group_id},'${escapeHtml(g.group_name)}',['${escapeHtml(practiceId)}'])"
+              style="padding:2px 8px;font-size:.78rem;">${btnLabel}</button></td>
+          </tr>
+          <tbody id="grp-detail-${g.group_id}-${escapeHtml(practiceId)}" style="display:none;">${memberDetails}</tbody>`;
+        }).join("");
+
+        // Ungrouped rows (shown only when filter is off or always)
+        const ungroupedRows = pData.ungrouped.map(r => {
           const sc = statusClass(r.assessment?.status || "");
-          const btnLabel = endorsement ? "Re-endorse" : "Endorse";
-          return `<tr>
-            <td><strong>${escapeHtml(r.display_name)}</strong><br><span style="color:var(--muted);font-size:.75rem;">${escapeHtml(r.username)}</span></td>
+          return `<tr style="opacity:.7;">
+            <td><span style="font-size:.75rem;color:var(--muted);">⊘ Ungrouped</span><br><strong style="font-size:.85rem;">${escapeHtml(r.display_name)}</strong></td>
             <td><span class="status-select ${sc}" style="padding:3px 8px;border-radius:6px;font-size:.8rem;">${escapeHtml(r.assessment?.status || "Not Assessed")}</span></td>
             <td class="wrap">${escapeHtml(r.assessment?.evidence || "—")}</td>
             <td class="wrap">${escapeHtml(r.assessment?.gap      || "—")}</td>
             <td class="wrap">${escapeHtml(r.assessment?.notes    || "—")}</td>
             <td>${escapeHtml(r.assessment?.owner || "—")}</td>
-            <td><button class="secondary"
-              id="approve-${escapeHtml(r.user_oid)}-${escapeHtml(practiceId)}"
-              onclick="approveContributions('${escapeHtml(r.user_oid)}', ['${escapeHtml(practiceId)}'])"
-              style="padding:2px 8px;font-size:.78rem;">${btnLabel}</button></td>
+            <td></td>
           </tr>`;
         }).join("");
+
+        // Worst-case across all groups for the header badge
+        const allStatuses = pData.groups.map(g => g.aggregate_status);
+        const overallStatus = allStatuses.length
+          ? allStatuses.reduce((w, s) => {
+              const P = { "No": 0, "Partial": 1, "In Progress": 1, "Yes": 2, "Not Assessed": 3 };
+              return (P[s] ?? 3) < (P[w] ?? 3) ? s : w;
+            }, "Not Assessed")
+          : "Not Assessed";
+        const overallSc = statusClass(overallStatus);
+
+        const anyChanged = pData.groups.some(g => endorsements[`${practiceId}:${g.group_id}`]?.changed_since);
+        const anyUnendorsed = pData.groups.some(g => !endorsements[`${practiceId}:${g.group_id}`]);
+        const practiceChangedBadge = anyChanged
+          ? `<span class="endorsement-changed-badge" style="margin-left:8px;">↑ Updated since endorsement</span>`
+          : (anyUnendorsed ? `<span class="endorsement-changed-badge" style="margin-left:8px;background:rgba(239,68,68,.1);color:#b91c1c;border-color:rgba(239,68,68,.3);">⚠ Pending review</span>` : "");
+
         return `<div class="dashboard-panel" style="margin-bottom:14px;">
           <div style="margin-bottom:10px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">
             <div>
-              <strong>${escapeHtml(practiceId)}</strong>${changedBadge}
+              <strong>${escapeHtml(practiceId)}</strong>${practiceChangedBadge}
               <span class="badge" style="margin-left:6px;">${escapeHtml(p?.objectiveId || "")}</span>
+              <span class="status-select ${overallSc}" style="margin-left:6px;padding:2px 8px;border-radius:6px;font-size:.78rem;">${escapeHtml(overallStatus)}</span>
               <div style="font-size:.83rem;color:var(--text-soft);margin-top:3px;">${escapeHtml(p?.practice || "")}</div>
-              ${endorsedNote}
             </div>
             <button class="secondary" onclick="toggleVersionHistory('${escapeHtml(practiceId)}', this)"
               style="padding:3px 10px;font-size:.78rem;flex-shrink:0;">📋 Version History</button>
           </div>
           <div class="audit-table-wrap">
             <table class="audit-table">
-              <thead><tr><th>Respondent</th><th>Status</th><th>Evidence</th><th>Gap / Remediation</th><th>Notes</th><th>Owner</th><th></th></tr></thead>
-              <tbody>${rows}</tbody>
+              <thead><tr><th>Group</th><th>Worst-case Status</th><th colspan="3">Endorsement</th><th></th><th></th></tr></thead>
+              <tbody>${groupRows}${ungroupedRows}</tbody>
             </table>
           </div>
           <div id="vhpanel-${escapeHtml(practiceId)}" class="version-history-panel" style="display:none;">
@@ -6118,6 +6170,50 @@ function buildPdfDomainRows(rows) {
           </div>
         </div>`;
       }).join("");
+    }
+
+    function toggleGroupDetail(practiceId, groupId) {
+      const tbody  = document.getElementById(`grp-detail-${groupId}-${practiceId}`);
+      const toggle = document.getElementById(`grp-toggle-${groupId}-${practiceId}`);
+      if (!tbody) return;
+      const open = tbody.style.display === "none";
+      tbody.style.display = open ? "" : "none";
+      if (toggle) toggle.textContent = open ? "▼" : "▶";
+    }
+
+    async function endorseGroupResponses(groupId, groupName, practiceIds) {
+      const btnId = practiceIds
+        ? `endorse-grp-${groupId}-${practiceIds[0]}`
+        : `endorse-all-grp-${groupId}`;
+      const btn = document.getElementById(btnId);
+      if (btn) { btn.disabled = true; btn.textContent = "Endorsing…"; }
+      try {
+        const body = practiceIds ? { practiceIds } : {};
+        const resp = await adminFetch(`/admin/groups/${groupId}/endorse-responses`, {
+          method: "POST", body: JSON.stringify(body)
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Endorse" : "Endorse all pending"; }
+          alert(`Endorsement failed: ${result.error || resp.status}`);
+          return;
+        }
+        // Optimistically mark as up-to-date in local cache
+        if (Array.isArray(result.practiceIds)) {
+          window.__AESCSF_GROUP_ENDORSEMENTS__ = window.__AESCSF_GROUP_ENDORSEMENTS__ || {};
+          for (const pid of result.practiceIds) {
+            const key = `${pid}:${groupId}`;
+            window.__AESCSF_GROUP_ENDORSEMENTS__[key] = {
+              ...(window.__AESCSF_GROUP_ENDORSEMENTS__[key] || {}),
+              changed_since: false
+            };
+          }
+        }
+        await loadAndRenderResponses();
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Endorse" : "Endorse all pending"; }
+        alert(err.message);
+      }
     }
 
     async function toggleVersionHistory(practiceId, btn) {

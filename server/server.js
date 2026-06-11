@@ -199,6 +199,16 @@ db.exec(`
     PRIMARY KEY (practice_id, tenant_id)
   );
 
+  CREATE TABLE IF NOT EXISTS group_endorsements (
+    practice_id TEXT    NOT NULL,
+    group_id    INTEGER NOT NULL,
+    tenant_id   TEXT    NOT NULL DEFAULT '',
+    snapshot    TEXT    NOT NULL DEFAULT '{}',
+    endorsed_by TEXT    NOT NULL DEFAULT '',
+    endorsed_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    PRIMARY KEY (practice_id, group_id, tenant_id)
+  );
+
   CREATE TABLE IF NOT EXISTS domain_targets (
     tenant_id   TEXT    NOT NULL DEFAULT '',
     domain      TEXT    NOT NULL,
@@ -561,6 +571,17 @@ const stmtGetUserGroups = db.prepare(`
 const stmtGetGroupMemberCount = db.prepare(
   "SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?"
 );
+const stmtGetGroupEndorsements = db.prepare(
+  "SELECT practice_id, group_id, snapshot, endorsed_by, endorsed_at FROM group_endorsements WHERE tenant_id = ?"
+);
+const stmtUpsertGroupEndorsement = db.prepare(`
+  INSERT INTO group_endorsements (practice_id, group_id, tenant_id, snapshot, endorsed_by, endorsed_at)
+  VALUES (?, ?, ?, ?, ?, unixepoch())
+  ON CONFLICT(practice_id, group_id, tenant_id) DO UPDATE SET
+    snapshot    = excluded.snapshot,
+    endorsed_by = excluded.endorsed_by,
+    endorsed_at = excluded.endorsed_at
+`);
 
 const stmtGetAllConfidence = db.prepare(
   "SELECT practice_id, rating, notes, updated_at FROM confidence_ratings WHERE tenant_id = ?"
@@ -1188,6 +1209,163 @@ app.get("/api/groups/:id/results", requireAuth, autoRegister, requireAdminOrAsse
     objectives:   stmtGetGroupObjectives.all(id).map(r => r.objective_id),
     assessments:  memberAssessments
   });
+});
+
+/* ── Group multi-respondent & endorsement routes ─────────────────────────── */
+
+const STATUS_PRIORITY = { "No": 0, "Partial": 1, "In Progress": 1, "Yes": 2, "Not Assessed": 3 };
+function groupWorstCase(statuses) {
+  return statuses.reduce((w, s) =>
+    (STATUS_PRIORITY[s] ?? 3) < (STATUS_PRIORITY[w] ?? 3) ? s : w, "Not Assessed");
+}
+
+app.get("/api/admin/group-responses", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  try {
+    const groups    = stmtListGroups.all(req.user.tenant);
+    const groupById = Object.fromEntries(groups.map(g => [g.id, g]));
+    const userGroupMap = {}; // user_oid -> group_id
+    for (const g of groups) {
+      for (const m of stmtGetGroupMembers.all(g.id)) userGroupMap[m.oid] = g.id;
+    }
+
+    const allUsers = db.prepare(
+      "SELECT oid, username, display_name FROM users WHERE tenant_id = ?"
+    ).all(req.user.tenant);
+    const usersByOid = Object.fromEntries(allUsers.map(u => [u.oid, u]));
+
+    const allRows = db.prepare(
+      "SELECT user_oid, data FROM assessments WHERE tenant_id = ?"
+    ).all(req.user.tenant);
+
+    // { practiceId: { groupId: [member responses] }, practiceId: { ungrouped: [responses] } }
+    const byPractice = {};
+    for (const row of allRows) {
+      const user    = usersByOid[row.user_oid];
+      const groupId = userGroupMap[row.user_oid];
+      try {
+        const assessments = JSON.parse(row.data)?.assessments || {};
+        for (const [practiceId, assessment] of Object.entries(assessments)) {
+          if (!byPractice[practiceId]) byPractice[practiceId] = { groups: {}, ungrouped: [] };
+          const entry = { user_oid: row.user_oid, display_name: user?.display_name || row.user_oid, username: user?.username || row.user_oid, assessment };
+          if (groupId) {
+            if (!byPractice[practiceId].groups[groupId]) byPractice[practiceId].groups[groupId] = [];
+            byPractice[practiceId].groups[groupId].push(entry);
+          } else {
+            byPractice[practiceId].ungrouped.push(entry);
+          }
+        }
+      } catch { /* skip corrupt */ }
+    }
+
+    const result = {};
+    for (const [practiceId, { groups, ungrouped }] of Object.entries(byPractice)) {
+      result[practiceId] = {
+        groups: Object.entries(groups).map(([gid, members]) => ({
+          group_id:         Number(gid),
+          group_name:       groupById[gid]?.name || `Group ${gid}`,
+          aggregate_status: groupWorstCase(members.map(m => m.assessment?.status || "Not Assessed")),
+          members
+        })).sort((a, b) => a.group_name.localeCompare(b.group_name)),
+        ungrouped
+      };
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[AESCSF API] Group responses error:", err);
+    res.status(500).json({ error: "Failed to load group responses" });
+  }
+});
+
+app.get("/api/admin/group-endorsements", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  try {
+    const endorsements = stmtGetGroupEndorsements.all(req.user.tenant);
+    const groups       = stmtListGroups.all(req.user.tenant);
+    const userGroupMap = {};
+    for (const g of groups) {
+      for (const m of stmtGetGroupMembers.all(g.id)) userGroupMap[m.oid] = g.id;
+    }
+
+    const allRows = db.prepare(
+      "SELECT user_oid, data FROM assessments WHERE tenant_id = ?"
+    ).all(req.user.tenant);
+
+    // Build current member-status snapshots per (practiceId, groupId)
+    const currentState = {};
+    for (const row of allRows) {
+      const gid = userGroupMap[row.user_oid];
+      if (!gid) continue;
+      try {
+        const assessments = JSON.parse(row.data)?.assessments || {};
+        for (const [practiceId, a] of Object.entries(assessments)) {
+          const key = `${practiceId}:${gid}`;
+          if (!currentState[key]) currentState[key] = {};
+          currentState[key][row.user_oid] = a?.status || "Not Assessed";
+        }
+      } catch { /* skip */ }
+    }
+
+    const result = {};
+    for (const row of endorsements) {
+      try {
+        const snapshot     = JSON.parse(row.snapshot);
+        const key          = `${row.practice_id}:${row.group_id}`;
+        const current      = currentState[key] || {};
+        const changed      = JSON.stringify(snapshot.member_statuses || {}) !== JSON.stringify(current);
+        result[key] = {
+          practice_id:   row.practice_id,
+          group_id:      row.group_id,
+          endorsed_by:   row.endorsed_by,
+          endorsed_at:   row.endorsed_at,
+          snapshot,
+          changed_since: changed
+        };
+      } catch { /* skip */ }
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load group endorsements" });
+  }
+});
+
+app.post("/api/admin/groups/:groupId/endorse-responses", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  try {
+    const groupId = parseInt(req.params.groupId);
+    const group   = stmtGetGroup.get(groupId, req.user.tenant);
+    if (!group) return res.status(404).json({ error: "Group not found" });
+
+    const practiceIds = Array.isArray(req.body.practiceIds) ? new Set(req.body.practiceIds) : null;
+    const members     = stmtGetGroupMembers.all(groupId);
+
+    const allRows = db.prepare(
+      "SELECT user_oid, data FROM assessments WHERE tenant_id = ?"
+    ).all(req.user.tenant);
+
+    // Build snapshot: { [practiceId]: { member_statuses: { [oid]: status } } }
+    const snapshots = {};
+    for (const row of allRows) {
+      if (!members.some(m => m.oid === row.user_oid)) continue;
+      try {
+        const assessments = JSON.parse(row.data)?.assessments || {};
+        for (const [pid, a] of Object.entries(assessments)) {
+          if (practiceIds && !practiceIds.has(pid)) continue;
+          if (!snapshots[pid]) snapshots[pid] = { member_statuses: {} };
+          snapshots[pid].member_statuses[row.user_oid] = a?.status || "Not Assessed";
+        }
+      } catch { /* skip */ }
+    }
+
+    const endorsedBy = req.dbUser.display_name || req.user.username;
+    db.transaction(() => {
+      for (const [pid, snapshot] of Object.entries(snapshots)) {
+        stmtUpsertGroupEndorsement.run(pid, groupId, req.user.tenant, JSON.stringify(snapshot), endorsedBy);
+      }
+    })();
+
+    res.json({ endorsed: Object.keys(snapshots).length, practiceIds: Object.keys(snapshots) });
+  } catch (err) {
+    console.error("[AESCSF API] Group endorse error:", err);
+    res.status(500).json({ error: "Failed to endorse" });
+  }
 });
 
 /* ── Admin routes ────────────────────────────────────────────────────────── */
