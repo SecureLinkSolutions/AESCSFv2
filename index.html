@@ -3329,6 +3329,25 @@
       return date.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
     }
 
+    function effectiveTargetDate(practice) {
+      const domainTargets = window.__AESCSF_DOMAIN_TARGETS__ || {};
+      return domainTargets[practice.objectiveId]
+          || domainTargets[practice.domain]
+          || "";
+    }
+
+    function targetDateBadgeHtml(practice) {
+      const date = effectiveTargetDate(practice);
+      if (!date) return "";
+      const days = daysUntil(date);
+      if (days === null) return "";
+      const completed = isCompletedStatus((state.assessments[practice.practiceId] || defaultAssessment()).status);
+      if (completed) return `<span class="badge tag-complete" style="font-size:.72rem;">✓ Done · ${escapeHtml(date)}</span>`;
+      if (days < 0)  return `<span class="badge tag-overdue"   style="font-size:.72rem;">${Math.abs(days)}d overdue · ${escapeHtml(date)}</span>`;
+      if (days <= 30) return `<span class="badge tag-upcoming" style="font-size:.72rem;">${days === 0 ? "Due today" : `Due in ${days}d`} · ${escapeHtml(date)}</span>`;
+      return `<span class="badge tag-future" style="font-size:.72rem;">Due ${escapeHtml(date)}</span>`;
+    }
+
     function daysUntil(dateString) {
       if (!dateString) return null;
       const today = new Date();
@@ -3890,6 +3909,7 @@
                 <span class="badge">${escapeHtml(practice.objectiveId)}</span>
                 <span class="badge">${escapeHtml(practice.mil)}</span>
                 <span class="badge">${escapeHtml(practice.securityProfile)}</span>
+                ${targetDateBadgeHtml(practice)}
               </div>
             </div>
             <div class="field" style="min-width: 220px;">
@@ -3906,14 +3926,10 @@
 
           ${isPrefilled ? `<div class="prefill-notice"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Pre-filled from endorsed version (${escapeHtml(endorsed.endorsed_by || "admin")}, ${new Date(endorsed.endorsed_at * 1000).toLocaleDateString("en-AU")}). Edit and save to record your own assessment.</div>` : ""}
 
-          <div class="grid-3">
+          <div class="grid-2">
             <div class="field">
               <label>Owner</label>
               <input data-field="owner" type="text" value="${escapeHtml(a.owner)}" placeholder="Responsible person or team" />
-            </div>
-            <div class="field">
-              <label>Target Date</label>
-              <div class="input-wrapper"><input data-field="targetDate" type="date" value="${escapeHtml(a.targetDate)}" /><svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
             </div>
             <div class="field">
               <label>Last Reviewed</label>
@@ -4043,11 +4059,11 @@
         timelineApp.innerHTML = emptyStateHtml({
           icon: "timeline",
           title: "No target dates set",
-          body: "Add target dates on the Assessment page to build the schedule timeline.",
-          actionLabel: "Go to Assessment",
+          body: "Set domain or group target dates using the editor above to build the schedule timeline.",
+          actionLabel: "Set domain dates",
           actionId: "emptyTimelineGoAssess"
         });
-        document.getElementById("emptyTimelineGoAssess")?.addEventListener("click", () => setActivePage("assessment"));
+        document.getElementById("emptyTimelineGoAssess")?.addEventListener("click", () => document.getElementById("domainTargetEditor")?.scrollIntoView({ behavior: "smooth" }));
         return;
       }
 
@@ -4206,7 +4222,7 @@
 
     async function loadOrgGoal() {
       try {
-        const r = await adminFetch("/org-goal");
+        const r = await adminFetch("/admin/org-goal");
         window.__AESCSF_ORG_GOAL__ = r.ok ? await r.json() : {};
       } catch { window.__AESCSF_ORG_GOAL__ = {}; }
       renderOrgGoal();
@@ -4304,7 +4320,7 @@
           targetDate: document.getElementById("orgGoalDateInput")?.value  || "",
         };
         try {
-          const r = await adminFetch("/org-goal", { method: "PUT", body: JSON.stringify(payload) });
+          const r = await adminFetch("/admin/org-goal", { method: "PUT", body: JSON.stringify(payload) });
           if (!r.ok) throw new Error(await r.text());
           window.__AESCSF_ORG_GOAL__ = payload;
           if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 2000); }
