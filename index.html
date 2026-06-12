@@ -1552,6 +1552,35 @@
     html[data-theme="cyber"] .group-card:hover           { border-color: #00e5a0; background: rgba(0,229,160,0.06); }
     html[data-theme="cyber"] .group-card.selected        { border-color: #00e5a0; background: rgba(0,229,160,0.08); }
 
+    /* Groups overview matrix */
+    #groupsPage { max-width: none; }
+    .groups-overview-wrap { overflow-x: auto; }
+    .groups-overview-table { width: 100%; border-collapse: collapse; font-size: .82rem; min-width: 480px; }
+    .groups-overview-table thead th {
+      padding: 9px 12px; background: var(--surface-strong);
+      font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em;
+      color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; text-align: center;
+    }
+    .groups-overview-table thead th:first-child { text-align: left; }
+    .groups-overview-table tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); text-align: center; font-size: .8rem; }
+    .groups-overview-table tbody td:first-child { text-align: left; font-weight: 600; }
+    .groups-overview-table tbody tr:hover td { background: var(--primary-soft); }
+    .gom-yes    { background: rgba(16,185,129,.14);  color: #059669; font-weight: 600; }
+    .gom-partial{ background: rgba(245,158,11,.14);  color: #b45309; font-weight: 600; }
+    .gom-no     { background: rgba(239,68,68,.14);   color: #dc2626; font-weight: 600; }
+    .gom-na     { color: var(--muted); }
+    .gom-legend { display: flex; gap: 16px; font-size: .75rem; margin-top: 12px; flex-wrap: wrap; }
+    .gom-legend-item { display: flex; align-items: center; gap: 5px; }
+    .gom-legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+    /* Dashboard group section */
+    .dashboard-group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px,1fr)); gap: 12px; }
+    .dashboard-group-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 14px 16px;
+    }
+    .dashboard-group-card:hover { border-color: var(--primary); }
+
     .empty {
       padding: 28px;
       text-align: center;
@@ -2422,6 +2451,19 @@
         </section>
       </section>
 
+      <!-- Admin/Assessor group compliance section -->
+      <section id="dashboardGroupSection" class="dashboard-grid" style="display:none;">
+        <section class="dashboard-panel dashboard-panel-span">
+          <div class="panel-header">
+            <div>
+              <h3>By Business Unit <span class="confidence-admin-badge" style="vertical-align:middle;margin-left:6px;">Admin / Assessor</span></h3>
+              <div class="footer-note">Worst-case compliance status per domain for each business unit group.</div>
+            </div>
+          </div>
+          <div id="dashboardGroupContent"><div class="audit-empty">Loading group data…</div></div>
+        </section>
+      </section>
+
       <!-- Admin-only Security Profile breakdown -->
       <section id="spBreakdownSection" class="dashboard-grid" style="display:none;">
         <section class="dashboard-panel dashboard-panel-span">
@@ -2912,10 +2954,23 @@
           <p>Manage business units, assign domains and objectives, and view aggregated assessment results.</p>
         </div>
         <div class="page-header-actions">
+          <button class="secondary" id="groupsOverviewBtn" type="button">📊 Compliance Overview</button>
           <button class="primary" id="createGroupBtn" type="button">+ Create Group</button>
         </div>
       </div>
-      <div class="groups-layout">
+      <!-- Overview matrix (shown when Overview button toggled) -->
+      <div id="groupsOverviewPanel" style="display:none;">
+        <div class="dashboard-panel" style="margin-bottom:0;">
+          <div class="panel-header" style="margin-bottom:12px;">
+            <div>
+              <h3 style="margin:0 0 2px;">Group Compliance Overview</h3>
+              <div class="footer-note" style="margin:0;">Worst-case status per domain per business unit — red = any practice is No, amber = any Partial/In Progress, green = all Yes.</div>
+            </div>
+          </div>
+          <div id="groupsOverviewContent"><div class="groups-loading">Loading…</div></div>
+        </div>
+      </div>
+      <div class="groups-layout" id="groupsManageLayout">
         <div class="groups-list-col" id="groupsListCol">
           <div class="groups-loading">Loading groups…</div>
         </div>
@@ -4349,6 +4404,7 @@
         });
       }
       renderSpBreakdown(Presentrics);
+      renderDashboardGroupSection();
     }
 
     function exportGapRegister() {
@@ -6735,6 +6791,140 @@ function buildPdfDomainRows(rows) {
       return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
     }
 
+    /* ── Group compliance helpers ─────────────────────────────────────────── */
+
+    const GOM_PRIORITY = { "No": 0, "Partial": 1, "In Progress": 1, "Yes": 2, "Not Assessed": 3 };
+    function gomWorstCase(a, b) {
+      return (GOM_PRIORITY[a] ?? 3) <= (GOM_PRIORITY[b] ?? 3) ? a : b;
+    }
+    function gomClass(s) {
+      return { "Yes": "gom-yes", "Partial": "gom-partial", "In Progress": "gom-partial", "No": "gom-no" }[s] || "gom-na";
+    }
+    function gomLabel(s) { return s === "Not Assessed" ? "—" : s; }
+
+    async function _loadGroupResponseData() {
+      const r = await adminFetch("/admin/group-responses");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    function _buildGroupDomainMap(data) {
+      // Returns { groupId: { name, memberCount, domains: { domain: worstStatus }, totalPractices, yesPractices } }
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const groupMap = {};
+      for (const [practiceId, pData] of Object.entries(data)) {
+        const practice = PRACTICES.find(p => p.practiceId === practiceId);
+        if (!practice) continue;
+        for (const g of pData.groups) {
+          if (!groupMap[g.group_id]) groupMap[g.group_id] = {
+            id: g.group_id, name: g.group_name, memberCount: g.members.length,
+            domains: Object.fromEntries(domains.map(d => [d, "Not Assessed"])),
+            totalPractices: 0, yesPractices: 0
+          };
+          const gm = groupMap[g.group_id];
+          gm.domains[practice.domain] = gomWorstCase(gm.domains[practice.domain], g.aggregate_status);
+          gm.totalPractices++;
+          if (g.aggregate_status === "Yes") gm.yesPractices++;
+        }
+      }
+      return groupMap;
+    }
+
+    async function renderGroupsOverview() {
+      const content = document.getElementById("groupsOverviewContent");
+      if (!content) return;
+      content.innerHTML = `<div class="groups-loading">Loading…</div>`;
+      try {
+        const data = await _loadGroupResponseData();
+        const groupMap = _buildGroupDomainMap(data);
+        const groups  = Object.values(groupMap).sort((a, b) => a.name.localeCompare(b.name));
+        const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+
+        if (!groups.length) {
+          content.innerHTML = `<div class="audit-empty">No group assessment data yet. Assign users to groups and have them complete their assessments.</div>`;
+          return;
+        }
+
+        content.innerHTML = `
+          <div class="groups-overview-wrap">
+            <table class="groups-overview-table">
+              <thead>
+                <tr>
+                  <th>Group</th>
+                  <th>Members</th>
+                  <th>Completion</th>
+                  ${domains.map(d => `<th title="${escapeHtml(d)}">${escapeHtml(d)}</th>`).join("")}
+                </tr>
+              </thead>
+              <tbody>
+                ${groups.map(g => {
+                  const pct = g.totalPractices ? Math.round(g.yesPractices / g.totalPractices * 100) : 0;
+                  const pctColor = pct >= 80 ? "#059669" : pct >= 50 ? "#b45309" : "#dc2626";
+                  return `<tr>
+                    <td>${escapeHtml(g.name)}</td>
+                    <td>${g.memberCount}</td>
+                    <td style="font-weight:700;color:${pctColor};">${pct}%</td>
+                    ${domains.map(d => `<td class="${gomClass(g.domains[d])}">${escapeHtml(gomLabel(g.domains[d]))}</td>`).join("")}
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+            <div class="gom-legend">
+              <div class="gom-legend-item"><div class="gom-legend-dot gom-yes" style="background:rgba(16,185,129,.5);"></div> Yes — all practices compliant</div>
+              <div class="gom-legend-item"><div class="gom-legend-dot gom-partial" style="background:rgba(245,158,11,.5);"></div> Partial / In Progress</div>
+              <div class="gom-legend-item"><div class="gom-legend-dot gom-no" style="background:rgba(239,68,68,.5);"></div> No — at least one practice non-compliant</div>
+              <div class="gom-legend-item"><div class="gom-legend-dot" style="background:var(--border);"></div> — Not assessed</div>
+            </div>
+          </div>`;
+      } catch (e) {
+        content.innerHTML = `<div class="audit-empty" style="color:var(--danger)">Failed to load: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    async function renderDashboardGroupSection() {
+      const section = document.getElementById("dashboardGroupSection");
+      const content = document.getElementById("dashboardGroupContent");
+      if (!section || !content) return;
+      const role = window.__AESCSF_RBAC__?.role;
+      if (role !== "admin" && role !== "assessor") return;
+      section.style.display = "";
+      try {
+        const data = await _loadGroupResponseData();
+        const groupMap = _buildGroupDomainMap(data);
+        const groups   = Object.values(groupMap).sort((a, b) => a.name.localeCompare(b.name));
+        const domains  = [...new Set(PRACTICES.map(p => p.domain))].sort();
+
+        if (!groups.length) {
+          content.innerHTML = `<div class="audit-empty">No group data. Assign users to groups to see business unit compliance.</div>`;
+          return;
+        }
+
+        content.innerHTML = `<div class="dashboard-group-grid">
+          ${groups.map(g => {
+            const pct = g.totalPractices ? Math.round(g.yesPractices / g.totalPractices * 100) : 0;
+            const pctColor = pct >= 80 ? "#059669" : pct >= 50 ? "#b45309" : "#dc2626";
+            const domainDots = domains.map(d => {
+              const s = g.domains[d] || "Not Assessed";
+              const abbr = d.slice(0,4);
+              const bg = { "Yes": "rgba(16,185,129,.55)", "Partial": "rgba(245,158,11,.55)", "In Progress": "rgba(245,158,11,.55)", "No": "rgba(239,68,68,.55)" }[s] || "var(--border)";
+              const col = { "Yes": "#059669", "Partial": "#b45309", "In Progress": "#b45309", "No": "#dc2626" }[s] || "var(--muted)";
+              return `<div title="${escapeHtml(d)}: ${escapeHtml(s)}"
+                style="padding:2px 5px;border-radius:3px;font-size:.65rem;font-weight:700;letter-spacing:.02em;background:${bg};color:${col};">${escapeHtml(abbr)}</div>`;
+            }).join("");
+            return `<div class="dashboard-group-card">
+              <div style="font-weight:700;font-size:.93rem;margin-bottom:2px;color:var(--text);">${escapeHtml(g.name)}</div>
+              <div style="font-size:.76rem;color:var(--muted);margin-bottom:10px;">${g.memberCount} member${g.memberCount===1?"":"s"}</div>
+              <div style="font-size:2rem;font-weight:800;color:${pctColor};line-height:1;">${pct}%</div>
+              <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px;">Yes practices</div>
+              <div style="display:flex;flex-wrap:wrap;gap:3px;">${domainDots}</div>
+            </div>`;
+          }).join("")}
+        </div>`;
+      } catch (e) {
+        content.innerHTML = `<div class="audit-empty">Could not load group data: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
     async function renderGroupsPage() {
       const listCol = document.getElementById("groupsListCol");
       if (!listCol) return;
@@ -6762,6 +6952,19 @@ function buildPdfDomainRows(rows) {
       }
 
       document.getElementById("createGroupBtn")?.addEventListener("click", _openCreateGroupModal);
+
+      // Overview toggle
+      const overviewBtn    = document.getElementById("groupsOverviewBtn");
+      const overviewPanel  = document.getElementById("groupsOverviewPanel");
+      const manageLayout   = document.getElementById("groupsManageLayout");
+      let overviewVisible  = false;
+      overviewBtn?.addEventListener("click", () => {
+        overviewVisible = !overviewVisible;
+        overviewPanel.style.display  = overviewVisible ? "" : "none";
+        manageLayout.style.display   = overviewVisible ? "none" : "";
+        overviewBtn.textContent = overviewVisible ? "◀ Back to Groups" : "📊 Compliance Overview";
+        if (overviewVisible) renderGroupsOverview();
+      });
     }
 
     function _renderGroupList() {
