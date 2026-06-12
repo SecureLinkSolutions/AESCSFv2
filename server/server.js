@@ -252,6 +252,14 @@ db.exec(`
     tenant_id    TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (group_id, objective_id)
   );
+
+  CREATE TABLE IF NOT EXISTS group_targets (
+    group_id    INTEGER NOT NULL,
+    tenant_id   TEXT    NOT NULL DEFAULT '',
+    target_key  TEXT    NOT NULL,
+    target_date TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (group_id, target_key)
+  );
 `);
 
 /* Migration: add scope column to snapshots if it doesn't exist yet */
@@ -568,6 +576,9 @@ const stmtGetUserGroups = db.prepare(`
   WHERE gm.user_oid = ? AND g.tenant_id = ?
   ORDER BY g.name
 `);
+const stmtGetGroupTargets   = db.prepare("SELECT target_key, target_date FROM group_targets WHERE group_id = ? AND tenant_id = ?");
+const stmtClearGroupTargets = db.prepare("DELETE FROM group_targets WHERE group_id = ? AND tenant_id = ?");
+const stmtInsertGroupTarget = db.prepare("INSERT OR REPLACE INTO group_targets (group_id, tenant_id, target_key, target_date) VALUES (?, ?, ?, ?)");
 const stmtGetGroupMemberCount = db.prepare(
   "SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?"
 );
@@ -1179,6 +1190,29 @@ app.put("/api/groups/:id/objectives", requireAuth, autoRegister, requireAdminOrA
   db.transaction(() => {
     stmtClearGroupObjectives.run(id);
     for (const o of objectives) stmtInsertGroupObjective.run(id, o, req.user.tenant);
+  })();
+  res.json({ ok: true });
+});
+
+app.get("/api/groups/:id/targets", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const id    = parseInt(req.params.id);
+  const group = stmtGetGroup.get(id, req.user.tenant);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+  const rows    = stmtGetGroupTargets.all(id, req.user.tenant);
+  const targets = Object.fromEntries(rows.map(r => [r.target_key, r.target_date]));
+  res.json({ targets });
+});
+
+app.put("/api/groups/:id/targets", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const id    = parseInt(req.params.id);
+  const group = stmtGetGroup.get(id, req.user.tenant);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+  const targets = req.body.targets && typeof req.body.targets === "object" ? req.body.targets : {};
+  db.transaction(() => {
+    stmtClearGroupTargets.run(id, req.user.tenant);
+    for (const [key, date] of Object.entries(targets)) {
+      if (date && typeof date === "string") stmtInsertGroupTarget.run(id, req.user.tenant, key, date);
+    }
   })();
   res.json({ ok: true });
 });

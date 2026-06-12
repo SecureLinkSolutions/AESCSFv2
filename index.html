@@ -2661,6 +2661,12 @@
           </div>
         </div>
       </section>
+      <div id="timelineGroupFilterWrapper" style="display:none;margin-bottom:16px;">
+        <label style="font-size:.82rem;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">View by group</label>
+        <select id="timelineGroupFilter" style="font-size:.875rem;padding:7px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);min-width:220px;">
+          <option value="">All groups (global dates)</option>
+        </select>
+      </div>
       <details class="domain-target-editor" id="domainTargetEditor" style="display:none">
         <summary class="domain-target-summary">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -3924,13 +3930,25 @@
     function renderTimeline() {
       const scheduled = [];
       let noDate = 0;
-      const domainTargets = window.__AESCSF_DOMAIN_TARGETS__ || {};
+      const domainTargets = window.__AESCSF_DOMAIN_TARGETS__     || {};
+      const groupTargets  = window.__AESCSF_ACTIVE_GROUP_TARGETS__ || null;
+      const groupMeta     = window.__AESCSF_ACTIVE_GROUP_META__    || null;
 
       for (const practice of PRACTICES) {
-        const assessment    = state.assessments[practice.practiceId] || defaultAssessment();
-        const practiceDate  = assessment.targetDate;
-        const domainDate    = domainTargets[practice.domain];
-        const effectiveDate = practiceDate || domainDate || "";
+        // When a group is selected, skip practices outside its scope
+        if (groupMeta) {
+          const inScope = (groupMeta.domains    || []).includes(practice.domain)
+                       || (groupMeta.objectives || []).includes(practice.objectiveId);
+          if (!inScope) { noDate++; continue; }
+        }
+        const assessment   = state.assessments[practice.practiceId] || defaultAssessment();
+        const practiceDate = assessment.targetDate;
+        // Group target: objective-level overrides domain-level
+        const groupDate    = groupTargets
+          ? (groupTargets[practice.objectiveId] || groupTargets[practice.domain] || "")
+          : "";
+        const domainDate    = domainTargets[practice.domain] || "";
+        const effectiveDate = practiceDate || groupDate || domainDate || "";
         if (!effectiveDate) {
           noDate++;
           continue;
@@ -4085,6 +4103,42 @@
       } catch (e) {
         if (statusEl) statusEl.textContent = "Save failed: " + e.message;
       }
+    }
+
+    async function loadGroupTargetsForFilter(groupId) {
+      if (!window.__AESCSF_GROUP_TARGETS_CACHE__) window.__AESCSF_GROUP_TARGETS_CACHE__ = {};
+      if (window.__AESCSF_GROUP_TARGETS_CACHE__[groupId]) return window.__AESCSF_GROUP_TARGETS_CACHE__[groupId];
+      try {
+        const r = await adminFetch(`/groups/${groupId}/targets`);
+        const data = r.ok ? await r.json() : { targets: {} };
+        window.__AESCSF_GROUP_TARGETS_CACHE__[groupId] = data.targets || {};
+        return window.__AESCSF_GROUP_TARGETS_CACHE__[groupId];
+      } catch { return {}; }
+    }
+
+    function setupTimelineGroupFilter(groups) {
+      const wrapper = document.getElementById("timelineGroupFilterWrapper");
+      const sel     = document.getElementById("timelineGroupFilter");
+      if (!wrapper || !sel || !groups?.length) return;
+      wrapper.style.display = "";
+      while (sel.options.length > 1) sel.remove(1);
+      for (const g of groups) {
+        const opt = document.createElement("option");
+        opt.value       = g.id;
+        opt.textContent = g.name;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener("change", async () => {
+        const groupId = sel.value ? parseInt(sel.value) : null;
+        if (!groupId) {
+          window.__AESCSF_ACTIVE_GROUP_TARGETS__ = null;
+          window.__AESCSF_ACTIVE_GROUP_META__    = null;
+        } else {
+          window.__AESCSF_ACTIVE_GROUP_TARGETS__ = await loadGroupTargetsForFilter(groupId);
+          window.__AESCSF_ACTIVE_GROUP_META__    = groups.find(g => g.id === groupId) || null;
+        }
+        renderTimeline();
+      });
     }
 
     function buildDashboardPresentrics() {
@@ -5779,7 +5833,10 @@ function buildPdfDomainRows(rows) {
           fetch(`${APP_CONFIG.apiBaseUrl}/domain-targets`, { credentials: "same-origin" })
             .then(r => r.ok ? r.json() : {}).then(data => {
               window.__AESCSF_DOMAIN_TARGETS__ = data || {};
-            }).catch(() => {})
+            }).catch(() => {}),
+          adminFetch("/groups").then(r => r.ok ? r.json() : []).then(groups => {
+            setupTimelineGroupFilter(groups);
+          }).catch(() => {})
         ]);
         if (remoteState) {
           state = remoteState;
@@ -7035,6 +7092,7 @@ function buildPdfDomainRows(rows) {
             <button class="group-detail-tab${activeTab==="domains"?" active":""}" data-gtab="domains">Domains</button>
             <button class="group-detail-tab${activeTab==="objectives"?" active":""}" data-gtab="objectives">Objectives</button>
             <button class="group-detail-tab${activeTab==="results"?" active":""}" data-gtab="results">Results</button>
+            <button class="group-detail-tab${activeTab==="targets"?" active":""}" data-gtab="targets">Targets</button>
           </div>
           <div class="group-detail-body" id="groupDetailBody"></div>
         </div>`;
@@ -7059,6 +7117,7 @@ function buildPdfDomainRows(rows) {
       else if (tab === "domains")    _renderDomainsTab(body, group);
       else if (tab === "objectives") _renderObjectivesTab(body, group);
       else if (tab === "results")    await _renderResultsTab(body, group);
+      else if (tab === "targets")    await _renderTargetsTab(body, group);
     }
 
     async function _renderMembersTab(body, group) {
@@ -7221,6 +7280,76 @@ function buildPdfDomainRows(rows) {
 
       html += `</tbody></table></div>`;
       body.innerHTML = html;
+    }
+
+    async function _renderTargetsTab(body, group) {
+      body.innerHTML = `<div class="groups-loading">Loading targets…</div>`;
+      try {
+        const r = await adminFetch(`/groups/${group.id}/targets`);
+        const data = r.ok ? await r.json() : { targets: {} };
+        const targets = data.targets || {};
+
+        const assignedDomains    = group.domains    || [];
+        const assignedObjectives = group.objectives || [];
+
+        if (!assignedDomains.length && !assignedObjectives.length) {
+          body.innerHTML = `<div style="padding:24px;color:var(--muted);font-size:.875rem;line-height:1.55;">
+            This group has no domain or objective assignments yet.<br>Add them in the <strong>Domains</strong> and <strong>Objectives</strong> tabs first.
+          </div>`;
+          return;
+        }
+
+        body.innerHTML = `
+          ${assignedDomains.length ? `
+            <div class="group-section-title">Domain target dates</div>
+            <p style="font-size:.78rem;color:var(--muted);margin:0 0 10px">These dates apply to all practices in each assigned domain.</p>
+            <div class="domain-target-grid" id="gdTargetDomainGrid">
+              ${assignedDomains.map(d => `
+                <div class="domain-target-row">
+                  <label>${escapeHtml(d)}</label>
+                  <input type="date" data-target-key="${escapeHtml(d)}" value="${escapeHtml(targets[d] || '')}">
+                </div>
+              `).join("")}
+            </div>
+          ` : ""}
+          ${assignedObjectives.length ? `
+            <div class="group-section-title" style="margin-top:${assignedDomains.length ? 16 : 0}px">Objective target dates</div>
+            <p style="font-size:.78rem;color:var(--muted);margin:0 0 10px">These override domain dates for the specific practices within each objective.</p>
+            <div class="domain-target-grid" id="gdTargetObjGrid">
+              ${assignedObjectives.map(o => `
+                <div class="domain-target-row">
+                  <label>${escapeHtml(o)}</label>
+                  <input type="date" data-target-key="${escapeHtml(o)}" value="${escapeHtml(targets[o] || '')}">
+                </div>
+              `).join("")}
+            </div>
+          ` : ""}
+          <div class="domain-target-actions" style="margin-top:16px">
+            <button class="primary" style="font-size:.85rem" id="gdSaveTargetsBtn">Save target dates</button>
+            <span class="domain-target-status" id="gdTargetStatus"></span>
+          </div>`;
+
+        document.getElementById("gdSaveTargetsBtn")?.addEventListener("click", async () => {
+          const statusEl = document.getElementById("gdTargetStatus");
+          const newTargets = {};
+          body.querySelectorAll("input[data-target-key]").forEach(inp => {
+            if (inp.value) newTargets[inp.dataset.targetKey] = inp.value;
+          });
+          try {
+            const resp = await adminFetch(`/groups/${group.id}/targets`, {
+              method: "PUT", body: JSON.stringify({ targets: newTargets })
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            // Invalidate timeline cache for this group
+            if (window.__AESCSF_GROUP_TARGETS_CACHE__) delete window.__AESCSF_GROUP_TARGETS_CACHE__[group.id];
+            if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 2500); }
+          } catch (e) {
+            if (statusEl) statusEl.textContent = "Save failed: " + e.message;
+          }
+        });
+      } catch (e) {
+        body.innerHTML = `<div style="color:var(--danger);padding:16px">${escapeHtml(e.message)}</div>`;
+      }
     }
 
     async function _saveGroupMembers(groupId, oids) {
