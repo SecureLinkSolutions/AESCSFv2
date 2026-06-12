@@ -6786,12 +6786,17 @@ function buildPdfDomainRows(rows) {
         const totalInScope = PRACTICES.filter(p =>
           gDomains.includes(p.domain) || gObjs.includes(p.objectiveId)
         ).length;
+        // coveredDomains = directly assigned domains + domains implied by objective assignments
+        const coveredDomains = [...new Set([
+          ...gDomains,
+          ...PRACTICES.filter(p => gObjs.includes(p.objectiveId)).map(p => p.domain)
+        ])];
         groupMap[gid] = {
           id: gid, name: meta.name, memberCount: 0,
           domains: Object.fromEntries(allDomains.map(d => [d, "Not Assessed"])),
           totalPractices: 0, yesPractices: 0,
           totalInScope,
-          groupDomains: gDomains, groupObjectives: gObjs
+          coveredDomains, groupDomains: gDomains, groupObjectives: gObjs
         };
       }
 
@@ -6826,9 +6831,9 @@ function buildPdfDomainRows(rows) {
           return;
         }
 
-        // Only show domain columns that are assigned to at least one group
+        // Only show domain columns that are assigned to at least one group (directly or via objectives)
         const visibleDomains = domains.filter(d =>
-          groups.some(g => g.groupDomains.includes(d))
+          groups.some(g => g.coveredDomains.includes(d))
         );
 
         content.innerHTML = `
@@ -6851,7 +6856,7 @@ function buildPdfDomainRows(rows) {
                     <td>${g.memberCount}</td>
                     <td style="font-weight:700;color:${pctColor};">${g.totalInScope ? `${pct}%` : "—"}</td>
                     ${visibleDomains.map(d => {
-                      if (!g.groupDomains.includes(d)) return `<td class="gom-na" title="Not assigned">N/A</td>`;
+                      if (!g.coveredDomains.includes(d)) return `<td class="gom-na" title="Not assigned">N/A</td>`;
                       return `<td class="${gomClass(g.domains[d])}">${escapeHtml(gomLabel(g.domains[d]))}</td>`;
                     }).join("")}
                   </tr>`;
@@ -6893,8 +6898,8 @@ function buildPdfDomainRows(rows) {
           ${groups.map(g => {
             const pct = g.totalInScope ? Math.round(g.yesPractices / g.totalInScope * 100) : 0;
             const pctColor = pct >= 80 ? "#059669" : pct >= 50 ? "#b45309" : "#dc2626";
-            // Only show domain dots for domains assigned to this group
-            const domainDots = (g.groupDomains.length ? g.groupDomains : domains).map(d => {
+            // Only show domain dots for domains covered by this group (directly or via objectives)
+            const domainDots = (g.coveredDomains.length ? g.coveredDomains : domains).map(d => {
               const s = g.domains[d] || "Not Assessed";
               const abbr = d.slice(0,4);
               const bg = { "Yes": "rgba(16,185,129,.55)", "Partial": "rgba(245,158,11,.55)", "In Progress": "rgba(245,158,11,.55)", "No": "rgba(239,68,68,.55)" }[s] || "var(--border)";
