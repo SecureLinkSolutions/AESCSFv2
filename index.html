@@ -410,6 +410,21 @@
       padding: 10px 12px; border-top: 1px solid rgba(148,163,184,0.08);
       font-size: 0.7rem; color: rgba(148,163,184,0.4);
     }
+    .sidebar-connecting {
+      display: flex; align-items: center; gap: 7px;
+      padding: 10px 12px; border-top: 1px solid rgba(148,163,184,0.08);
+      font-size: 0.7rem; color: rgba(148,163,184,0.55);
+    }
+    .sidebar-connecting-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: rgba(148,163,184,0.45);
+      animation: connectingPulse 1.2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes connectingPulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50%       { opacity: 1;   transform: scale(1.15); }
+    }
     .sidebar-overlay {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.5); z-index: 89;
@@ -2345,7 +2360,10 @@
         Audit Log
       </button>
     </div>
-    <div class="sidebar-footer" id="sidebarStorageMode"></div>
+    <div class="sidebar-connecting" id="sidebarConnecting">
+      <span class="sidebar-connecting-dot"></span>Connecting…
+    </div>
+    <div class="sidebar-footer" id="sidebarStorageMode" style="display:none;"></div>
   </nav>
 
   <div id="main-app">
@@ -5973,6 +5991,14 @@ function buildPdfDomainRows(rows) {
           ? 'Session error \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">reload to sign in again</a>'
           : 'Could not reach the server \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">retry</a>';
       if (btn) btn.style.display = "none";
+      /* Replace connecting indicator with error state */
+      const connectingEl = document.getElementById("sidebarConnecting");
+      if (connectingEl) {
+        const dot = connectingEl.querySelector(".sidebar-connecting-dot");
+        if (dot) { dot.style.background = "rgba(239,68,68,0.7)"; dot.style.animation = "none"; }
+        const txt = connectingEl.childNodes[1];
+        if (txt) txt.textContent = " Connection error";
+      }
     }
 
     async function initializeFromApi() {
@@ -6120,9 +6146,11 @@ function buildPdfDomainRows(rows) {
       if (topbarUserBtn)  topbarUserBtn.style.display = "flex";
       if (topbarSignOut)  topbarSignOut.style.display = "";
 
-      /* Update sidebar storage mode footer */
+      /* Update sidebar storage mode footer; hide connecting indicator */
+      const connectingEl = document.getElementById("sidebarConnecting");
+      if (connectingEl) connectingEl.style.display = "none";
       const smEl = document.getElementById("sidebarStorageMode");
-      if (smEl) smEl.textContent = APP_CONFIG.storageMode === "api" ? "API mode" : "Offline mode";
+      if (smEl) { smEl.textContent = APP_CONFIG.storageMode === "api" ? "API mode" : "Offline mode"; smEl.style.display = ""; }
 
       /* Show audit purge button for admins in API mode */
       const purgeBtn = document.getElementById("auditPurgeBtn");
