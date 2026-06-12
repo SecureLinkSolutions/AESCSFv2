@@ -1572,13 +1572,43 @@
     .gom-legend-item { display: flex; align-items: center; gap: 5px; }
     .gom-legend-dot { width: 10px; height: 10px; border-radius: 2px; }
 
+    /* Dashboard view toggle */
+    .dash-view-toggle {
+      display: inline-flex; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 3px; gap: 2px;
+    }
+    .dash-view-btn {
+      padding: 6px 20px; border-radius: 7px; font-size: .85rem; font-weight: 600;
+      border: none; background: transparent; color: var(--muted); cursor: pointer;
+      transition: background .12s, color .12s;
+    }
+    .dash-view-btn.active { background: var(--primary); color: #fff; }
+
     /* Dashboard group section */
-    .dashboard-group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px,1fr)); gap: 12px; }
+    .dashboard-group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 12px; }
     .dashboard-group-card {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 14px 16px;
+      border-radius: var(--radius-sm); padding: 16px; cursor: pointer;
+      transition: border-color .12s, box-shadow .12s;
     }
-    .dashboard-group-card:hover { border-color: var(--primary); }
+    .dashboard-group-card:hover { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+
+    /* Group drilldown */
+    .dash-drill-back { display:inline-flex;align-items:center;gap:6px;font-size:.85rem;font-weight:600;color:var(--primary);cursor:pointer;border:none;background:none;padding:0;margin-bottom:16px; }
+    .dash-drill-back:hover { text-decoration:underline; }
+    .dash-drill-stat-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px; }
+    .dash-drill-stat { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px; }
+    .dash-drill-stat .label { font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px; }
+    .dash-drill-stat .value { font-size:1.6rem;font-weight:800;color:var(--text);line-height:1.1; }
+    .dash-drill-domain-table { width:100%;border-collapse:collapse;font-size:.875rem; }
+    .dash-drill-domain-table th { font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--border);text-align:left; }
+    .dash-drill-domain-table td { padding:9px 12px;border-bottom:1px solid var(--border); }
+    .dash-drill-domain-table tr:last-child td { border-bottom:none; }
+    .gom-badge { display:inline-flex;align-items:center;padding:2px 10px;border-radius:999px;font-size:.72rem;font-weight:700;letter-spacing:.03em; }
+    .gom-badge.yes      { background:rgba(16,185,129,.12);color:#059669; }
+    .gom-badge.partial  { background:rgba(245,158,11,.12); color:#b45309; }
+    .gom-badge.no       { background:rgba(239,68,68,.12);  color:#dc2626; }
+    .gom-badge.na       { background:var(--border);        color:var(--muted); }
 
     .empty {
       padding: 28px;
@@ -2362,12 +2392,19 @@
           <h1>Dashboard</h1>
           <p>Executive overview of assessment progress, domain maturity, and open gaps.</p>
         </div>
+        <div class="page-header-actions" id="dashViewToggleWrapper" style="display:none;">
+          <div class="dash-view-toggle">
+            <button class="dash-view-btn active" id="dashViewOrgBtn">Organisation</button>
+            <button class="dash-view-btn" id="dashViewGroupsBtn">By Group</button>
+          </div>
+        </div>
       </div>
+      <div id="dashOrgContent">
       <section class="summary">
         <div class="timeline-toolbar">
           <div>
-            <h2 style="margin:0 0 6px 0;">Dashboard Summary</h2>
-            <div class="footer-note" style="margin-top:0;">Executive overview of assessment progress, open gaps, overdue activities, and domain maturity across the AESCSF v2 practice set.</div>
+            <h2 style="margin:0 0 6px 0;">Organisation Overview</h2>
+            <div class="footer-note" style="margin-top:0;">Aggregate assessment progress, open gaps, overdue activities, and domain maturity across all AESCSF v2 practices.</div>
           </div>
         </div>
         <div class="summary-grid">
@@ -2450,18 +2487,13 @@
         </section>
       </section>
 
-      <!-- Admin/Assessor group compliance section -->
-      <section id="dashboardGroupSection" class="dashboard-grid" style="display:none;">
-        <section class="dashboard-panel dashboard-panel-span">
-          <div class="panel-header">
-            <div>
-              <h3>By Business Unit <span class="confidence-admin-badge" style="vertical-align:middle;margin-left:6px;">Admin / Assessor</span></h3>
-              <div class="footer-note">Worst-case compliance status per domain for each business unit group.</div>
-            </div>
-          </div>
-          <div id="dashboardGroupContent"><div class="audit-empty">Loading group data…</div></div>
-        </section>
-      </section>
+      </div><!-- /dashOrgContent -->
+
+      <!-- Group-level dashboard (admin/assessor only) -->
+      <div id="dashGroupsContent" style="display:none;">
+        <div id="dashGroupOverview"></div>
+        <div id="dashGroupDrilldown" style="display:none;"></div>
+      </div>
 
       <!-- Admin-only Security Profile breakdown -->
       <section id="spBreakdownSection" class="dashboard-grid" style="display:none;">
@@ -4599,7 +4631,7 @@
         });
       }
       renderSpBreakdown(Presentrics);
-      renderDashboardGroupSection();
+      _applyDashView();
     }
 
     function exportGapRegister() {
@@ -6996,6 +7028,7 @@ function buildPdfDomainRows(rows) {
         groupMap[gid] = {
           id: gid, name: meta.name, memberCount: 0,
           domains: Object.fromEntries(allDomains.map(d => [d, "Not Assessed"])),
+          domainYes: {}, domainTotal: {},
           totalPractices: 0, yesPractices: 0,
           totalInScope,
           coveredDomains, groupDomains: gDomains, groupObjectives: gObjs
@@ -7013,6 +7046,8 @@ function buildPdfDomainRows(rows) {
           gm.domains[practice.domain] = gomWorstCase(gm.domains[practice.domain], g.aggregate_status);
           gm.totalPractices++;
           if (g.aggregate_status === "Yes") gm.yesPractices++;
+          gm.domainTotal[practice.domain] = (gm.domainTotal[practice.domain] || 0) + 1;
+          if (g.aggregate_status === "Yes") gm.domainYes[practice.domain] = (gm.domainYes[practice.domain] || 0) + 1;
         }
       }
       return groupMap;
@@ -7078,49 +7113,179 @@ function buildPdfDomainRows(rows) {
       }
     }
 
-    async function renderDashboardGroupSection() {
-      const section = document.getElementById("dashboardGroupSection");
-      const content = document.getElementById("dashboardGroupContent");
-      if (!section || !content) return;
+    /* ── Dashboard view switching ─────────────────────────────────────────── */
+
+    let _dashView = localStorage.getItem("aescsf_dash_view") || "org";
+
+    function _applyDashView() {
       const role = window.__AESCSF_RBAC__?.role;
-      if (role !== "admin" && role !== "assessor") return;
-      section.style.display = "";
+      const canSeeGroups = role === "admin" || role === "assessor";
+      document.getElementById("dashViewToggleWrapper").style.display = canSeeGroups ? "" : "none";
+      if (!canSeeGroups) _dashView = "org";
+      document.getElementById("dashOrgContent").style.display    = _dashView === "org"    ? "" : "none";
+      document.getElementById("dashGroupsContent").style.display = _dashView === "groups" ? "" : "none";
+      document.getElementById("dashViewOrgBtn")?.classList.toggle("active", _dashView === "org");
+      document.getElementById("dashViewGroupsBtn")?.classList.toggle("active", _dashView === "groups");
+      if (_dashView === "groups") _renderDashGroups();
+    }
+
+    function _setDashView(view) {
+      _dashView = view;
+      localStorage.setItem("aescsf_dash_view", view);
+      _applyDashView();
+    }
+
+    (function wireDashToggle() {
+      document.getElementById("dashViewOrgBtn")?.addEventListener("click", () => _setDashView("org"));
+      document.getElementById("dashViewGroupsBtn")?.addEventListener("click", () => _setDashView("groups"));
+    })();
+
+    let _dashGroupMap = null;
+
+    async function _renderDashGroups() {
+      const overview  = document.getElementById("dashGroupOverview");
+      const drilldown = document.getElementById("dashGroupDrilldown");
+      if (!overview) return;
+      drilldown.style.display = "none";
+      overview.innerHTML = `<div class="audit-empty" style="padding:24px;">Loading group data…</div>`;
       try {
         const data = await _loadGroupResponseData();
-        const groupMap = _buildGroupDomainMap(data);
-        const groups   = Object.values(groupMap).sort((a, b) => a.name.localeCompare(b.name));
-        const domains  = [...new Set(PRACTICES.map(p => p.domain))].sort();
-
+        _dashGroupMap = _buildGroupDomainMap(data);
+        const groups = Object.values(_dashGroupMap).sort((a, b) => a.name.localeCompare(b.name));
         if (!groups.length) {
-          content.innerHTML = `<div class="audit-empty">No group data. Assign users to groups to see business unit compliance.</div>`;
+          overview.innerHTML = `<div class="audit-empty">No groups found. Create groups and assign users to see group compliance.</div>`;
           return;
         }
-
-        content.innerHTML = `<div class="dashboard-group-grid">
-          ${groups.map(g => {
-            const pct = g.totalInScope ? Math.round(g.yesPractices / g.totalInScope * 100) : 0;
-            const pctColor = pct >= 80 ? "#059669" : pct >= 50 ? "#b45309" : "#dc2626";
-            // Only show domain dots for domains covered by this group (directly or via objectives)
-            const domainDots = (g.coveredDomains.length ? g.coveredDomains : domains).map(d => {
-              const s = g.domains[d] || "Not Assessed";
-              const abbr = d.slice(0,4);
-              const bg = { "Yes": "rgba(16,185,129,.55)", "Partial": "rgba(245,158,11,.55)", "In Progress": "rgba(245,158,11,.55)", "No": "rgba(239,68,68,.55)" }[s] || "var(--border)";
-              const col = { "Yes": "#059669", "Partial": "#b45309", "In Progress": "#b45309", "No": "#dc2626" }[s] || "var(--muted)";
-              return `<div title="${escapeHtml(d)}: ${escapeHtml(s)}"
-                style="padding:2px 5px;border-radius:3px;font-size:.65rem;font-weight:700;letter-spacing:.02em;background:${bg};color:${col};">${escapeHtml(abbr)}</div>`;
-            }).join("");
-            return `<div class="dashboard-group-card">
-              <div style="font-weight:700;font-size:.93rem;margin-bottom:2px;color:var(--text);">${escapeHtml(g.name)}</div>
-              <div style="font-size:.76rem;color:var(--muted);margin-bottom:10px;">${g.memberCount} member${g.memberCount===1?"":"s"}</div>
-              <div style="font-size:2rem;font-weight:800;color:${pctColor};line-height:1;">${g.totalInScope ? `${pct}%` : "—"}</div>
-              <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px;">${g.totalInScope ? `of ${g.totalInScope} assigned practices` : "No domains assigned"}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:3px;">${domainDots}</div>
-            </div>`;
-          }).join("")}
-        </div>`;
+        overview.innerHTML = `
+          <div style="margin-bottom:14px;">
+            <div style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);">Click a group to drill down</div>
+          </div>
+          <div class="dashboard-group-grid" id="dashGroupCards">
+            ${groups.map(g => {
+              const pct = g.totalInScope ? Math.round(g.yesPractices / g.totalInScope * 100) : 0;
+              const pctColor = pct >= 80 ? "#059669" : pct >= 50 ? "#b45309" : "#dc2626";
+              const domainDots = g.coveredDomains.map(d => {
+                const s = g.domains[d] || "Not Assessed";
+                const abbr = d.slice(0,4).toUpperCase();
+                const bg  = { "Yes": "rgba(16,185,129,.15)", "Partial": "rgba(245,158,11,.15)", "In Progress": "rgba(245,158,11,.15)", "No": "rgba(239,68,68,.15)" }[s] || "var(--border)";
+                const col = { "Yes": "#059669", "Partial": "#b45309", "In Progress": "#b45309", "No": "#dc2626" }[s] || "var(--muted)";
+                return `<div title="${escapeHtml(d)}: ${escapeHtml(s)}" style="padding:2px 6px;border-radius:4px;font-size:.63rem;font-weight:700;background:${bg};color:${col};">${escapeHtml(abbr)}</div>`;
+              }).join("");
+              return `<div class="dashboard-group-card" data-group-id="${g.id}">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                  <div style="font-weight:700;font-size:.93rem;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g.name)}</div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;color:var(--muted);"><path d="M9 18l6-6-6-6"/></svg>
+                </div>
+                <div style="font-size:.75rem;color:var(--muted);margin-bottom:12px;">${g.memberCount} member${g.memberCount===1?"":"s"} · ${g.totalInScope || 0} practices in scope</div>
+                <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
+                  <span style="font-size:1.8rem;font-weight:800;color:${pctColor};line-height:1;">${g.totalInScope ? `${pct}%` : "—"}</span>
+                  <span style="font-size:.75rem;color:var(--muted);">complete</span>
+                </div>
+                <div style="height:5px;border-radius:999px;background:var(--border);overflow:hidden;margin-bottom:10px;">
+                  <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:999px;"></div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:3px;">${domainDots}</div>
+              </div>`;
+            }).join("")}
+          </div>`;
+        overview.querySelectorAll(".dashboard-group-card[data-group-id]").forEach(card => {
+          card.addEventListener("click", () => _renderDashGroupDrilldown(parseInt(card.dataset.groupId)));
+        });
       } catch (e) {
-        content.innerHTML = `<div class="audit-empty">Could not load group data: ${escapeHtml(e.message)}</div>`;
+        overview.innerHTML = `<div class="audit-empty">Could not load group data: ${escapeHtml(e.message)}</div>`;
       }
+    }
+
+    function _renderDashGroupDrilldown(groupId) {
+      const overview  = document.getElementById("dashGroupOverview");
+      const drilldown = document.getElementById("dashGroupDrilldown");
+      const g = _dashGroupMap?.[groupId];
+      if (!g || !drilldown) return;
+      overview.style.display  = "none";
+      drilldown.style.display = "";
+
+      const pct      = g.totalInScope ? Math.round(g.yesPractices / g.totalInScope * 100) : 0;
+      const notYet   = g.totalInScope - g.yesPractices;
+      const partial  = g.coveredDomains.filter(d => ["Partial","In Progress"].includes(g.domains[d])).length;
+      const noCount  = g.coveredDomains.filter(d => g.domains[d] === "No").length;
+      const pctColor = pct >= 80 ? "var(--success)" : pct >= 50 ? "var(--warning)" : "var(--danger)";
+
+      const domainRows = g.coveredDomains.map(d => {
+        const s      = g.domains[d] || "Not Assessed";
+        const yes    = g.domainYes[d]   || 0;
+        const total  = g.domainTotal[d] || 0;
+        const scope  = PRACTICES.filter(p => p.domain === d && (
+          g.groupDomains.includes(p.domain) || g.groupObjectives.includes(p.objectiveId)
+        )).length;
+        const dpct   = scope ? Math.round(yes / scope * 100) : 0;
+        const badgeCls = { "Yes": "yes", "Partial": "partial", "In Progress": "partial", "No": "no" }[s] || "na";
+        return `<tr>
+          <td style="font-weight:600;">${escapeHtml(d)}</td>
+          <td><span class="gom-badge ${badgeCls}">${escapeHtml(s === "Not Assessed" ? "Not Assessed" : s)}</span></td>
+          <td style="color:var(--muted);font-size:.8rem;">${yes} / ${scope} practices</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;height:5px;border-radius:999px;background:var(--border);overflow:hidden;min-width:60px;">
+                <div style="height:100%;width:${dpct}%;background:${pct>=80?"var(--success)":pct>=50?"var(--warning)":"var(--danger)"};border-radius:999px;"></div>
+              </div>
+              <span style="font-size:.75rem;color:var(--muted);width:32px;text-align:right;">${dpct}%</span>
+            </div>
+          </td>
+        </tr>`;
+      }).join("");
+
+      drilldown.innerHTML = `
+        <button class="dash-drill-back" id="dashDrillBackBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+          All groups
+        </button>
+        <div style="margin-bottom:16px;">
+          <h2 style="margin:0 0 4px;font-size:1.3rem;font-weight:800;">${escapeHtml(g.name)}</h2>
+          <div style="font-size:.85rem;color:var(--muted);">${g.memberCount} member${g.memberCount===1?"":"s"} · ${g.coveredDomains.length} domain${g.coveredDomains.length===1?"":"s"} in scope</div>
+        </div>
+        <div class="dash-drill-stat-grid">
+          <div class="dash-drill-stat">
+            <div class="label">In Scope</div>
+            <div class="value">${g.totalInScope}</div>
+          </div>
+          <div class="dash-drill-stat">
+            <div class="label">Completed (Yes)</div>
+            <div class="value" style="color:var(--success);">${g.yesPractices}</div>
+          </div>
+          <div class="dash-drill-stat">
+            <div class="label">Partial / In Progress</div>
+            <div class="value" style="color:var(--warning);">${partial}</div>
+          </div>
+          <div class="dash-drill-stat">
+            <div class="label">Not Complete</div>
+            <div class="value" style="color:var(--danger);">${noCount}</div>
+          </div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:600;margin-bottom:6px;">
+            <span style="color:var(--text-soft);">Overall completion</span>
+            <span style="color:${pctColor};">${pct}%</span>
+          </div>
+          <div style="height:8px;border-radius:999px;background:var(--border);overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:999px;transition:width .4s;"></div>
+          </div>
+        </div>
+        <div class="dashboard-panel" style="margin-top:20px;padding:0;overflow:hidden;">
+          <div class="panel-header" style="padding:14px 18px;">
+            <h3 style="margin:0;font-size:.95rem;">Domain Breakdown</h3>
+          </div>
+          <table class="dash-drill-domain-table">
+            <thead><tr>
+              <th>Domain</th><th>Status</th><th>Practices</th><th>Progress</th>
+            </tr></thead>
+            <tbody>${domainRows || `<tr><td colspan="4" style="color:var(--muted);padding:16px;">No domain data yet.</td></tr>`}</tbody>
+          </table>
+        </div>`;
+
+      document.getElementById("dashDrillBackBtn")?.addEventListener("click", () => {
+        drilldown.style.display = "none";
+        overview.style.display  = "";
+      });
     }
 
     async function renderGroupsPage() {
