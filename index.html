@@ -3235,6 +3235,7 @@
       };
       const allowed = PAGE_ACCESS[role] || PAGE_ACCESS["user"];
       if (!allowed.has(page)) page = allowed.values().next().value;
+      localStorage.setItem("aescsf_last_page", page);
       dashboardPage.classList.toggle("active", page === "dashboard");
       assessmentPage.classList.toggle("active", page === "assessment");
       timelinePage.classList.toggle("active", page === "timeline");
@@ -5913,7 +5914,7 @@ function buildPdfDomainRows(rows) {
     populateDomains();
     setupDelegatedListeners();
     render();
-    setActivePage("assessment");
+    setActivePage(localStorage.getItem("aescsf_last_page") || "assessment");
     initializeFromApi();
     setTheme(localStorage.getItem('aescsf_theme')||'light'); /* load user profile + remote state (oauth2-proxy session already established) */
 
