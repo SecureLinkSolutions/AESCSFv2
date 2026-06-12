@@ -2361,7 +2361,7 @@
       </button>
     </div>
     <div class="sidebar-connecting" id="sidebarConnecting">
-      <span class="sidebar-connecting-dot"></span>Connecting…
+      <span class="sidebar-connecting-dot"></span>Starting up…
     </div>
     <div class="sidebar-footer" id="sidebarStorageMode" style="display:none;"></div>
   </nav>
@@ -5996,8 +5996,8 @@ function buildPdfDomainRows(rows) {
       if (connectingEl) {
         const dot = connectingEl.querySelector(".sidebar-connecting-dot");
         if (dot) { dot.style.background = "rgba(239,68,68,0.7)"; dot.style.animation = "none"; }
-        const txt = connectingEl.childNodes[1];
-        if (txt) txt.textContent = " Connection error";
+        const labelNode = connectingEl.lastChild;
+        if (labelNode && labelNode.nodeType === Node.TEXT_NODE) labelNode.textContent = " Connection error";
       }
     }
 
@@ -6017,25 +6017,57 @@ function buildPdfDomainRows(rows) {
         return;
       }
 
-      /* Step 1: load user profile + RBAC */
-      try {
-        const meResp   = await fetch(`${APP_CONFIG.apiBaseUrl}/me`, {
-          headers: { "Accept": "application/json" },
-          credentials: "same-origin"
-        });
-        if (meResp.ok) {
+      /* Step 1: load user profile + RBAC — retry while API is cold-starting */
+      const MAX_RETRIES = 20;
+      const RETRY_DELAYS = [2000,3000,4000,5000,6000,8000,10000,12000,15000,20000]; // ms
+      let meResp = null, meOk = false, meStatus = 0;
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+          meResp   = await fetch(`${APP_CONFIG.apiBaseUrl}/me`, {
+            headers: { "Accept": "application/json" },
+            credentials: "same-origin"
+          });
+          meStatus = meResp.status;
+          if (meResp.ok || meStatus === 401 || meStatus === 403) {
+            meOk = meResp.ok;
+            break; // success or hard auth error — stop retrying
+          }
+          // 502/503/etc (API still starting) — fall through to retry
+          console.info(`[AESCSF] /me returned ${meStatus}, retrying (${attempt + 1}/${MAX_RETRIES})…`);
+        } catch (err) {
+          console.info(`[AESCSF] /me network error, retrying (${attempt + 1}/${MAX_RETRIES})…`, err);
+          meStatus = 0;
+        }
+        if (attempt < MAX_RETRIES - 1) {
+          /* Update the connecting dot with attempt count */
+          const cEl = document.getElementById("sidebarConnecting");
+          if (cEl) {
+            const dotEl = cEl.querySelector(".sidebar-connecting-dot");
+            if (dotEl) dotEl.title = `Retry ${attempt + 1}`;
+            const labelNode = cEl.lastChild;
+            if (labelNode && labelNode.nodeType === Node.TEXT_NODE) {
+              labelNode.textContent = attempt < 4
+                ? "Connecting…"
+                : `Connecting… (${attempt + 1})`;
+            }
+          }
+          await new Promise(r => setTimeout(r, RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)]));
+        }
+      }
+      if (meOk) {
+        try {
           const me = await meResp.json();
           window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], objectives: me.objectives || [], _oid: me.oid || "", displayName: me.displayName || me.username || "" };
           applyRbacUI(me);
           populateDomains();
           render();
           if (me.objectives && me.objectives.length) checkAssignmentCompletion(me.objectives);
-        } else {
-          showAuthErrorBar(meResp.status);
+        } catch (err) {
+          console.warn("[AESCSF] Could not parse /me response:", err);
+          showAuthErrorBar(0);
         }
-      } catch (err) {
-        console.warn("[AESCSF] Could not load user profile:", err);
-        showAuthErrorBar(0);
+      } else {
+        showAuthErrorBar(meStatus);
       }
 
       /* Step 2: load assessment data, endorsements, domain targets, and confidence ratings in parallel */
