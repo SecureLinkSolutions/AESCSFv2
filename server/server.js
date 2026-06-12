@@ -260,6 +260,13 @@ db.exec(`
     target_date TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (group_id, target_key)
   );
+
+  CREATE TABLE IF NOT EXISTS tenant_settings (
+    tenant_id TEXT NOT NULL,
+    key       TEXT NOT NULL,
+    value     TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (tenant_id, key)
+  );
 `);
 
 /* Migration: add scope column to snapshots if it doesn't exist yet */
@@ -1092,6 +1099,21 @@ app.put("/api/domain-targets", requireAuth, autoRegister, requireAdminOrAssessor
     }
   });
   upsertTx();
+  res.json({ ok: true });
+});
+
+/* ── Organisation goal ───────────────────────────────────────────────────── */
+
+app.get("/api/admin/org-goal", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const row = db.prepare("SELECT value FROM tenant_settings WHERE tenant_id = ? AND key = 'org_goal'").get(req.user.tenant);
+  res.json(row ? JSON.parse(row.value) : {});
+});
+
+app.put("/api/admin/org-goal", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const { goalName = "", targetSp = "", targetDate = "" } = req.body || {};
+  const value = JSON.stringify({ goalName, targetSp, targetDate });
+  db.prepare(`INSERT INTO tenant_settings (tenant_id, key, value) VALUES (?, 'org_goal', ?)
+    ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value`).run(req.user.tenant, value);
   res.json({ ok: true });
 });
 

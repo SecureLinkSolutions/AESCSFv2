@@ -1332,11 +1332,8 @@
       font-size: 0.875rem;
       font-weight: 600;
       color: var(--text);
-      cursor: pointer;
       user-select: none;
-      list-style: none;
     }
-    .domain-target-summary::-webkit-details-marker { display: none; }
     .domain-target-hint {
       font-size: 0.78rem;
       font-weight: 400;
@@ -2661,26 +2658,47 @@
           </div>
         </div>
       </section>
-      <div id="timelineGroupFilterWrapper" style="display:none;margin-bottom:16px;">
-        <label style="font-size:.82rem;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">View by group</label>
-        <select id="timelineGroupFilter" style="font-size:.875rem;padding:7px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);min-width:220px;">
-          <option value="">All groups (global dates)</option>
-        </select>
+      <!-- Organisation Goal card -->
+      <div id="orgGoalSection" style="display:none;margin-bottom:16px;">
+        <div class="domain-target-editor">
+          <div class="domain-target-summary" style="cursor:default;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            Organisation Goal
+          </div>
+          <div class="domain-target-body" id="orgGoalBody">
+            <div style="color:var(--muted);font-size:.875rem;">Loading…</div>
+          </div>
+        </div>
       </div>
-      <details class="domain-target-editor" id="domainTargetEditor" style="display:none">
-        <summary class="domain-target-summary">
+
+      <!-- Group filter + domain target editor -->
+      <div class="domain-target-editor" id="domainTargetEditor" style="display:none">
+        <div class="domain-target-summary" style="cursor:default;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           Set Domain Target Dates
-          <span class="domain-target-hint">Apply a target date to all practices in a domain (overridden by practice-level dates)</span>
-        </summary>
+          <span class="domain-target-hint">Apply target dates per domain. Overridden by practice-level dates.</span>
+        </div>
         <div class="domain-target-body">
+          <!-- Group filter -->
+          <div id="timelineGroupFilterWrapper" style="display:none;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <label style="font-size:.82rem;font-weight:600;color:var(--text-soft);white-space:nowrap;">View by group:</label>
+            <select id="timelineGroupFilter" style="font-size:.875rem;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);min-width:200px;">
+              <option value="">All groups (global dates)</option>
+            </select>
+          </div>
+          <!-- Apply all row -->
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+            <label style="font-size:.82rem;font-weight:600;color:var(--text-soft);white-space:nowrap;">Apply one date to all domains:</label>
+            <input type="date" id="domainTargetSetAll" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+            <button class="secondary" id="domainTargetApplyAll" style="font-size:.82rem;padding:5px 14px;">Apply to all</button>
+          </div>
           <div class="domain-target-grid" id="domainTargetGrid"></div>
           <div class="domain-target-actions">
             <button class="primary" id="saveDomainTargetsBtn">Save domain dates</button>
             <span class="domain-target-status" id="domainTargetStatus"></span>
           </div>
         </div>
-      </details>
+      </div>
 
       <div id="timelineApp"></div>
     </div>
@@ -3264,7 +3282,7 @@
         document.getElementById("sidebarOverlay")?.classList.remove("open");
         document.body.style.overflow = "";
       }
-      if (page === "timeline")   { renderTimeline(); populateDomainTargetEditor(); }
+      if (page === "timeline")   { renderTimeline(); populateDomainTargetEditor(); if (window.__AESCSF_ORG_GOAL__ !== undefined) renderOrgGoal(); }
       if (page === "dashboard")  renderDashboard();
       if (page === "comparison") renderComparison();
       if (page === "admin")      renderAdminPanel();
@@ -4074,6 +4092,12 @@
           <input type="date" data-domain="${escapeHtml(domain)}" value="${escapeHtml(targets[domain] || "")}">
         </div>
       `).join("");
+      // Wire "apply to all domains" button
+      document.getElementById("domainTargetApplyAll")?.addEventListener("click", () => {
+        const val = document.getElementById("domainTargetSetAll")?.value;
+        if (!val) return;
+        grid.querySelectorAll("input[data-domain]").forEach(inp => { inp.value = val; });
+      });
     }
 
     async function saveDomainTargets() {
@@ -4134,10 +4158,128 @@
           window.__AESCSF_ACTIVE_GROUP_TARGETS__ = null;
           window.__AESCSF_ACTIVE_GROUP_META__    = null;
         } else {
-          window.__AESCSF_ACTIVE_GROUP_TARGETS__ = await loadGroupTargetsForFilter(groupId);
-          window.__AESCSF_ACTIVE_GROUP_META__    = groups.find(g => g.id === groupId) || null;
+          // Fetch full group detail to get domains + objectives
+          const [targets, detail] = await Promise.all([
+            loadGroupTargetsForFilter(groupId),
+            adminFetch(`/groups/${groupId}`).then(r => r.ok ? r.json() : null).catch(() => null)
+          ]);
+          window.__AESCSF_ACTIVE_GROUP_TARGETS__ = targets;
+          window.__AESCSF_ACTIVE_GROUP_META__    = detail || groups.find(g => g.id === groupId) || null;
         }
         renderTimeline();
+      });
+    }
+
+    /* ── Organisation Goal ─────────────────────────────────────────────────── */
+
+    async function loadOrgGoal() {
+      try {
+        const r = await adminFetch("/org-goal");
+        window.__AESCSF_ORG_GOAL__ = r.ok ? await r.json() : {};
+      } catch { window.__AESCSF_ORG_GOAL__ = {}; }
+      renderOrgGoal();
+    }
+
+    function renderOrgGoal() {
+      const body = document.getElementById("orgGoalBody");
+      if (!body) return;
+      const goal = window.__AESCSF_ORG_GOAL__ || {};
+      const { goalName = "", targetSp = "", targetDate = "" } = goal;
+      const hasGoal = goalName || targetSp || targetDate;
+
+      // Calculate progress
+      const spPractices = targetSp
+        ? PRACTICES.filter(p => p.securityProfile === targetSp)
+        : PRACTICES;
+      const done  = spPractices.filter(p => isCompletedStatus((state.assessments[p.practiceId] || defaultAssessment()).status)).length;
+      const total = spPractices.length;
+      const pct   = total ? Math.round(done / total * 100) : 0;
+      const pctColor = pct >= 80 ? "var(--success)" : pct >= 50 ? "var(--warning)" : "var(--danger)";
+
+      const daysLeft = targetDate ? daysUntil(targetDate) : null;
+      const dueTxt   = daysLeft === null ? "" : daysLeft < 0
+        ? `<span style="color:var(--danger);font-weight:600;">Overdue by ${Math.abs(daysLeft)} day${Math.abs(daysLeft)===1?"":"s"}</span>`
+        : daysLeft === 0 ? `<span style="color:var(--warning);font-weight:600;">Due today</span>`
+        : `<span style="color:var(--muted);">Due in ${daysLeft} day${daysLeft===1?"":"s"} (${targetDate})</span>`;
+
+      body.innerHTML = `
+        ${hasGoal ? `
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;">
+            <div>
+              <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:4px;">${escapeHtml(goalName || "Untitled goal")}</div>
+              <div style="font-size:.85rem;color:var(--muted);">
+                ${targetSp ? `<span class="role-badge assessor" style="margin-right:6px;">${escapeHtml(targetSp)}</span>` : "All practices"}
+                ${dueTxt}
+              </div>
+            </div>
+            <button class="secondary" id="orgGoalEditBtn" style="font-size:.8rem;padding:5px 12px;flex-shrink:0;">Edit goal</button>
+          </div>
+          <div style="margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:.8rem;font-weight:600;margin-bottom:4px;">
+              <span style="color:var(--text-soft);">Progress — ${escapeHtml(targetSp || "All")} practices at Yes</span>
+              <span style="color:${pctColor};">${done} / ${total} (${pct}%)</span>
+            </div>
+            <div style="height:8px;border-radius:999px;background:var(--border);overflow:hidden;">
+              <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:999px;transition:width .4s;"></div>
+            </div>
+          </div>
+        ` : `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <span style="font-size:.875rem;color:var(--muted);">No organisation goal set yet.</span>
+            <button class="secondary" id="orgGoalEditBtn" style="font-size:.8rem;padding:5px 12px;">Set goal</button>
+          </div>
+        `}
+        <div id="orgGoalForm" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+          <div class="domain-target-grid" style="margin-bottom:12px;">
+            <div class="domain-target-row">
+              <label>Goal name</label>
+              <input type="text" id="orgGoalNameInput" value="${escapeHtml(goalName)}" placeholder="e.g. Achieve SP-2 compliance" maxlength="120" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+            </div>
+            <div class="domain-target-row">
+              <label>Security profile target</label>
+              <select id="orgGoalSpInput" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+                <option value="" ${!targetSp?"selected":""}>All practices</option>
+                <option value="SP-1" ${targetSp==="SP-1"?"selected":""}>SP-1 — Foundational</option>
+                <option value="SP-2" ${targetSp==="SP-2"?"selected":""}>SP-2 — Intermediate</option>
+                <option value="SP-3" ${targetSp==="SP-3"?"selected":""}>SP-3 — Advanced</option>
+              </select>
+            </div>
+            <div class="domain-target-row">
+              <label>Target date</label>
+              <input type="date" id="orgGoalDateInput" value="${escapeHtml(targetDate)}" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+            </div>
+          </div>
+          <div class="domain-target-actions">
+            <button class="primary" id="orgGoalSaveBtn" style="font-size:.85rem;">Save goal</button>
+            <button class="secondary" id="orgGoalCancelBtn" style="font-size:.85rem;">Cancel</button>
+            <span class="domain-target-status" id="orgGoalStatus"></span>
+          </div>
+        </div>`;
+
+      document.getElementById("orgGoalEditBtn")?.addEventListener("click", () => {
+        document.getElementById("orgGoalForm").style.display = "";
+        document.getElementById("orgGoalEditBtn").style.display = "none";
+      });
+      document.getElementById("orgGoalCancelBtn")?.addEventListener("click", () => {
+        document.getElementById("orgGoalForm").style.display = "none";
+        document.getElementById("orgGoalEditBtn").style.display = "";
+      });
+      document.getElementById("orgGoalSaveBtn")?.addEventListener("click", async () => {
+        const statusEl = document.getElementById("orgGoalStatus");
+        const payload = {
+          goalName:   document.getElementById("orgGoalNameInput")?.value  || "",
+          targetSp:   document.getElementById("orgGoalSpInput")?.value    || "",
+          targetDate: document.getElementById("orgGoalDateInput")?.value  || "",
+        };
+        try {
+          const r = await adminFetch("/org-goal", { method: "PUT", body: JSON.stringify(payload) });
+          if (!r.ok) throw new Error(await r.text());
+          window.__AESCSF_ORG_GOAL__ = payload;
+          if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 2000); }
+          renderOrgGoal();
+        } catch (e) {
+          if (statusEl) statusEl.textContent = "Save failed: " + e.message;
+        }
       });
     }
 
@@ -5942,9 +6084,13 @@ function buildPdfDomainRows(rows) {
       const spSection = document.getElementById("spBreakdownSection");
       if (spSection) spSection.style.display = me.role === "admin" ? "" : "none";
 
-      /* Show domain target editor for admin + assessor */
+      /* Show domain target editor + org goal for admin + assessor */
+      const canManageTimeline = isAdmin || role === "assessor";
       const dtEditor = document.getElementById("domainTargetEditor");
-      if (dtEditor) dtEditor.style.display = (isAdmin || role === "assessor") ? "" : "none";
+      if (dtEditor) dtEditor.style.display = canManageTimeline ? "" : "none";
+      const orgGoalSec = document.getElementById("orgGoalSection");
+      if (orgGoalSec) orgGoalSec.style.display = canManageTimeline ? "" : "none";
+      if (canManageTimeline) loadOrgGoal();
 
       /* Show snapshot UI only in API mode */
       const snapshotEls = [
