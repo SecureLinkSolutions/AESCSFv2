@@ -6409,20 +6409,31 @@ function buildPdfDomainRows(rows) {
     }
 
     function buildUserCard(user) {
-      const initials = (user.display_name || user.username || "?")
+      const initials    = (user.display_name || user.username || "?")
         .split(" ").slice(0, 2).map(s => s[0].toUpperCase()).join("");
-      const assignedSet = new Set(user.domains || []);
-      const domainChips = ALL_DOMAINS.map(d => {
-        const checked = assignedSet.has(d);
-        return `<label class="admin-domain-chip${checked ? " checked" : ""}" id="chip-${user.oid}-${d}">
-          <input type="checkbox" ${checked ? "checked" : ""}
-                 onchange="adminToggleDomainChip('${escapeHtml(user.oid)}','${escapeHtml(d)}',this)"
-                 style="pointer-events:none;">
-          ${escapeHtml(d)}
-        </label>`;
-      }).join("");
-      const currentOid = window.__AESCSF_RBAC__?._oid || "";
-      const isSelf = !!currentOid && currentOid === user.oid;
+      const currentOid  = window.__AESCSF_RBAC__?._oid || "";
+      const isSelf      = !!currentOid && currentOid === user.oid;
+
+      // Access section — read-only, sourced from group membership
+      const groupNames = (user.groups || []).map(g => escapeHtml(g.name)).join(", ");
+      const domainChips = (user.domains || []).map(d =>
+        `<span class="group-assignment-chip">${escapeHtml(d)}</span>`
+      ).join("");
+      const objectiveChips = (user.objectives || []).map(o =>
+        `<span class="group-assignment-chip objective">${escapeHtml(o)}</span>`
+      ).join("");
+
+      let accessHtml;
+      if (!user.groups?.length) {
+        accessHtml = `<div style="font-size:.78rem;color:var(--muted);font-style:italic;">Not in any group — assign to a group on the Groups page to grant assessment access.</div>`;
+      } else if (!domainChips && !objectiveChips) {
+        accessHtml = `<div style="font-size:.82rem;font-weight:600;color:var(--text-soft);margin-bottom:4px;">${groupNames}</div>
+          <div style="font-size:.78rem;color:var(--muted);font-style:italic;">Group has no domain assignments yet — configure on the Groups page.</div>`;
+      } else {
+        accessHtml = `<div style="font-size:.82rem;font-weight:600;color:var(--text-soft);margin-bottom:6px;">${groupNames}</div>
+          <div class="group-assignment-grid">${domainChips}${objectiveChips}</div>`;
+      }
+
       return `
         <article class="admin-user-card" id="user-card-${escapeHtml(user.oid)}">
           <div class="admin-user-head">
@@ -6440,56 +6451,10 @@ function buildPdfDomainRows(rows) {
               <option value="admin"     ${user.role==="admin"     ? "selected" : ""}>Admin</option>
             </select>`}
           </div>
-          <details class="admin-assignment-details" open>
-            <summary class="admin-assignment-summary">
-              Domain Assignments
-              <span class="admin-assignment-count">${user.domains?.length || 0} assigned</span>
-            </summary>
-            <div class="admin-domains-section">
-              <div class="admin-domain-grid">${domainChips}</div>
-              <div class="admin-save-row">
-                <button onclick="adminSaveAssignments('${escapeHtml(user.oid)}')" class="secondary">Save assignments</button>
-                <span class="admin-save-status" id="save-status-${escapeHtml(user.oid)}"></span>
-              </div>
-            </div>
-          </details>
-          <details class="admin-assignment-details"${(user.objectives?.length || 0) > 0 ? " open" : ""}>
-            <summary class="admin-assignment-summary">
-              Objective Assignments
-              <span class="admin-assignment-count">${user.objectives?.length || 0} assigned</span>
-            </summary>
-            <div class="admin-domains-section">
-              <div class="obj-accordion">
-                ${(() => {
-                  const objAssignedSet = new Set(user.objectives || []);
-                  const objectivesByDomain = new Map();
-                  for (const p of PRACTICES) {
-                    if (!objectivesByDomain.has(p.domain)) objectivesByDomain.set(p.domain, new Map());
-                    objectivesByDomain.get(p.domain).set(p.objectiveId, p.objective);
-                  }
-                  return [...objectivesByDomain.entries()].map(([domain, objMap]) => {
-                    const domainHasAssigned = [...objMap.keys()].some(oid => objAssignedSet.has(oid));
-                    const chips = [...objMap.entries()].map(([objId, objLabel]) =>
-                      `<label class="admin-domain-chip${objAssignedSet.has(objId) ? " checked" : ""}" id="objchip-${escapeHtml(user.oid)}-${escapeHtml(objId)}" title="${escapeHtml(objLabel)}">
-                        <input type="checkbox" ${objAssignedSet.has(objId) ? "checked" : ""}
-                               onchange="adminToggleObjectiveChip('${escapeHtml(user.oid)}','${escapeHtml(objId)}',this)"
-                               style="pointer-events:none;">
-                        ${escapeHtml(objId)}
-                      </label>`
-                    ).join("");
-                    return `<details class="obj-domain-group"${domainHasAssigned ? " open" : ""}>
-                      <summary class="obj-domain-summary">${escapeHtml(domain)}</summary>
-                      <div class="admin-domain-grid">${chips}</div>
-                    </details>`;
-                  }).join("");
-                })()}
-              </div>
-              <div class="save-row">
-                <button class="secondary" onclick="adminSaveObjectiveAssignments('${escapeHtml(user.oid)}')">Save objectives</button>
-                <span id="obj-save-status-${escapeHtml(user.oid)}" class="save-status"></span>
-              </div>
-            </div>
-          </details>
+          <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
+            <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px;">Access via group</div>
+            ${accessHtml}
+          </div>
         </article>`;
     }
 
@@ -6809,19 +6774,35 @@ function buildPdfDomainRows(rows) {
     }
 
     function _buildGroupDomainMap(data) {
-      // Returns { groupId: { name, memberCount, domains: { domain: worstStatus }, totalPractices, yesPractices } }
-      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
-      const groupMap = {};
+      const groupsMeta = data._groups_meta || {};
+      const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const groupMap   = {};
+
+      // Pre-create entries for all known groups (even with no assessed data yet)
+      for (const [gidStr, meta] of Object.entries(groupsMeta)) {
+        const gid = Number(gidStr);
+        const gDomains = meta.domains || [];
+        const gObjs    = meta.objectives || [];
+        const totalInScope = PRACTICES.filter(p =>
+          gDomains.includes(p.domain) || gObjs.includes(p.objectiveId)
+        ).length;
+        groupMap[gid] = {
+          id: gid, name: meta.name, memberCount: 0,
+          domains: Object.fromEntries(allDomains.map(d => [d, "Not Assessed"])),
+          totalPractices: 0, yesPractices: 0,
+          totalInScope,
+          groupDomains: gDomains, groupObjectives: gObjs
+        };
+      }
+
       for (const [practiceId, pData] of Object.entries(data)) {
+        if (practiceId === "_groups_meta") continue;
         const practice = PRACTICES.find(p => p.practiceId === practiceId);
         if (!practice) continue;
         for (const g of pData.groups) {
-          if (!groupMap[g.group_id]) groupMap[g.group_id] = {
-            id: g.group_id, name: g.group_name, memberCount: g.members.length,
-            domains: Object.fromEntries(domains.map(d => [d, "Not Assessed"])),
-            totalPractices: 0, yesPractices: 0
-          };
+          if (!groupMap[g.group_id]) continue; // group not in meta; skip
           const gm = groupMap[g.group_id];
+          gm.memberCount = Math.max(gm.memberCount, g.members.length);
           gm.domains[practice.domain] = gomWorstCase(gm.domains[practice.domain], g.aggregate_status);
           gm.totalPractices++;
           if (g.aggregate_status === "Yes") gm.yesPractices++;
@@ -6841,9 +6822,14 @@ function buildPdfDomainRows(rows) {
         const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
 
         if (!groups.length) {
-          content.innerHTML = `<div class="audit-empty">No group assessment data yet. Assign users to groups and have them complete their assessments.</div>`;
+          content.innerHTML = `<div class="audit-empty">No groups configured yet. Create groups and assign domains on the Groups page.</div>`;
           return;
         }
+
+        // Only show domain columns that are assigned to at least one group
+        const visibleDomains = domains.filter(d =>
+          groups.some(g => g.groupDomains.includes(d))
+        );
 
         content.innerHTML = `
           <div class="groups-overview-wrap">
@@ -6853,18 +6839,21 @@ function buildPdfDomainRows(rows) {
                   <th>Group</th>
                   <th>Members</th>
                   <th>Completion</th>
-                  ${domains.map(d => `<th title="${escapeHtml(d)}">${escapeHtml(d)}</th>`).join("")}
+                  ${visibleDomains.map(d => `<th title="${escapeHtml(d)}">${escapeHtml(d)}</th>`).join("")}
                 </tr>
               </thead>
               <tbody>
                 ${groups.map(g => {
-                  const pct = g.totalPractices ? Math.round(g.yesPractices / g.totalPractices * 100) : 0;
+                  const pct = g.totalInScope ? Math.round(g.yesPractices / g.totalInScope * 100) : 0;
                   const pctColor = pct >= 80 ? "#059669" : pct >= 50 ? "#b45309" : "#dc2626";
                   return `<tr>
                     <td>${escapeHtml(g.name)}</td>
                     <td>${g.memberCount}</td>
-                    <td style="font-weight:700;color:${pctColor};">${pct}%</td>
-                    ${domains.map(d => `<td class="${gomClass(g.domains[d])}">${escapeHtml(gomLabel(g.domains[d]))}</td>`).join("")}
+                    <td style="font-weight:700;color:${pctColor};">${g.totalInScope ? `${pct}%` : "—"}</td>
+                    ${visibleDomains.map(d => {
+                      if (!g.groupDomains.includes(d)) return `<td class="gom-na" title="Not assigned">N/A</td>`;
+                      return `<td class="${gomClass(g.domains[d])}">${escapeHtml(gomLabel(g.domains[d]))}</td>`;
+                    }).join("")}
                   </tr>`;
                 }).join("")}
               </tbody>
@@ -6873,7 +6862,8 @@ function buildPdfDomainRows(rows) {
               <div class="gom-legend-item"><div class="gom-legend-dot gom-yes" style="background:rgba(16,185,129,.5);"></div> Yes — all practices compliant</div>
               <div class="gom-legend-item"><div class="gom-legend-dot gom-partial" style="background:rgba(245,158,11,.5);"></div> Partial / In Progress</div>
               <div class="gom-legend-item"><div class="gom-legend-dot gom-no" style="background:rgba(239,68,68,.5);"></div> No — at least one practice non-compliant</div>
-              <div class="gom-legend-item"><div class="gom-legend-dot" style="background:var(--border);"></div> — Not assessed</div>
+              <div class="gom-legend-item"><div class="gom-legend-dot" style="background:var(--border);"></div> — Not assessed yet</div>
+              <div class="gom-legend-item"><div class="gom-legend-dot" style="background:var(--surface-strong);"></div> N/A — domain not assigned to this group</div>
             </div>
           </div>`;
       } catch (e) {
@@ -6901,9 +6891,10 @@ function buildPdfDomainRows(rows) {
 
         content.innerHTML = `<div class="dashboard-group-grid">
           ${groups.map(g => {
-            const pct = g.totalPractices ? Math.round(g.yesPractices / g.totalPractices * 100) : 0;
+            const pct = g.totalInScope ? Math.round(g.yesPractices / g.totalInScope * 100) : 0;
             const pctColor = pct >= 80 ? "#059669" : pct >= 50 ? "#b45309" : "#dc2626";
-            const domainDots = domains.map(d => {
+            // Only show domain dots for domains assigned to this group
+            const domainDots = (g.groupDomains.length ? g.groupDomains : domains).map(d => {
               const s = g.domains[d] || "Not Assessed";
               const abbr = d.slice(0,4);
               const bg = { "Yes": "rgba(16,185,129,.55)", "Partial": "rgba(245,158,11,.55)", "In Progress": "rgba(245,158,11,.55)", "No": "rgba(239,68,68,.55)" }[s] || "var(--border)";
@@ -6914,8 +6905,8 @@ function buildPdfDomainRows(rows) {
             return `<div class="dashboard-group-card">
               <div style="font-weight:700;font-size:.93rem;margin-bottom:2px;color:var(--text);">${escapeHtml(g.name)}</div>
               <div style="font-size:.76rem;color:var(--muted);margin-bottom:10px;">${g.memberCount} member${g.memberCount===1?"":"s"}</div>
-              <div style="font-size:2rem;font-weight:800;color:${pctColor};line-height:1;">${pct}%</div>
-              <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px;">Yes practices</div>
+              <div style="font-size:2rem;font-weight:800;color:${pctColor};line-height:1;">${g.totalInScope ? `${pct}%` : "—"}</div>
+              <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px;">${g.totalInScope ? `of ${g.totalInScope} assigned practices` : "No domains assigned"}</div>
               <div style="display:flex;flex-wrap:wrap;gap:3px;">${domainDots}</div>
             </div>`;
           }).join("")}

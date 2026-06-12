@@ -725,15 +725,11 @@ function practiceObjectiveId(practiceId) {
 }
 
 function getUserObjectiveAssignments(oid) {
-  const personal = stmtGetObjectiveAssignments.all(oid).map(r => r.objective_id);
-  const fromGroups = stmtGetGroupObjectivesByUser.all(oid).map(r => r.objective_id);
-  return [...new Set([...personal, ...fromGroups])];
+  return stmtGetGroupObjectivesByUser.all(oid).map(r => r.objective_id);
 }
 
 function getUserAssignments(oid) {
-  const personal = stmtGetAssignments.all(oid).map(r => r.domain);
-  const fromGroups = stmtGetGroupDomainsByUser.all(oid).map(r => r.domain);
-  return [...new Set([...personal, ...fromGroups])];
+  return stmtGetGroupDomainsByUser.all(oid).map(r => r.domain);
 }
 
 function buildMergedAssessment() {
@@ -1223,7 +1219,20 @@ app.get("/api/admin/group-responses", requireAuth, autoRegister, requireAdminOrA
   try {
     const groups    = stmtListGroups.all(req.user.tenant);
     const groupById = Object.fromEntries(groups.map(g => [g.id, g]));
-    const userGroupMap = {}; // user_oid -> group_id
+
+    // Load each group's domain/objective assignments
+    const groupDomainSets = {};
+    const groupObjSets    = {};
+    const groupsMeta      = {};
+    for (const g of groups) {
+      const gDomains = stmtGetGroupDomains.all(g.id).map(r => r.domain);
+      const gObjIds  = stmtGetGroupObjectives.all(g.id).map(r => r.objective_id);
+      groupDomainSets[g.id] = new Set(gDomains);
+      groupObjSets[g.id]    = new Set(gObjIds);
+      groupsMeta[g.id]      = { name: g.name, domains: gDomains, objectives: gObjIds };
+    }
+
+    const userGroupMap = {};
     for (const g of groups) {
       for (const m of stmtGetGroupMembers.all(g.id)) userGroupMap[m.oid] = g.id;
     }
@@ -1237,7 +1246,6 @@ app.get("/api/admin/group-responses", requireAuth, autoRegister, requireAdminOrA
       "SELECT user_oid, data FROM assessments WHERE tenant_id = ?"
     ).all(req.user.tenant);
 
-    // { practiceId: { groupId: [member responses] }, practiceId: { ungrouped: [responses] } }
     const byPractice = {};
     for (const row of allRows) {
       const user    = usersByOid[row.user_oid];
@@ -1245,19 +1253,24 @@ app.get("/api/admin/group-responses", requireAuth, autoRegister, requireAdminOrA
       try {
         const assessments = JSON.parse(row.data)?.assessments || {};
         for (const [practiceId, assessment] of Object.entries(assessments)) {
-          if (!byPractice[practiceId]) byPractice[practiceId] = { groups: {}, ungrouped: [] };
-          const entry = { user_oid: row.user_oid, display_name: user?.display_name || row.user_oid, username: user?.username || row.user_oid, assessment };
+          const pDomain  = practiceDomain(practiceId);
+          const pObjId   = practiceObjectiveId(practiceId);
+          const entry    = { user_oid: row.user_oid, display_name: user?.display_name || row.user_oid, username: user?.username || row.user_oid, assessment };
           if (groupId) {
+            // Only include practices within the group's assigned domains/objectives
+            if (!groupDomainSets[groupId]?.has(pDomain) && !groupObjSets[groupId]?.has(pObjId)) continue;
+            if (!byPractice[practiceId]) byPractice[practiceId] = { groups: {}, ungrouped: [] };
             if (!byPractice[practiceId].groups[groupId]) byPractice[practiceId].groups[groupId] = [];
             byPractice[practiceId].groups[groupId].push(entry);
           } else {
+            if (!byPractice[practiceId]) byPractice[practiceId] = { groups: {}, ungrouped: [] };
             byPractice[practiceId].ungrouped.push(entry);
           }
         }
       } catch { /* skip corrupt */ }
     }
 
-    const result = {};
+    const result = { _groups_meta: groupsMeta };
     for (const [practiceId, { groups, ungrouped }] of Object.entries(byPractice)) {
       result[practiceId] = {
         groups: Object.entries(groups).map(([gid, members]) => ({
@@ -1370,26 +1383,27 @@ app.post("/api/admin/groups/:groupId/endorse-responses", requireAuth, autoRegist
 
 /* ── Admin routes ────────────────────────────────────────────────────────── */
 
-app.get("/api/admin/users", requireAuth, autoRegister, requireAdmin, (_req, res) => {
+app.get("/api/admin/users", requireAuth, autoRegister, requireAdmin, (req, res) => {
   const users = stmtGetAllUsers.all();
-  const allAssignments = stmtGetAllAssignments.all();
 
-  const assignmentsByOid = {};
-  for (const { user_oid, domain } of allAssignments) {
-    if (!assignmentsByOid[user_oid]) assignmentsByOid[user_oid] = [];
-    assignmentsByOid[user_oid].push(domain);
+  // Group memberships (one group per user enforced at application layer)
+  const allGroupMembers = db.prepare(`
+    SELECT gm.user_oid, g.id AS group_id, g.name AS group_name
+    FROM group_members gm
+    JOIN groups g ON g.id = gm.group_id
+    WHERE g.tenant_id = ?
+  `).all(req.user.tenant);
+  const groupsByOid = {};
+  for (const gm of allGroupMembers) {
+    if (!groupsByOid[gm.user_oid]) groupsByOid[gm.user_oid] = [];
+    groupsByOid[gm.user_oid].push({ id: gm.group_id, name: gm.group_name });
   }
 
-  const allObjAssignments = stmtGetAllObjectiveAssignments.all();
-  const objectivesByOid = {};
-  for (const { user_oid, objective_id } of allObjAssignments) {
-    if (!objectivesByOid[user_oid]) objectivesByOid[user_oid] = [];
-    objectivesByOid[user_oid].push(objective_id);
-  }
   res.json(users.map(u => ({
     ...u,
-    domains:    assignmentsByOid[u.oid]  || [],
-    objectives: objectivesByOid[u.oid]   || []
+    groups:     groupsByOid[u.oid]           || [],
+    domains:    getUserAssignments(u.oid),       // group-inherited only
+    objectives: getUserObjectiveAssignments(u.oid)
   })));
 });
 
