@@ -1869,6 +1869,40 @@
       }
     }
 
+    .exec-summary-goal {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 18px 22px; border-radius: var(--radius-md);
+      background: linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(139,92,246,0.08) 100%);
+      border: 1px solid rgba(59,130,246,0.20); margin-bottom: 22px;
+    }
+    .exec-goal-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); }
+    .exec-goal-name  { font-size: 1.05rem; font-weight: 700; color: var(--text); margin: 2px 0; }
+    .exec-goal-meta  { font-size: 0.82rem; color: var(--muted); }
+    .exec-goal-bar-wrap { flex: 1; min-width: 200px; }
+    .exec-goal-bar-shell { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; }
+    .exec-goal-bar-fill  { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary), #818cf8); transition: width 0.4s; }
+    .exec-stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 14px; margin-bottom: 22px; }
+    .exec-stat { background: var(--surface-strong); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px; }
+    .exec-stat .label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 6px; }
+    .exec-stat .value { font-size: 1.9rem; font-weight: 800; line-height: 1; color: var(--text); }
+    .exec-stat .value.compliant  { color: #059669; }
+    .exec-stat .value.inprogress { color: #b45309; }
+    .exec-stat .value.noncompliant { color: #dc2626; }
+    .exec-heatmap { overflow-x: auto; margin-bottom: 22px; }
+    .exec-heatmap table { border-collapse: collapse; font-size: 0.78rem; min-width: 100%; }
+    .exec-heatmap th { padding: 6px 10px; font-weight: 600; color: var(--muted); text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .exec-heatmap td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+    .exec-heatmap td.hm-yes      { background: rgba(16,185,129,0.18); color: #065f46; font-weight: 700; text-align: center; }
+    .exec-heatmap td.hm-partial  { background: rgba(245,158,11,0.18); color: #78350f; font-weight: 700; text-align: center; }
+    .exec-heatmap td.hm-no       { background: rgba(239,68,68,0.18);  color: #7f1d1d; font-weight: 700; text-align: center; }
+    .exec-heatmap td.hm-na       { color: var(--muted); text-align: center; }
+    html[data-theme="dark"] .exec-heatmap td.hm-yes     { color: #6ee7b7; }
+    html[data-theme="dark"] .exec-heatmap td.hm-partial { color: #fde68a; }
+    html[data-theme="dark"] .exec-heatmap td.hm-no      { color: #fca5a5; }
+    .exec-top-gaps { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .exec-top-gaps th { padding: 8px 12px; text-align: left; font-weight: 600; color: var(--muted); border-bottom: 2px solid var(--border); }
+    .exec-top-gaps td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+
     @media print {
       body::before, .toolbar, .top-actions, .page-nav, #timelinePage, #assessmentPage,
       .app-topbar, .app-sidebar, .sidebar-overlay, .cmd-palette-overlay {
@@ -2342,6 +2376,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Timeline
       </button>
+      <button class="sidebar-nav-item" data-page-tab="summary" id="sidebarSummaryTab" style="display:none;" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17h7M17 14v7"/></svg>
+        Executive Summary
+      </button>
       <button class="sidebar-nav-item" data-page-tab="comparison" id="sidebarComparisonTab" style="display:none;" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
         Comparison
@@ -2491,6 +2529,16 @@
           <div id="domainSummaryGrid" class="domain-summary-grid"></div>
         </section>
 
+        <section class="dashboard-panel dashboard-panel-span" id="trendChartSection">
+          <div class="panel-header">
+            <div>
+              <h3>Completion Trend</h3>
+              <div class="footer-note">Overall completion % per golden snapshot over time.</div>
+            </div>
+          </div>
+          <div id="trendChartWrap" class="chart-wrap" style="height:220px;"></div>
+        </section>
+
         <section class="dashboard-panel dashboard-panel-span">
           <div class="panel-header">
             <div>
@@ -2531,6 +2579,18 @@
           <div id="spBreakdownTable"></div>
         </section>
       </section>
+    </div>
+
+    <div class="page-tab" id="summaryPage" data-page-tab="summary">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1>Executive Summary</h1>
+          <p>Organisation compliance posture at a glance.</p>
+        </div>
+      </div>
+      <div id="execSummaryContent">
+        <div class="audit-empty">Loading…</div>
+      </div>
     </div>
 
     <div id="assessmentPage" class="page">
@@ -3262,6 +3322,7 @@
     let comparisonRadarChart = null;
     let comparisonStatusChart = null;
     let comparisonGapChart = null;
+    let trendLineChart = null;
     let comparisonState = { previous: null, current: null, previousLabel: "Previous Assessment", currentLabel: "Current Assessment" };
     const openObjectiveKeys = new Set();
 
@@ -3282,10 +3343,10 @@
     function setActivePage(page) {
       const role = window.__AESCSF_RBAC__?.role || "user";
       const PAGE_ACCESS = {
-        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups"]),
-        assessor:  new Set(["assessment","timeline","groups"]),
+        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups","summary"]),
+        assessor:  new Set(["assessment","timeline","groups","summary"]),
         user:      new Set(["assessment","timeline"]),
-        dashboard: new Set(["dashboard","comparison"]),
+        dashboard: new Set(["summary","dashboard","comparison"]),
       };
       const allowed = PAGE_ACCESS[role] || PAGE_ACCESS["user"];
       if (!allowed.has(page)) page = allowed.values().next().value;
@@ -3300,6 +3361,8 @@
       if (auditPage) auditPage.classList.toggle("active", page === "audit");
       const groupsPage = document.getElementById("groupsPage");
       if (groupsPage) groupsPage.classList.toggle("active", page === "groups");
+      const summaryPage = document.getElementById("summaryPage");
+      if (summaryPage) summaryPage.classList.toggle("active", page === "summary");
       pageTabs.forEach(tab => {
         tab.classList.toggle("active", tab.dataset.pageTab === page);
       });
@@ -3317,6 +3380,7 @@
       if (page === "admin")      renderAdminPanel();
       if (page === "audit")      renderAuditLog();
       if (page === "groups")     renderGroupsPage();
+      if (page === "summary")    renderExecSummary();
     }
 
     function formatDate(dateString) {
@@ -4689,6 +4753,7 @@
         // SP breakdown still uses state-based Presentrics (admin only)
         renderSpBreakdown(buildDashboardPresentrics());
         _applyDashView();
+        if (_dashView === "org") renderTrendChart();
         return;
       }
 
@@ -4794,6 +4859,222 @@
       _renderRadarCharts(domainRows, mils);
       renderSpBreakdown(Presentrics);
       _applyDashView();
+      if (_dashView === "org") renderTrendChart();
+    }
+
+    async function renderTrendChart() {
+      const wrap = document.getElementById("trendChartWrap");
+      if (!wrap) return;
+      try {
+        const data = await fetch(`${APP_CONFIG.apiBaseUrl}/snapshots/trend`, { credentials: "same-origin" })
+          .then(r => r.ok ? r.json() : []).catch(() => []);
+        if (data.length < 2) {
+          wrap.innerHTML = `<div class="empty-state" style="padding:28px 0;"><p class="empty-state-body">Save at least two golden snapshots to see the completion trend.</p></div>`;
+          if (trendLineChart) { trendLineChart.destroy(); trendLineChart = null; }
+          return;
+        }
+        wrap.innerHTML = `<canvas id="trendChart"></canvas>`;
+        if (trendLineChart) trendLineChart.destroy();
+        if (!window.Chart) return;
+        const cc = getChartColors();
+        trendLineChart = new Chart(document.getElementById("trendChart"), {
+          type: "line",
+          data: {
+            labels: data.map(d => d.label || d.date),
+            datasets: [
+              { label: "Completion %", data: data.map(d => d.completion),
+                fill: true, tension: 0.35,
+                backgroundColor: cc.domain.bg, borderColor: cc.domain.border,
+                pointBackgroundColor: cc.domain.point, borderWidth: 2 },
+              { label: "Fully", data: data.map(d => d.fully),
+                fill: false, tension: 0.35, borderDash: [4,4],
+                backgroundColor: "transparent", borderColor: cc.mil.border,
+                pointBackgroundColor: cc.mil.point, borderWidth: 1.5 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              y: { min: 0, ticks: { color: cc.tickColor }, grid: { color: cc.grid } },
+              x: { ticks: { color: cc.tickColor }, grid: { color: cc.grid } }
+            },
+            plugins: {
+              legend: { labels: { color: cc.legend, boxWidth: 12, padding: 16 } },
+              tooltip: { callbacks: { label: ctx => ctx.dataset.label === "Completion %" ? `${ctx.parsed.y}%` : `${ctx.parsed.y} practices` } }
+            }
+          }
+        });
+      } catch (e) {
+        wrap.innerHTML = `<div class="empty-state" style="padding:28px 0;"><p class="empty-state-body">Could not load trend data.</p></div>`;
+      }
+    }
+
+    async function renderExecSummary() {
+      const content = document.getElementById("execSummaryContent");
+      if (!content) return;
+      content.innerHTML = `<div class="groups-loading">Loading…</div>`;
+      try {
+        const [groupData, trendData, orgGoal] = await Promise.all([
+          _getOrgGroupData().catch(() => null),
+          fetch(`${APP_CONFIG.apiBaseUrl}/snapshots/trend`, { credentials: "same-origin" }).then(r => r.ok ? r.json() : []).catch(() => []),
+          adminFetch("/admin/org-goal").then(r => r.ok ? r.json() : {}).catch(() => {}),
+        ]);
+
+        /* Org goal banner */
+        let goalHtml = "";
+        if (orgGoal?.goalName) {
+          const spPractices = PRACTICES.filter(p => {
+            const lvl = orgGoal.targetSp || "SP-1";
+            const rank = { "SP-1": 1, "SP-2": 2, "SP-3": 3 };
+            return rank[p.securityProfile] <= rank[lvl];
+          });
+          const spTotal = spPractices.length;
+          let spDone = 0;
+          if (groupData) {
+            for (const p of spPractices) {
+              const pd = groupData[p.practiceId];
+              if (pd?.groups?.length) {
+                const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+                if (orgStatus === "Yes") spDone++;
+              }
+            }
+          }
+          const pct = spTotal ? Math.round(spDone / spTotal * 100) : 0;
+          const daysLeft = orgGoal.targetDate ? daysUntil(orgGoal.targetDate) : null;
+          const daysStr = daysLeft === null ? "" : daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d remaining`;
+          goalHtml = `<div class="exec-summary-goal">
+            <div>
+              <div class="exec-goal-label">Organisation Goal</div>
+              <div class="exec-goal-name">${escapeHtml(orgGoal.goalName)}</div>
+              <div class="exec-goal-meta">${escapeHtml(orgGoal.targetSp || "")}${orgGoal.targetDate ? " · Target: " + escapeHtml(orgGoal.targetDate) : ""}${daysStr ? " · " + escapeHtml(daysStr) : ""}</div>
+            </div>
+            <div class="exec-goal-bar-wrap">
+              <div style="font-size:0.78rem;color:var(--muted);margin-bottom:6px;">${spDone} / ${spTotal} practices (${pct}%)</div>
+              <div class="exec-goal-bar-shell"><div class="exec-goal-bar-fill" style="width:${pct}%"></div></div>
+            </div>
+          </div>`;
+        }
+
+        /* Aggregate stats from group data */
+        let fully = 0, largely = 0, gaps = 0, notAssessed = 0, total = PRACTICES.length;
+        if (groupData) {
+          for (const p of PRACTICES) {
+            const pd = groupData[p.practiceId];
+            if (!pd?.groups?.length) { notAssessed++; continue; }
+            const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+            if (orgStatus === "Yes") fully++;
+            else if (orgStatus === "Partial" || orgStatus === "In Progress") largely++;
+            else if (orgStatus === "No") gaps++;
+            else notAssessed++;
+          }
+        }
+        const completion = total ? Math.round(fully / total * 100) : 0;
+
+        const statsHtml = `<div class="exec-stat-row">
+          <div class="exec-stat"><div class="label">Compliant</div><div class="value compliant">${fully}</div></div>
+          <div class="exec-stat"><div class="label">In Progress</div><div class="value inprogress">${largely}</div></div>
+          <div class="exec-stat"><div class="label">Non-Compliant</div><div class="value noncompliant">${gaps}</div></div>
+          <div class="exec-stat"><div class="label">Not Assessed</div><div class="value">${notAssessed}</div></div>
+          <div class="exec-stat"><div class="label">Overall Completion</div><div class="value">${completion}%</div></div>
+        </div>`;
+
+        /* Group heatmap */
+        let heatmapHtml = "";
+        if (groupData) {
+          const groupMap = _buildGroupDomainMap(groupData);
+          const groups = Object.values(groupMap).sort((a, b) => a.name.localeCompare(b.name));
+          const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+          const visibleDomains = allDomains.filter(d => groups.some(g => g.coveredDomains.includes(d)));
+          if (groups.length) {
+            const hmClass = s => ({ "Yes": "hm-yes", "Partial": "hm-partial", "In Progress": "hm-partial", "No": "hm-no" }[s] || "hm-na");
+            const hmLabel = s => ({ "Yes": "✓", "Partial": "~", "In Progress": "~", "No": "✗", "Not Assessed": "—" }[s] || "—");
+            heatmapHtml = `<section class="dashboard-panel dashboard-panel-span" style="margin-bottom:22px;">
+              <div class="panel-header"><div><h3>Group Compliance Heatmap</h3></div></div>
+              <div class="exec-heatmap">
+                <table>
+                  <thead><tr>
+                    <th>Domain</th>
+                    ${groups.map(g => `<th title="${escapeHtml(g.name)}">${escapeHtml(g.name.length > 14 ? g.name.slice(0,13)+"…" : g.name)}</th>`).join("")}
+                  </tr></thead>
+                  <tbody>
+                    ${visibleDomains.map(d => `<tr>
+                      <td style="font-weight:600;">${escapeHtml(d)}</td>
+                      ${groups.map(g => {
+                        if (!g.coveredDomains.includes(d)) return `<td class="hm-na">—</td>`;
+                        const s = g.domains[d] || "Not Assessed";
+                        return `<td class="${hmClass(s)}" title="${escapeHtml(s)}">${hmLabel(s)}</td>`;
+                      }).join("")}
+                    </tr>`).join("")}
+                  </tbody>
+                </table>
+              </div>
+            </section>`;
+          }
+        }
+
+        /* Top gaps */
+        let gapsHtml = "";
+        if (groupData) {
+          const gapRows = PRACTICES
+            .map(p => {
+              const pd = groupData[p.practiceId];
+              if (!pd?.groups?.length) return null;
+              const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+              if (orgStatus === "Yes" || orgStatus === "Not Assessed") return null;
+              return { practice: p, orgStatus, groups: pd.groups.map(g => g.group_name) };
+            })
+            .filter(Boolean)
+            .sort((a, b) => (GOM_PRIORITY[a.orgStatus] ?? 3) - (GOM_PRIORITY[b.orgStatus] ?? 3))
+            .slice(0, 8);
+          if (gapRows.length) {
+            const sc = s => ({ "No": "tag-no", "Partial": "tag-partial", "In Progress": "tag-partial" }[s] || "");
+            gapsHtml = `<section class="dashboard-panel dashboard-panel-span">
+              <div class="panel-header"><div><h3>Priority Gaps</h3><div class="footer-note">Practices with non-compliant org status, worst-first.</div></div></div>
+              <table class="exec-top-gaps">
+                <thead><tr><th>Practice</th><th>Domain</th><th>Status</th><th>Responsible Groups</th></tr></thead>
+                <tbody>
+                  ${gapRows.map(r => `<tr>
+                    <td><strong>${escapeHtml(r.practice.practiceId)}</strong> ${escapeHtml(r.practice.practice)}</td>
+                    <td>${escapeHtml(r.practice.domain)}</td>
+                    <td><span class="badge ${sc(r.orgStatus)}">${escapeHtml(r.orgStatus)}</span></td>
+                    <td style="color:var(--muted);font-size:.8rem;">${r.groups.map(escapeHtml).join(", ") || "—"}</td>
+                  </tr>`).join("")}
+                </tbody>
+              </table>
+            </section>`;
+          }
+        }
+
+        /* Trend chart placeholder */
+        const trendHtml = `<section class="dashboard-panel dashboard-panel-span" style="margin-bottom:22px;">
+          <div class="panel-header"><div><h3>Completion Trend</h3><div class="footer-note">Overall completion % per golden snapshot.</div></div></div>
+          <div id="execTrendWrap" class="chart-wrap" style="height:200px;"></div>
+        </section>`;
+
+        content.innerHTML = goalHtml + statsHtml + trendHtml + heatmapHtml + gapsHtml;
+
+        /* Render trend mini chart */
+        if (trendData.length >= 2 && window.Chart) {
+          const cc = getChartColors();
+          new Chart(document.getElementById("execTrendWrap").appendChild(document.createElement("canvas")), {
+            type: "line",
+            data: {
+              labels: trendData.map(d => d.label || d.date),
+              datasets: [{ label: "Completion %", data: trendData.map(d => d.completion),
+                fill: true, tension: 0.35, backgroundColor: cc.domain.bg, borderColor: cc.domain.border,
+                pointBackgroundColor: cc.domain.point, borderWidth: 2 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false,
+              scales: { y: { min:0, max:100, ticks:{ color: cc.tickColor, callback: v=>v+"%" }, grid:{color:cc.grid} },
+                        x: { ticks:{color:cc.tickColor}, grid:{color:cc.grid} } },
+              plugins: { legend: { display: false } } }
+          });
+        } else {
+          document.getElementById("execTrendWrap").innerHTML = `<div class="empty-state" style="padding:20px 0;"><p class="empty-state-body">Save at least two golden snapshots to see the trend.</p></div>`;
+        }
+      } catch (e) {
+        content.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load: ${escapeHtml(e.message)}</div>`;
+      }
     }
 
     function exportGapRegister() {
@@ -6142,6 +6423,7 @@ function buildPdfDomainRows(rows) {
         sidebarAssessmentTab:  canEdit,
         sidebarTimelineTab:    canEdit,
         sidebarDashboardTab:   isAdmin || isDashOnly,
+        sidebarSummaryTab:     isAdmin || isDashOnly || role === "assessor",
         sidebarComparisonTab:  isAdmin || isDashOnly,
         sidebarGroupsTab:      isAdmin || role === "assessor",
         sidebarAdminTab:       isAdmin,
@@ -6166,17 +6448,17 @@ function buildPdfDomainRows(rows) {
 
       /* Redirect to first allowed page if current page is not permitted */
       const PAGE_ACCESS = {
-        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups"]),
-        assessor:  new Set(["assessment","timeline","groups"]),
+        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups","summary"]),
+        assessor:  new Set(["assessment","timeline","groups","summary"]),
         user:      new Set(["assessment","timeline"]),
-        dashboard: new Set(["dashboard","comparison"]),
+        dashboard: new Set(["summary","dashboard","comparison"]),
       };
       const allowed = PAGE_ACCESS[role] || PAGE_ACCESS["user"];
       const activeTab = document.querySelector(".page-tab.active");
       if (activeTab && !allowed.has(activeTab.dataset.pageTab)) {
         setActivePage(allowed.values().next().value);
       } else if (isDashOnly && !activeTab) {
-        setActivePage("dashboard");
+        setActivePage("summary");
       }
 
       /* Show action toolbar (export/import/reset) — replaced by Actions menu */

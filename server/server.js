@@ -1768,6 +1768,30 @@ app.delete("/api/snapshots/golden/:id", requireAuth, autoRegister, (req, res) =>
   res.json({ deleted: true });
 });
 
+/* Completion trend from golden snapshots */
+app.get("/api/snapshots/trend", requireAuth, autoRegister, (req, res) => {
+  const rows = db.prepare(
+    "SELECT id, label, created_at, data FROM snapshots WHERE tenant_id = ? AND scope = 'golden' ORDER BY created_at ASC"
+  ).all(req.user.tenant);
+  const trend = rows.map(row => {
+    try {
+      const assessments = JSON.parse(row.data)?.assessments || {};
+      const entries = Object.values(assessments);
+      const total = entries.length;
+      const fully  = entries.filter(a => a.status === "Fully" || a.status === "Yes").length;
+      const largely = entries.filter(a => a.status === "Largely").length;
+      const gaps   = entries.filter(a => !["Fully","Yes","Largely","Not Assessed",""].includes(a.status)).length;
+      return {
+        id: row.id, label: row.label,
+        date: new Date(row.created_at * 1000).toISOString().slice(0, 10),
+        total, fully, largely, gaps,
+        completion: total ? Math.round(fully / total * 100) : 0,
+      };
+    } catch { return null; }
+  }).filter(Boolean);
+  res.json(trend);
+});
+
 /* ── Snapshot routes ─────────────────────────────────────────────────────── */
 
 app.get("/api/snapshots", requireAuth, autoRegister, (req, res) => {
