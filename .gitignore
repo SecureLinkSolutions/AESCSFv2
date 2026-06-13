@@ -2,6 +2,10 @@
 node_modules/
 server/node_modules/
 
+# Vite build output
+dist/
+package-lock.json
+
 # Environment / secrets
 .env
 .env.local
