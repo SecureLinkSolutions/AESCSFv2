@@ -7158,7 +7158,7 @@ function buildPdfDomainRows(rows) {
       if (!content) return;
       content.innerHTML = `<div class="groups-loading">Loading…</div>`;
       try {
-        const data = await _loadGroupResponseData();
+        const data = await _getOrgGroupData();
         const groupMap = _buildGroupDomainMap(data);
         const groups  = Object.values(groupMap).sort((a, b) => a.name.localeCompare(b.name));
         const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
@@ -7249,7 +7249,7 @@ function buildPdfDomainRows(rows) {
       drilldown.style.display = "none";
       overview.innerHTML = `<div class="audit-empty" style="padding:24px;">Loading group data…</div>`;
       try {
-        const data = await _loadGroupResponseData();
+        const data = await _getOrgGroupData();
         _dashGroupMap = _buildGroupDomainMap(data);
         const groups = Object.values(_dashGroupMap).sort((a, b) => a.name.localeCompare(b.name));
         if (!groups.length) {
@@ -7702,6 +7702,12 @@ function buildPdfDomainRows(rows) {
 
         const assignedDomains    = group.domains    || [];
         const assignedObjectives = group.objectives || [];
+        const dateRows = (items, targets) => items.map(k =>
+          `<div class="domain-target-row">
+            <label>${escapeHtml(k)}</label>
+            <input type="date" data-target-key="${escapeHtml(k)}" value="${escapeHtml(targets[k] || '')}">
+          </div>`
+        ).join("");
 
         if (!assignedDomains.length && !assignedObjectives.length) {
           body.innerHTML = `<div style="padding:24px;color:var(--muted);font-size:.875rem;line-height:1.55;">
@@ -7715,24 +7721,14 @@ function buildPdfDomainRows(rows) {
             <div class="group-section-title">Domain target dates</div>
             <p style="font-size:.78rem;color:var(--muted);margin:0 0 10px">These dates apply to all practices in each assigned domain.</p>
             <div class="domain-target-grid" id="gdTargetDomainGrid">
-              ${assignedDomains.map(d => `
-                <div class="domain-target-row">
-                  <label>${escapeHtml(d)}</label>
-                  <input type="date" data-target-key="${escapeHtml(d)}" value="${escapeHtml(targets[d] || '')}">
-                </div>
-              `).join("")}
+              ${dateRows(assignedDomains, targets)}
             </div>
           ` : ""}
           ${assignedObjectives.length ? `
             <div class="group-section-title" style="margin-top:${assignedDomains.length ? 16 : 0}px">Objective target dates</div>
             <p style="font-size:.78rem;color:var(--muted);margin:0 0 10px">These override domain dates for the specific practices within each objective.</p>
             <div class="domain-target-grid" id="gdTargetObjGrid">
-              ${assignedObjectives.map(o => `
-                <div class="domain-target-row">
-                  <label>${escapeHtml(o)}</label>
-                  <input type="date" data-target-key="${escapeHtml(o)}" value="${escapeHtml(targets[o] || '')}">
-                </div>
-              `).join("")}
+              ${dateRows(assignedObjectives, targets)}
             </div>
           ` : ""}
           <div class="domain-target-actions" style="margin-top:16px">

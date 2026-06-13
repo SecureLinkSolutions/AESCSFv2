@@ -601,6 +601,8 @@ const stmtUpsertGroupEndorsement = db.prepare(`
     endorsed_at = excluded.endorsed_at
 `);
 
+const stmtGetUsersByTenant = db.prepare("SELECT oid, username, display_name FROM users WHERE tenant_id = ?");
+
 const stmtGetAllConfidence = db.prepare(
   "SELECT practice_id, rating, notes, updated_at FROM confidence_ratings WHERE tenant_id = ?"
 );
@@ -1293,9 +1295,7 @@ app.get("/api/admin/group-responses", requireAuth, autoRegister, requireAdminOrA
       for (const m of stmtGetGroupMembers.all(g.id)) userGroupMap[m.oid] = g.id;
     }
 
-    const allUsers = db.prepare(
-      "SELECT oid, username, display_name FROM users WHERE tenant_id = ?"
-    ).all(req.user.tenant);
+    const allUsers = stmtGetUsersByTenant.all(req.user.tenant);
     const usersByOid = Object.fromEntries(allUsers.map(u => [u.oid, u]));
 
     const allRows = db.prepare(
