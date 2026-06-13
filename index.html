@@ -2422,7 +2422,7 @@
         <div class="timeline-toolbar">
           <div>
             <h2 style="margin:0 0 6px 0;">Organisation Overview</h2>
-            <div class="footer-note" style="margin-top:0;">Aggregate assessment progress, open gaps, overdue activities, and domain maturity across all AESCSF v2 practices.</div>
+            <div class="footer-note" id="orgOverviewSubtitle" style="margin-top:0;">Aggregate assessment progress, open gaps, overdue activities, and domain maturity across all AESCSF v2 practices.</div>
           </div>
         </div>
         <div class="summary-grid">
@@ -3235,6 +3235,7 @@
     let state = loadState();
 
     function saveState() {
+      _orgGroupDataCache = null;
       storageAdapter.save(state);
     }
 
@@ -4527,13 +4528,235 @@
         </table>`;
     }
 
-    function renderDashboard() {
+    /* ── Group-aggregate org dashboard helpers ───────────────────────── */
+    let _orgGroupDataCache = null;
+    let _orgGroupDataCacheTs = 0;
+    async function _getOrgGroupData() {
+      if (_orgGroupDataCache && Date.now() - _orgGroupDataCacheTs < 60000) return _orgGroupDataCache;
+      _orgGroupDataCache = await _loadGroupResponseData();
+      _orgGroupDataCacheTs = Date.now();
+      return _orgGroupDataCache;
+    }
+
+    function _buildOrgStatsFromGroups(data) {
+      const GOM_SCORE = { "Yes": 3, "Partial": 1.5, "In Progress": 1.5, "No": 0, "Not Assessed": 0 };
+      const rows = PRACTICES.map(practice => {
+        const entry = data[practice.practiceId];
+        let orgStatus = "Not Assessed";
+        const responsibleGroups = [];
+        if (entry && entry.groups && entry.groups.length) {
+          entry.groups.forEach(g => {
+            const s = g.aggregate_status || "Not Assessed";
+            orgStatus = orgStatus === "Not Assessed" ? s : gomWorstCase(orgStatus, s);
+            if (s !== "Not Assessed") responsibleGroups.push(g.group_name);
+          });
+        }
+        return { practice, orgStatus, responsibleGroups };
+      });
+
+      const total = rows.length;
+      const fully = rows.filter(r => r.orgStatus === "Yes").length;
+      const largely = rows.filter(r => r.orgStatus === "In Progress").length;
+      const gaps = rows.filter(r => r.orgStatus === "No" || r.orgStatus === "Partial").length;
+      const notAssessed = rows.filter(r => r.orgStatus === "Not Assessed").length;
+      const assessedCount = total - notAssessed;
+      const completion = total ? Math.round((assessedCount / total) * 100) : 0;
+
+      const GAP_ORDER = { "No": 0, "Partial": 1, "In Progress": 2 };
+      const gapRows = rows
+        .filter(r => r.orgStatus === "No" || r.orgStatus === "Partial" || r.orgStatus === "In Progress")
+        .sort((a, b) => (GAP_ORDER[a.orgStatus] ?? 99) - (GAP_ORDER[b.orgStatus] ?? 99))
+        .slice(0, 25);
+
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const domainRows = domains.map(domain => {
+        const dRows = rows.filter(r => r.practice.domain === domain);
+        const dFully = dRows.filter(r => r.orgStatus === "Yes").length;
+        const dLargely = dRows.filter(r => r.orgStatus === "In Progress").length;
+        const dGaps = dRows.filter(r => r.orgStatus === "No" || r.orgStatus === "Partial").length;
+        const dNotAssessed = dRows.filter(r => r.orgStatus === "Not Assessed").length;
+        const dAssessed = dRows.length - dNotAssessed;
+        const scoreTotal = dRows.reduce((sum, r) => sum + (GOM_SCORE[r.orgStatus] ?? 0), 0);
+        const score = dRows.length ? Number((scoreTotal / dRows.length).toFixed(2)) : 0;
+        return {
+          label: domain,
+          score,
+          total: dRows.length,
+          fully: dFully,
+          largely: dLargely,
+          gaps: dGaps,
+          notAssessed: dNotAssessed,
+          completion: dRows.length ? Math.round((dAssessed / dRows.length) * 100) : 0
+        };
+      });
+
+      const mils = ["MIL-1", "MIL-2", "MIL-3"].map(level => {
+        const mRows = rows.filter(r => r.practice.mil === level);
+        const scoreTotal = mRows.reduce((sum, r) => sum + (GOM_SCORE[r.orgStatus] ?? 0), 0);
+        return { label: level, score: mRows.length ? Number((scoreTotal / mRows.length).toFixed(2)) : 0 };
+      });
+
+      return { rows, gapRows, domainRows, mils, total, fully, largely, gaps, notAssessed, completion };
+    }
+
+    function _setStatTile(valueId, value, label) {
+      const el = document.getElementById(valueId);
+      if (!el) return;
+      el.textContent = value;
+      if (label !== undefined) {
+        const lEl = el.previousElementSibling;
+        if (lEl) lEl.textContent = label;
+      }
+    }
+    function _showStatTile(valueId, show) {
+      const el = document.getElementById(valueId);
+      const tile = el?.closest?.(".stat");
+      if (tile) tile.style.display = show ? "" : "none";
+    }
+
+    async function renderDashboard() {
+      const role = window.__AESCSF_RBAC__?.role;
+      const useGroupData = (role === "admin" || role === "assessor") && APP_CONFIG.storageMode === "api";
+
+      if (useGroupData) {
+        // Show brief loading state
+        const subtitleEl = document.getElementById("orgOverviewSubtitle");
+        if (subtitleEl) subtitleEl.textContent = "Loading group member responses…";
+
+        let groupStats = null;
+        try {
+          const data = await _getOrgGroupData();
+          groupStats = _buildOrgStatsFromGroups(data);
+        } catch (e) {
+          console.warn("renderDashboard: failed to load group data, falling back to state-based render", e);
+          if (subtitleEl) subtitleEl.textContent = "Assessment progress, open gaps, overdue activities, and domain maturity across all AESCSF v2 practices.";
+          _renderDashboardFromState();
+          return;
+        }
+
+        // Update subtitle
+        if (subtitleEl) subtitleEl.textContent = "Organisation compliance posture aggregated from group member responses across all assigned practices.";
+
+        // Update stat tiles (group mode)
+        _setStatTile("dashTotal",    groupStats.total,            "Practices");
+        _setStatTile("dashFully",    groupStats.fully,            "Compliant (Yes)");
+        _setStatTile("dashLargely",  groupStats.largely,          "In Progress");
+        _setStatTile("dashPartial",  groupStats.gaps,             "Non-Compliant");
+        _setStatTile("dashGaps",     groupStats.notAssessed,      "Not Assessed");
+        _setStatTile("dashCompletion", groupStats.completion + "%", "Completion");
+        _showStatTile("dashOverdue", false);
+        _showStatTile("dashEvidenceCoverage", false);
+
+        // Domain summary grid
+        const domainContainer = document.getElementById("domainSummaryGrid");
+        domainContainer.innerHTML = groupStats.domainRows.map(item => `
+          <article class="domain-card">
+            <div class="domain-card-head">
+              <h4>${escapeHtml(item.label)}</h4>
+              <small>Avg score ${item.score} / 3</small>
+            </div>
+            <div class="Presentric-row"><span>Yes</span><strong>${item.fully}</strong></div>
+            <div class="Presentric-row"><span>In Progress</span><strong>${item.largely}</strong></div>
+            <div class="Presentric-row"><span>Non-Compliant</span><strong>${item.gaps}</strong></div>
+            <div class="Presentric-row"><span>Not Assessed</span><strong>${item.notAssessed}</strong></div>
+            <div class="mini-bar"><span style="width:${item.completion}%"></span></div>
+          </article>
+        `).join("");
+
+        // Gap register (group mode)
+        document.getElementById("dashboardGapTable").innerHTML = groupStats.gapRows.length ? `
+          <table class="gap-table">
+            <thead>
+              <tr><th>Practice</th><th>Domain</th><th>Status</th><th>Responsible Groups</th></tr>
+            </thead>
+            <tbody>
+              ${groupStats.gapRows.map(r => `
+                <tr>
+                  <td><strong>${escapeHtml(r.practice.practiceId)}</strong><br>${escapeHtml(r.practice.practice)}</td>
+                  <td>${escapeHtml(r.practice.domain)}</td>
+                  <td><span class="status-select ${statusClass(r.orgStatus)}" style="padding:3px 8px;border-radius:6px;font-size:.8rem;">${escapeHtml(r.orgStatus)}</span></td>
+                  <td>${r.responsibleGroups.map(g => escapeHtml(g)).join(", ") || "—"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        ` : `<div class="empty">No non-compliant practices detected across group member responses.</div>`;
+
+        // Radar charts (group mode)
+        if (window.Chart) {
+          if (domainRadarChart) domainRadarChart.destroy();
+          if (milRadarChart) milRadarChart.destroy();
+
+          const cc = getChartColors();
+          domainRadarChart = new Chart(document.getElementById("domainRadarChart"), {
+            type: "radar",
+            data: {
+              labels: groupStats.domainRows.map(d => d.label),
+              datasets: [{
+                label: "Domain compliance",
+                data: groupStats.domainRows.map(d => d.score),
+                fill: true,
+                backgroundColor: cc.domain.bg,
+                borderColor: cc.domain.border,
+                pointBackgroundColor: cc.domain.point,
+                borderWidth: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: radarScaleOpts(3),
+              plugins: { legend: { display: false } }
+            }
+          });
+
+          milRadarChart = new Chart(document.getElementById("milRadarChart"), {
+            type: "radar",
+            data: {
+              labels: groupStats.mils.map(m => m.label),
+              datasets: [{
+                label: "MIL coverage",
+                data: groupStats.mils.map(m => m.score),
+                fill: true,
+                backgroundColor: cc.mil.bg,
+                borderColor: cc.mil.border,
+                pointBackgroundColor: cc.mil.point,
+                borderWidth: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: radarScaleOpts(3),
+              plugins: { legend: { display: false } }
+            }
+          });
+        }
+
+        // SP breakdown still uses state-based Presentrics (admin only)
+        renderSpBreakdown(buildDashboardPresentrics());
+        _applyDashView();
+        return;
+      }
+
+      // State-based render (non-API or non-admin/assessor roles)
+      _renderDashboardFromState();
+    }
+
+    function _renderDashboardFromState() {
       const Presentrics = buildDashboardPresentrics();
+
+      // Restore subtitle and tile labels for state-based view
+      const subtitleEl = document.getElementById("orgOverviewSubtitle");
+      if (subtitleEl) subtitleEl.textContent = "Assessment progress, open gaps, overdue activities, and domain maturity across all AESCSF v2 practices.";
+      _setStatTile("dashFully",   Presentrics.fully,   "Fully");
+      _setStatTile("dashLargely", Presentrics.largely, "Largely");
+      _setStatTile("dashPartial", Presentrics.partial, "Open / Partial");
+      _setStatTile("dashGaps",    Presentrics.gaps,    "Open Gaps");
+      _showStatTile("dashOverdue", true);
+      _showStatTile("dashEvidenceCoverage", true);
+
       document.getElementById("dashTotal").textContent = Presentrics.total;
-      document.getElementById("dashFully").textContent = Presentrics.fully;
-      document.getElementById("dashLargely").textContent = Presentrics.largely;
-      document.getElementById("dashPartial").textContent = Presentrics.partial;
-      document.getElementById("dashGaps").textContent = Presentrics.gaps;
       document.getElementById("dashOverdue").textContent = Presentrics.overdue;
       document.getElementById("dashEvidenceCoverage").textContent = Presentrics.evidenceCoverage + "%";
       document.getElementById("evidenceCoverageBar").style.width = Presentrics.evidenceCoverage + "%";
