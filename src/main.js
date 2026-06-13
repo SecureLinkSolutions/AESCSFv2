@@ -1866,15 +1866,6 @@ function buildPdfDomainRows(rows) {
       });
     }
 
-    function escapeHtml(value) {
-      return String(value == null ? "" : value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-    }
-
     function openPrintablePdfFallback(metrics, domainRows, gapRows, generatedAt) {
       const domainRadarImage = getCanvasImageData("domainRadarChart");
       const milRadarImage = getCanvasImageData("milRadarChart");
@@ -4903,4 +4894,15 @@ Object.assign(window, {
   setTheme,
   signOut,
   closeHistoryModal,
+  acceptContribution,
+  handleFileInputChange,
+  openHistoryModal,
+  endorseGroupResponses,
+  toggleGroupDetail,
+  endorseVersion,
+  removeEndorsement,
+  adminSetRole,
+  deleteFile,
+  _auditState,
+  _loadAuditPage,
 });
