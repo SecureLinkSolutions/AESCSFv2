@@ -2384,12 +2384,10 @@
       <h1>AESCSF v2 Evidence Tracker</h1>
       <p>Capture implementation status, evidence, owners, dates, and notes against each AESCSF v2 practice.</p>
       <div class="top-actions" id="topActionsBar">
-        <button id="exportBtn" style="display:none;"></button>
         <button class="secondary" id="exportTemplateCsvBtn">AEMO Export</button>
         <button class="secondary" id="exportGapBtn">Export Gap Register</button>
         <button class="secondary" id="pdfBtn">Generate PDF Report</button>
         <button class="secondary" id="saveSnapshotBtn" title="Save the current assessment as a named snapshot for year-on-year comparison">Save Snapshot</button>
-        <input id="importFile" type="file" accept=".json,application/json" hidden />
         <button class="ghost" id="resetBtn">Reset Assessment Data</button>
       </div>
       <div class="page-nav">
@@ -4594,6 +4592,29 @@
       if (tile) tile.style.display = show ? "" : "none";
     }
 
+    function _renderRadarCharts(domainItems, milItems) {
+      if (!window.Chart) return;
+      if (domainRadarChart) domainRadarChart.destroy();
+      if (milRadarChart) milRadarChart.destroy();
+      const cc = getChartColors();
+      domainRadarChart = new Chart(document.getElementById("domainRadarChart"), {
+        type: "radar",
+        data: {
+          labels: domainItems.map(d => d.label),
+          datasets: [{ label: "Domain maturity", data: domainItems.map(d => d.score), fill: true, backgroundColor: cc.domain.bg, borderColor: cc.domain.border, pointBackgroundColor: cc.domain.point, borderWidth: 2 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: radarScaleOpts(3), plugins: { legend: { display: false } } }
+      });
+      milRadarChart = new Chart(document.getElementById("milRadarChart"), {
+        type: "radar",
+        data: {
+          labels: milItems.map(m => m.label),
+          datasets: [{ label: "MIL coverage", data: milItems.map(m => m.score), fill: true, backgroundColor: cc.mil.bg, borderColor: cc.mil.border, pointBackgroundColor: cc.mil.point, borderWidth: 2 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: radarScaleOpts(3), plugins: { legend: { display: false } } }
+      });
+    }
+
     async function renderDashboard() {
       const role = window.__AESCSF_RBAC__?.role;
       const useGroupData = (role === "admin" || role === "assessor") && APP_CONFIG.storageMode === "api";
@@ -4663,55 +4684,7 @@
         ` : `<div class="empty">No non-compliant practices detected across group member responses.</div>`;
 
         // Radar charts (group mode)
-        if (window.Chart) {
-          if (domainRadarChart) domainRadarChart.destroy();
-          if (milRadarChart) milRadarChart.destroy();
-
-          const cc = getChartColors();
-          domainRadarChart = new Chart(document.getElementById("domainRadarChart"), {
-            type: "radar",
-            data: {
-              labels: groupStats.domainRows.map(d => d.label),
-              datasets: [{
-                label: "Domain compliance",
-                data: groupStats.domainRows.map(d => d.score),
-                fill: true,
-                backgroundColor: cc.domain.bg,
-                borderColor: cc.domain.border,
-                pointBackgroundColor: cc.domain.point,
-                borderWidth: 2
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: radarScaleOpts(3),
-              plugins: { legend: { display: false } }
-            }
-          });
-
-          milRadarChart = new Chart(document.getElementById("milRadarChart"), {
-            type: "radar",
-            data: {
-              labels: groupStats.mils.map(m => m.label),
-              datasets: [{
-                label: "MIL coverage",
-                data: groupStats.mils.map(m => m.score),
-                fill: true,
-                backgroundColor: cc.mil.bg,
-                borderColor: cc.mil.border,
-                pointBackgroundColor: cc.mil.point,
-                borderWidth: 2
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: radarScaleOpts(3),
-              plugins: { legend: { display: false } }
-            }
-          });
-        }
+        _renderRadarCharts(groupStats.domainRows, groupStats.mils);
 
         // SP breakdown still uses state-based Presentrics (admin only)
         renderSpBreakdown(buildDashboardPresentrics());
@@ -4736,11 +4709,11 @@
       _showStatTile("dashOverdue", true);
       _showStatTile("dashEvidenceCoverage", true);
 
-      document.getElementById("dashTotal").textContent = Presentrics.total;
-      document.getElementById("dashOverdue").textContent = Presentrics.overdue;
-      document.getElementById("dashEvidenceCoverage").textContent = Presentrics.evidenceCoverage + "%";
+      _setStatTile("dashTotal", Presentrics.total);
+      _setStatTile("dashOverdue", Presentrics.overdue, "Overdue");
+      _setStatTile("dashEvidenceCoverage", Presentrics.evidenceCoverage + "%", "Evidence Coverage");
       document.getElementById("evidenceCoverageBar").style.width = Presentrics.evidenceCoverage + "%";
-      document.getElementById("dashCompletion").textContent = Presentrics.completion + "%";
+      _setStatTile("dashCompletion", Presentrics.completion + "%", "Completion");
       document.getElementById("dashCompletionBar").style.width = Presentrics.completion + "%";
 
       const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
@@ -4818,55 +4791,7 @@
         </table>
       ` : `<div class="empty">No open gaps detected. All practices are either complete or have no recorded remediation actions.</div>`;
 
-      if (window.Chart) {
-        if (domainRadarChart) domainRadarChart.destroy();
-        if (milRadarChart) milRadarChart.destroy();
-
-        const cc = getChartColors();
-        domainRadarChart = new Chart(document.getElementById("domainRadarChart"), {
-          type: "radar",
-          data: {
-            labels: domainRows.map(item => item.label),
-            datasets: [{
-              label: "Domain maturity",
-              data: domainRows.map(item => item.score),
-              fill: true,
-              backgroundColor: cc.domain.bg,
-              borderColor: cc.domain.border,
-              pointBackgroundColor: cc.domain.point,
-              borderWidth: 2
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: radarScaleOpts(3),
-            plugins: { legend: { display: false } }
-          }
-        });
-
-        milRadarChart = new Chart(document.getElementById("milRadarChart"), {
-          type: "radar",
-          data: {
-            labels: mils.map(item => item.label),
-            datasets: [{
-              label: "MIL coverage",
-              data: mils.map(item => item.score),
-              fill: true,
-              backgroundColor: cc.mil.bg,
-              borderColor: cc.mil.border,
-              pointBackgroundColor: cc.mil.point,
-              borderWidth: 2
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: radarScaleOpts(3),
-            plugins: { legend: { display: false } }
-          }
-        });
-      }
+      _renderRadarCharts(domainRows, mils);
       renderSpBreakdown(Presentrics);
       _applyDashView();
     }
@@ -6124,23 +6049,20 @@ function buildPdfDomainRows(rows) {
       /* Step 1: load user profile + RBAC — retry while API is cold-starting */
       const MAX_RETRIES = 20;
       const RETRY_DELAYS = [2000,3000,4000,5000,6000,8000,10000,12000,15000,20000]; // ms
-      let meResp = null, meOk = false, meStatus = 0;
+      let meResp = null;
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
           meResp   = await fetch(`${APP_CONFIG.apiBaseUrl}/me`, {
             headers: { "Accept": "application/json" },
             credentials: "same-origin"
           });
-          meStatus = meResp.status;
-          if (meResp.ok || meStatus === 401 || meStatus === 403) {
-            meOk = meResp.ok;
+          if (meResp.ok || meResp.status === 401 || meResp.status === 403) {
             break; // success or hard auth error — stop retrying
           }
           // 502/503/etc (API still starting) — fall through to retry
-          console.info(`[AESCSF] /me returned ${meStatus}, retrying (${attempt + 1}/${MAX_RETRIES})…`);
+          console.info(`[AESCSF] /me returned ${meResp?.status}, retrying (${attempt + 1}/${MAX_RETRIES})…`);
         } catch (err) {
           console.info(`[AESCSF] /me network error, retrying (${attempt + 1}/${MAX_RETRIES})…`, err);
-          meStatus = 0;
         }
         if (attempt < MAX_RETRIES - 1) {
           /* Update the connecting dot with attempt count */
@@ -6158,7 +6080,7 @@ function buildPdfDomainRows(rows) {
           await new Promise(r => setTimeout(r, RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)]));
         }
       }
-      if (meOk) {
+      if (meResp?.ok) {
         try {
           const me = await meResp.json();
           window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], objectives: me.objectives || [], _oid: me.oid || "", displayName: me.displayName || me.username || "" };
@@ -6171,7 +6093,7 @@ function buildPdfDomainRows(rows) {
           showAuthErrorBar(0);
         }
       } else {
-        showAuthErrorBar(meStatus);
+        showAuthErrorBar(meResp?.status ?? 0);
       }
 
       /* Step 2: load assessment data, endorsements, domain targets, and confidence ratings in parallel */
