@@ -2382,14 +2382,13 @@
         <button onclick="signOut()" style="padding:5px 12px;background:transparent;border:1px solid rgba(255,255,255,.5);border-radius:8px;font-size:.8rem;font-weight:500;color:#fff;cursor:pointer;font-family:inherit;">Sign out</button>
       </div>
       <h1>AESCSF v2 Evidence Tracker</h1>
-      <p>Capture implementation status, evidence, owners, dates, and notes against each AESCSF v2 practice. Your work is stored locally in the browser and can also be exported to or imported from JSON.</p>
+      <p>Capture implementation status, evidence, owners, dates, and notes against each AESCSF v2 practice.</p>
       <div class="top-actions" id="topActionsBar">
-        <button id="exportBtn">Export JSON</button>
+        <button id="exportBtn" style="display:none;"></button>
         <button class="secondary" id="exportTemplateCsvBtn">AEMO Export</button>
         <button class="secondary" id="exportGapBtn">Export Gap Register</button>
         <button class="secondary" id="pdfBtn">Generate PDF Report</button>
         <button class="secondary" id="saveSnapshotBtn" title="Save the current assessment as a named snapshot for year-on-year comparison">Save Snapshot</button>
-        <label class="button-like secondary" for="importFile">Import JSON</label>
         <input id="importFile" type="file" accept=".json,application/json" hidden />
         <button class="ghost" id="resetBtn">Reset Assessment Data</button>
       </div>
@@ -2551,10 +2550,6 @@
           <div class="actions-menu" id="actionsMenu">
             <div class="actions-menu-group">
               <div class="actions-menu-group-label">Export</div>
-              <button class="actions-menu-item" id="actionsExportJson" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Export JSON
-              </button>
               <button class="actions-menu-item" id="actionsAemoExport" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 AEMO Export
@@ -2570,10 +2565,6 @@
             </div>
             <div class="actions-menu-group">
               <div class="actions-menu-group-label">Data</div>
-              <label class="actions-menu-item" for="importFile" style="cursor:pointer;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Import JSON
-              </label>
               <button class="actions-menu-item" id="actionsSaveSnapshot" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 Save Snapshot
@@ -2789,17 +2780,12 @@
                 <button class="ghost" id="comparisonPreviousDeleteBtn" type="button" title="Delete selected snapshot">Delete</button>
               </div>
             </div>
-            <div class="top-actions" style="margin-top:12px;">
-              <label class="button-like secondary" for="comparisonPreviousFile">Import JSON</label>
-              <input id="comparisonPreviousFile" type="file" accept=".json,application/json" hidden />
-              <button class="ghost" id="comparisonExportPreviousBtn" type="button">Export JSON</button>
-            </div>
           </section>
 
           <section class="dashboard-panel">
             <div class="panel-header"><div>
               <h3>Current Assessment</h3>
-              <div class="footer-note" id="comparisonCurrentMeta">Nothing loaded — select a snapshot, use the live assessment, or import a JSON file.</div>
+              <div class="footer-note" id="comparisonCurrentMeta">Nothing loaded — select a snapshot or use the live assessment.</div>
             </div></div>
             <div class="field">
               <label>Loaded</label>
@@ -2816,10 +2802,7 @@
               </div>
             </div>
             <div class="top-actions" style="margin-top:12px;">
-              <label class="button-like secondary" for="comparisonCurrentFile">Import JSON</label>
-              <input id="comparisonCurrentFile" type="file" accept=".json,application/json" hidden />
               <button class="secondary" id="comparisonUseLiveBtn" type="button">Use Live Assessment</button>
-              <button class="ghost" id="comparisonExportCurrentBtn" type="button">Export JSON</button>
             </div>
           </section>
 
@@ -3270,14 +3253,11 @@
     const timelinePage = document.getElementById("timelinePage");
     const comparisonPage = document.getElementById("comparisonPage");
     const pageTabs = document.querySelectorAll("[data-page-tab]");
-    const comparisonPreviousFile = document.getElementById("comparisonPreviousFile");
-    const comparisonCurrentFile = document.getElementById("comparisonCurrentFile");
     const searchInput = document.getElementById("searchInput");
     const domainFilter = document.getElementById("domainFilter");
     const milFilter = document.getElementById("milFilter");
     const spFilter = document.getElementById("spFilter");
     const statusFilter = document.getElementById("statusFilter");
-    const importFile = document.getElementById("importFile");
     let domainRadarChart = null;
     let milRadarChart = null;
     let spBreakdownChart = null;
@@ -5686,104 +5666,19 @@ function buildPdfDomainRows(rows) {
       renderComparisonTable(metrics.rows);
     }
 
-    function importComparisonFile(file, side) {
-      const reader = new FileReader();
-      reader.onload = event => {
-        try {
-          const parsed = JSON.parse(event.target.result);
-          if (!parsed || typeof parsed !== "object" || !parsed.assessments) throw new Error("JSON does not contain an assessments object.");
-          const label = side === "previous" ? "Previous Assessment" : "Current Assessment";
-          const snapshot = buildSnapshotFromAssessments(parsed.assessments, file.name, label);
-          comparisonState[side] = snapshot;
-          comparisonState[side + "Label"] = file.name.replace(/\.json$/i, "") || label;
-          renderComparison();
-        } catch (error) {
-          alert("Comparison import failed: " + error.message);
-        } finally {
-          if (side === "previous" && comparisonPreviousFile) comparisonPreviousFile.value = "";
-          if (side === "current" && comparisonCurrentFile) comparisonCurrentFile.value = "";
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    function exportComparisonSnapshot(side) {
-      const snapshot = comparisonState[side];
-      if (!snapshot) {
-        alert(`No ${side} comparison data is loaded.`);
-        return;
-      }
-      const payload = { version: "1.0", framework: "AESCSF v2", exportedAt: new Date().toISOString(), assessments: snapshot.assessments };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
-      downloadBlob(blob, `${side}-comparison-${stamp}.json`);
-    }
-
     function clearComparisonState() {
       comparisonState = { previous: null, current: null, previousLabel: "Previous Assessment", currentLabel: "Current Assessment" };
       updateComparisonMeta();
       resetComparisonSummary();
     }
 
-    function exportJson() {
-      const exportState = {
-        version: "1.0",
-        framework: "AESCSF v2",
-        exportedAt: new Date().toISOString(),
-        assessments: state.assessments
-      };
-      const blob = new Blob([JSON.stringify(exportState, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
-      a.href = url;
-      a.download = `aescsf-v2-assessment-${stamp}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
-
-    function importJsonFile(file) {
-      const reader = new FileReader();
-      reader.onload = event => {
-        try {
-          const parsed = JSON.parse(event.target.result);
-          if (!parsed || typeof parsed !== "object" || !parsed.assessments) {
-            throw new Error("JSON does not contain an assessments object.");
-          }
-          const next = buildInitialState();
-          for (const [practiceId, value] of Object.entries(parsed.assessments)) {
-            if (next.assessments[practiceId]) {
-              next.assessments[practiceId] = { ...defaultAssessment(), ...value };
-            }
-          }
-          state = next;
-          saveState();
-          render();
-          alert("Assessment data imported successfully.");
-        } catch (error) {
-          alert("Import failed: " + error.message);
-        } finally {
-          importFile.value = "";
-        }
-      };
-      reader.readAsText(file);
-    }
-
     pageTabs.forEach(tab => {
       tab.addEventListener("click", () => setActivePage(tab.dataset.pageTab));
     });
 
-    document.getElementById("exportBtn").addEventListener("click", exportJson);
     document.getElementById("exportTemplateCsvBtn").addEventListener("click", exportTemplateCsv);
     document.getElementById("exportGapBtn").addEventListener("click", exportGapRegister);
     document.getElementById("pdfBtn").addEventListener("click", generatePdfReport);
-    importFile.addEventListener("change", () => {
-      if (importFile.files && importFile.files[0]) {
-        importJsonFile(importFile.files[0]);
-      }
-    });
     document.getElementById("resetBtn").addEventListener("click", () => {
       if (confirm("This will clear all saved assessment data in this browser. Continue?")) {
         state = buildInitialState();
@@ -5816,24 +5711,12 @@ function buildPdfDomainRows(rows) {
       el.addEventListener("change", render);
     });
 
-    if (comparisonPreviousFile) {
-      comparisonPreviousFile.addEventListener("change", () => {
-        if (comparisonPreviousFile.files && comparisonPreviousFile.files[0]) importComparisonFile(comparisonPreviousFile.files[0], "previous");
-      });
-    }
-    if (comparisonCurrentFile) {
-      comparisonCurrentFile.addEventListener("change", () => {
-        if (comparisonCurrentFile.files && comparisonCurrentFile.files[0]) importComparisonFile(comparisonCurrentFile.files[0], "current");
-      });
-    }
     const useLiveBtn = document.getElementById("comparisonUseLiveBtn");
     if (useLiveBtn) useLiveBtn.addEventListener("click", () => {
       comparisonState.current = { ...getLiveComparisonSnapshot(), isLive: true };
       comparisonState.currentLabel = "Live Assessment";
       renderComparison();
     });
-    document.getElementById("comparisonExportPreviousBtn")?.addEventListener("click", () => exportComparisonSnapshot("previous"));
-    document.getElementById("comparisonExportCurrentBtn")?.addEventListener("click",  () => exportComparisonSnapshot("current"));
     document.getElementById("clearComparisonBtn")?.addEventListener("click", clearComparisonState);
     document.getElementById("comparisonPreviousLoadBtn")?.addEventListener("click",   () => loadSnapshotIntoComparison("previous"));
     document.getElementById("comparisonCurrentLoadBtn")?.addEventListener("click",    () => loadSnapshotIntoComparison("current"));
@@ -6021,7 +5904,6 @@ function buildPdfDomainRows(rows) {
       document.addEventListener("keydown", e => { if (e.key === "Escape" && menu.hasAttribute("data-open")) closeMenu(); });
 
       const wire = (id, fn) => document.getElementById(id)?.addEventListener("click", () => { closeMenu(); fn(); });
-      wire("actionsExportJson",   exportJson);
       wire("actionsAemoExport",   exportTemplateCsv);
       wire("actionsGapRegister",  exportGapRegister);
       wire("actionsFullReport",   generatePdfReport);
@@ -6053,7 +5935,6 @@ function buildPdfDomainRows(rows) {
         { type:"page", label:"Audit Log",  page:"audit",      icon:"file",   adminOnly:true },
       ];
       const ACTION_COMMANDS = [
-        { type:"action", label:"Export JSON",         fn: exportJson,           adminOnly: true },
         { type:"action", label:"AEMO Export (CSV)",   fn: exportTemplateCsv,    adminOnly: true },
         { type:"action", label:"Gap Register PDF",    fn: exportGapRegister,    adminOnly: true },
         { type:"action", label:"Full Report PDF",     fn: generatePdfReport,    adminOnly: true },
@@ -6387,8 +6268,6 @@ function buildPdfDomainRows(rows) {
         const el = document.getElementById(id);
         if (el) el.style.display = isAdmin ? "" : "none";
       });
-      const importLabel = document.querySelector("label.actions-menu-item[for='importFile']");
-      if (importLabel) importLabel.style.display = isAdmin ? "" : "none";
 
       /* Update topbar user display */
       const topbarUserBtn  = document.getElementById("topbarUserBtn");
