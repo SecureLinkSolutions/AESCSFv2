@@ -4,16 +4,14 @@ import "./style.css";
 // npm package imports replacing CDN scripts
 import Chart from "chart.js/auto";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import "jspdf-autotable"; // side-effect: extends jsPDF.prototype.autoTable
 import html2canvas from "html2canvas";
 
 // Make them global for the existing code that references them as globals
 window.Chart = Chart;
+// Expose as both window.jsPDF and window.jspdf.jsPDF (CDN compat)
 window.jsPDF = jsPDF;
-window.html2canvas = html2canvas;
-
-// Apply jspdf-autotable plugin to jsPDF
-autoTable(jsPDF);
+window.jspdf = { jsPDF };
 
 // ── Paste the entire existing <script> content below ──
     const STORAGE_KEY = "aescsf-v2-evidence-tracker";
