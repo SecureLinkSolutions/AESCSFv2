@@ -2854,7 +2854,7 @@ function buildPdfDomainRows(rows) {
 
         const placeholder = '<option value="">— Select a snapshot —</option>';
         const goldenOpts  = _goldenSnapshotCache.map(s =>
-          `<option value="${s.id}">★ ${escapeHtml(s.label)} — ${formatSnapshotDate(s.created_at)}</option>`
+          `<option value="${s.id}">${escapeHtml(s.label)} — ${formatSnapshotDate(s.created_at)}</option>`
         );
         const personalOpts = _snapshotCache.map(s => {
           const byLabel = s.created_by ? ` (${escapeHtml(s.created_by)})` : "";
@@ -2867,7 +2867,7 @@ function buildPdfDomainRows(rows) {
         } else {
           options = placeholder;
           if (goldenOpts.length) {
-            options += `<optgroup label="★ Shared (Golden)">${goldenOpts.join("")}</optgroup>`;
+            options += `<optgroup label="Shared (Golden)">${goldenOpts.join("")}</optgroup>`;
           }
           if (personalOpts.length) {
             options += `<optgroup label="Admin Snapshots">${personalOpts.join("")}</optgroup>`;
