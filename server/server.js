@@ -2202,6 +2202,73 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`[AESCSF API] Listening on port ${PORT}`);
   console.log(`[AESCSF API] SSO: ${SSO_ENABLED ? "EntraID (oauth2-proxy)" : "DISABLED"}`);
   console.log(`[AESCSF API] Admin OIDs: ${ADMIN_OIDS.length ? `${ADMIN_OIDS.length} configured` : "(first user will become admin)"}`);
+
+/* ── Automatic golden snapshots ──────────────────────────────────────────── */
+(function scheduleAutoSnapshot() {
+  const schedule = (process.env.AESCSF_AUTO_SNAPSHOT || "monthly").toLowerCase();
+  if (schedule === "off") return;
+  console.log(`[AESCSF API] Auto-snapshot schedule: ${schedule}`);
+
+  function runAutoSnapshot() {
+    const now  = new Date();
+    const dow  = now.getDay();  // 0=Sun…6=Sat
+    const dom  = now.getDate(); // 1-31
+
+    if (schedule === "monthly" && dom !== 1)  return;
+    if (schedule === "weekly"  && dow !== 1)  return; // Monday
+
+    const label = schedule === "weekly"
+      ? `Auto: Week of ${now.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}`
+      : `Auto: ${now.toLocaleString("en-AU", { month: "long", year: "numeric" })}`;
+
+    const tenants = db.prepare("SELECT DISTINCT tenant_id FROM assessments").all();
+    let created = 0;
+    for (const { tenant_id } of tenants) {
+      /* Skip if this label was already snapshotted for this tenant */
+      const existing = db.prepare(
+        "SELECT id FROM snapshots WHERE tenant_id = ? AND scope = 'golden' AND label = ?"
+      ).get(tenant_id, label);
+      if (existing) continue;
+
+      /* Pick the most complete assessment in this tenant (most practices assessed),
+         preferring admin/assessor roles to avoid snapshotting an empty user account */
+      const row = db.prepare(`
+        SELECT a.user_oid, a.data
+        FROM   assessments a
+        LEFT JOIN users u ON a.user_oid = u.oid AND a.tenant_id = u.tenant_id
+        WHERE  a.tenant_id = ?
+        ORDER BY
+          CASE u.role WHEN 'admin' THEN 0 WHEN 'assessor' THEN 1 ELSE 2 END,
+          length(a.data) DESC,
+          a.updated_at DESC
+        LIMIT 1
+      `).get(tenant_id);
+      if (!row) continue;
+
+      try {
+        db.prepare(
+          "INSERT INTO snapshots (user_oid, tenant_id, label, data, scope) VALUES (?, ?, ?, ?, 'golden')"
+        ).run(row.user_oid, tenant_id, label, row.data);
+        created++;
+        console.log(`[AESCSF API] Auto-snapshot "${label}" created for tenant ${tenant_id}`);
+      } catch (err) {
+        console.error(`[AESCSF API] Auto-snapshot failed for tenant ${tenant_id}:`, err.message);
+      }
+    }
+    if (created === 0 && tenants.length > 0) {
+      console.log(`[AESCSF API] Auto-snapshot check: nothing new (label "${label}" already exists or no assessments)`);
+    }
+  }
+
+  /* Fire at the next UTC midnight, then every 24 h */
+  const now    = new Date();
+  const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  const msToMidnight = midnight - now;
+  setTimeout(function tick() {
+    runAutoSnapshot();
+    setInterval(runAutoSnapshot, 24 * 60 * 60 * 1000);
+  }, msToMidnight);
+})();
   console.log(`[AESCSF API] DB:      ${path.join(DATA_DIR, "aescsf.db")}`);
   console.log(`[AESCSF API] Uploads: ${UPLOAD_DIR}`);
 });

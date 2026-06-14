@@ -123,6 +123,7 @@ services:
       AESCSF_SSO_ENABLED:          "true"
       AESCSF_ADMIN_OIDS:           "${AESCSF_ADMIN_OIDS}"
       AESCSF_AUDIT_RETENTION_DAYS: "${AESCSF_AUDIT_RETENTION_DAYS:-365}"
+      AESCSF_AUTO_SNAPSHOT:        "${AESCSF_AUTO_SNAPSHOT:-monthly}"
       ALLOWED_ORIGIN:              "${ALLOWED_ORIGIN}"
       PORT:                        "3000"
       DATA_DIR:                    "/data"
