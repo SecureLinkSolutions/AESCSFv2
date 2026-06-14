@@ -1806,7 +1806,8 @@ window.jspdf = { jsPDF };
 
     async function renderExecSummary() {
       const content = document.getElementById("execSummaryContent");
-      if (!content) return;
+      if (!content || content.dataset.loading === "1") return;
+      content.dataset.loading = "1";
       content.innerHTML = `<div class="groups-loading">Loading…</div>`;
       try {
         const [groupData, trendData, orgGoal] = await Promise.all([
@@ -1969,6 +1970,8 @@ window.jspdf = { jsPDF };
         }
       } catch (e) {
         content.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load: ${escapeHtml(e.message)}</div>`;
+      } finally {
+        delete content.dataset.loading;
       }
     }
 
@@ -3332,7 +3335,9 @@ function buildPdfDomainRows(rows) {
         if (el) el.style.display = isAdmin ? "" : "none";
       });
 
-      /* Redirect to first allowed page if current page is not permitted */
+      /* Restore last-visited page (or a role-appropriate default) now that
+         we know the user's role. setActivePage at startup uses role "user" so
+         pages like "summary" are blocked there; we re-apply the correct page here. */
       const PAGE_ACCESS = {
         admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups","summary"]),
         assessor:  new Set(["assessment","timeline","groups","summary"]),
@@ -3340,12 +3345,11 @@ function buildPdfDomainRows(rows) {
         dashboard: new Set(["summary","dashboard","comparison"]),
       };
       const allowed = PAGE_ACCESS[role] || PAGE_ACCESS["user"];
-      const activeTab = document.querySelector(".page-tab.active");
-      if (activeTab && !allowed.has(activeTab.dataset.pageTab)) {
-        setActivePage(allowed.values().next().value);
-      } else if (isDashOnly && !activeTab) {
-        setActivePage("summary");
-      }
+      const savedPage = localStorage.getItem("aescsf_last_page");
+      const targetPage = (savedPage && allowed.has(savedPage)) ? savedPage
+        : isDashOnly ? "summary"
+        : null;
+      if (targetPage) setActivePage(targetPage);
 
       /* Show action toolbar (export/import/reset) — replaced by Actions menu */
       const topActions = document.getElementById("topActionsBar");
@@ -3418,7 +3422,7 @@ function buildPdfDomainRows(rows) {
     populateDomains();
     setupDelegatedListeners();
     render();
-    setActivePage(localStorage.getItem("aescsf_last_page") || "assessment");
+    setActivePage("assessment"); /* temporary; applyRbacUI restores the saved page once role is known */
     initializeFromApi();
     setTheme(localStorage.getItem('aescsf_theme')||'light'); /* load user profile + remote state (oauth2-proxy session already established) */
 
