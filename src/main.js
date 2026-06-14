@@ -1650,6 +1650,7 @@ autoTable(jsPDF);
         // SP breakdown still uses state-based Presentrics (admin only)
         renderSpBreakdown(buildDashboardPresentrics());
         _applyDashView();
+        if (_dashView === "org") renderTrendChart();
         return;
       }
 
@@ -1755,6 +1756,222 @@ autoTable(jsPDF);
       _renderRadarCharts(domainRows, mils);
       renderSpBreakdown(Presentrics);
       _applyDashView();
+      if (_dashView === "org") renderTrendChart();
+    }
+
+    async function renderTrendChart() {
+      const wrap = document.getElementById("trendChartWrap");
+      if (!wrap) return;
+      try {
+        const data = await fetch(`${APP_CONFIG.apiBaseUrl}/snapshots/trend`, { credentials: "same-origin" })
+          .then(r => r.ok ? r.json() : []).catch(() => []);
+        if (data.length < 2) {
+          wrap.innerHTML = `<div class="empty-state" style="padding:28px 0;"><p class="empty-state-body">Save at least two golden snapshots to see the completion trend.</p></div>`;
+          if (trendLineChart) { trendLineChart.destroy(); trendLineChart = null; }
+          return;
+        }
+        wrap.innerHTML = `<canvas id="trendChart"></canvas>`;
+        if (trendLineChart) trendLineChart.destroy();
+        if (!window.Chart) return;
+        const cc = getChartColors();
+        trendLineChart = new Chart(document.getElementById("trendChart"), {
+          type: "line",
+          data: {
+            labels: data.map(d => d.label || d.date),
+            datasets: [
+              { label: "Completion %", data: data.map(d => d.completion),
+                fill: true, tension: 0.35,
+                backgroundColor: cc.domain.bg, borderColor: cc.domain.border,
+                pointBackgroundColor: cc.domain.point, borderWidth: 2 },
+              { label: "Fully", data: data.map(d => d.fully),
+                fill: false, tension: 0.35, borderDash: [4,4],
+                backgroundColor: "transparent", borderColor: cc.mil.border,
+                pointBackgroundColor: cc.mil.point, borderWidth: 1.5 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              y: { min: 0, ticks: { color: cc.tickColor }, grid: { color: cc.grid } },
+              x: { ticks: { color: cc.tickColor }, grid: { color: cc.grid } }
+            },
+            plugins: {
+              legend: { labels: { color: cc.legend, boxWidth: 12, padding: 16 } },
+              tooltip: { callbacks: { label: ctx => ctx.dataset.label === "Completion %" ? `${ctx.parsed.y}%` : `${ctx.parsed.y} practices` } }
+            }
+          }
+        });
+      } catch (e) {
+        wrap.innerHTML = `<div class="empty-state" style="padding:28px 0;"><p class="empty-state-body">Could not load trend data.</p></div>`;
+      }
+    }
+
+    async function renderExecSummary() {
+      const content = document.getElementById("execSummaryContent");
+      if (!content) return;
+      content.innerHTML = `<div class="groups-loading">Loading…</div>`;
+      try {
+        const [groupData, trendData, orgGoal] = await Promise.all([
+          _getOrgGroupData().catch(() => null),
+          fetch(`${APP_CONFIG.apiBaseUrl}/snapshots/trend`, { credentials: "same-origin" }).then(r => r.ok ? r.json() : []).catch(() => []),
+          adminFetch("/admin/org-goal").then(r => r.ok ? r.json() : {}).catch(() => {}),
+        ]);
+
+        /* Org goal banner */
+        let goalHtml = "";
+        if (orgGoal?.goalName) {
+          const spPractices = PRACTICES.filter(p => {
+            const lvl = orgGoal.targetSp || "SP-1";
+            const rank = { "SP-1": 1, "SP-2": 2, "SP-3": 3 };
+            return rank[p.securityProfile] <= rank[lvl];
+          });
+          const spTotal = spPractices.length;
+          let spDone = 0;
+          if (groupData) {
+            for (const p of spPractices) {
+              const pd = groupData[p.practiceId];
+              if (pd?.groups?.length) {
+                const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+                if (orgStatus === "Yes") spDone++;
+              }
+            }
+          }
+          const pct = spTotal ? Math.round(spDone / spTotal * 100) : 0;
+          const daysLeft = orgGoal.targetDate ? daysUntil(orgGoal.targetDate) : null;
+          const daysStr = daysLeft === null ? "" : daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d remaining`;
+          goalHtml = `<div class="exec-summary-goal">
+            <div>
+              <div class="exec-goal-label">Organisation Goal</div>
+              <div class="exec-goal-name">${escapeHtml(orgGoal.goalName)}</div>
+              <div class="exec-goal-meta">${escapeHtml(orgGoal.targetSp || "")}${orgGoal.targetDate ? " · Target: " + escapeHtml(orgGoal.targetDate) : ""}${daysStr ? " · " + escapeHtml(daysStr) : ""}</div>
+            </div>
+            <div class="exec-goal-bar-wrap">
+              <div style="font-size:0.78rem;color:var(--muted);margin-bottom:6px;">${spDone} / ${spTotal} practices (${pct}%)</div>
+              <div class="exec-goal-bar-shell"><div class="exec-goal-bar-fill" style="width:${pct}%"></div></div>
+            </div>
+          </div>`;
+        }
+
+        /* Aggregate stats from group data */
+        let fully = 0, largely = 0, gaps = 0, notAssessed = 0, total = PRACTICES.length;
+        if (groupData) {
+          for (const p of PRACTICES) {
+            const pd = groupData[p.practiceId];
+            if (!pd?.groups?.length) { notAssessed++; continue; }
+            const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+            if (orgStatus === "Yes") fully++;
+            else if (orgStatus === "Partial" || orgStatus === "In Progress") largely++;
+            else if (orgStatus === "No") gaps++;
+            else notAssessed++;
+          }
+        }
+        const completion = total ? Math.round(fully / total * 100) : 0;
+
+        const statsHtml = `<div class="exec-stat-row">
+          <div class="exec-stat"><div class="label">Compliant</div><div class="value compliant">${fully}</div></div>
+          <div class="exec-stat"><div class="label">In Progress</div><div class="value inprogress">${largely}</div></div>
+          <div class="exec-stat"><div class="label">Non-Compliant</div><div class="value noncompliant">${gaps}</div></div>
+          <div class="exec-stat"><div class="label">Not Assessed</div><div class="value">${notAssessed}</div></div>
+          <div class="exec-stat"><div class="label">Overall Completion</div><div class="value">${completion}%</div></div>
+        </div>`;
+
+        /* Group heatmap */
+        let heatmapHtml = "";
+        if (groupData) {
+          const groupMap = _buildGroupDomainMap(groupData);
+          const groups = Object.values(groupMap).sort((a, b) => a.name.localeCompare(b.name));
+          const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+          const visibleDomains = allDomains.filter(d => groups.some(g => g.coveredDomains.includes(d)));
+          if (groups.length) {
+            const hmClass = s => ({ "Yes": "hm-yes", "Partial": "hm-partial", "In Progress": "hm-partial", "No": "hm-no" }[s] || "hm-na");
+            const hmLabel = s => ({ "Yes": "✓", "Partial": "~", "In Progress": "~", "No": "✗", "Not Assessed": "—" }[s] || "—");
+            heatmapHtml = `<section class="dashboard-panel dashboard-panel-span" style="margin-bottom:22px;">
+              <div class="panel-header"><div><h3>Group Compliance Heatmap</h3></div></div>
+              <div class="exec-heatmap">
+                <table>
+                  <thead><tr>
+                    <th>Domain</th>
+                    ${groups.map(g => `<th title="${escapeHtml(g.name)}">${escapeHtml(g.name.length > 14 ? g.name.slice(0,13)+"…" : g.name)}</th>`).join("")}
+                  </tr></thead>
+                  <tbody>
+                    ${visibleDomains.map(d => `<tr>
+                      <td style="font-weight:600;">${escapeHtml(d)}</td>
+                      ${groups.map(g => {
+                        if (!g.coveredDomains.includes(d)) return `<td class="hm-na">—</td>`;
+                        const s = g.domains[d] || "Not Assessed";
+                        return `<td class="${hmClass(s)}" title="${escapeHtml(s)}">${hmLabel(s)}</td>`;
+                      }).join("")}
+                    </tr>`).join("")}
+                  </tbody>
+                </table>
+              </div>
+            </section>`;
+          }
+        }
+
+        /* Top gaps */
+        let gapsHtml = "";
+        if (groupData) {
+          const gapRows = PRACTICES
+            .map(p => {
+              const pd = groupData[p.practiceId];
+              if (!pd?.groups?.length) return null;
+              const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+              if (orgStatus === "Yes" || orgStatus === "Not Assessed") return null;
+              return { practice: p, orgStatus, groups: pd.groups.map(g => g.group_name) };
+            })
+            .filter(Boolean)
+            .sort((a, b) => (GOM_PRIORITY[a.orgStatus] ?? 3) - (GOM_PRIORITY[b.orgStatus] ?? 3))
+            .slice(0, 8);
+          if (gapRows.length) {
+            const sc = s => ({ "No": "tag-no", "Partial": "tag-partial", "In Progress": "tag-partial" }[s] || "");
+            gapsHtml = `<section class="dashboard-panel dashboard-panel-span">
+              <div class="panel-header"><div><h3>Priority Gaps</h3><div class="footer-note">Practices with non-compliant org status, worst-first.</div></div></div>
+              <table class="exec-top-gaps">
+                <thead><tr><th>Practice</th><th>Domain</th><th>Status</th><th>Responsible Groups</th></tr></thead>
+                <tbody>
+                  ${gapRows.map(r => `<tr>
+                    <td><strong>${escapeHtml(r.practice.practiceId)}</strong> ${escapeHtml(r.practice.practice)}</td>
+                    <td>${escapeHtml(r.practice.domain)}</td>
+                    <td><span class="badge ${sc(r.orgStatus)}">${escapeHtml(r.orgStatus)}</span></td>
+                    <td style="color:var(--muted);font-size:.8rem;">${r.groups.map(escapeHtml).join(", ") || "—"}</td>
+                  </tr>`).join("")}
+                </tbody>
+              </table>
+            </section>`;
+          }
+        }
+
+        /* Trend chart placeholder */
+        const trendHtml = `<section class="dashboard-panel dashboard-panel-span" style="margin-bottom:22px;">
+          <div class="panel-header"><div><h3>Completion Trend</h3><div class="footer-note">Overall completion % per golden snapshot.</div></div></div>
+          <div id="execTrendWrap" class="chart-wrap" style="height:200px;"></div>
+        </section>`;
+
+        content.innerHTML = goalHtml + statsHtml + trendHtml + heatmapHtml + gapsHtml;
+
+        /* Render trend mini chart */
+        if (trendData.length >= 2 && window.Chart) {
+          const cc = getChartColors();
+          new Chart(document.getElementById("execTrendWrap").appendChild(document.createElement("canvas")), {
+            type: "line",
+            data: {
+              labels: trendData.map(d => d.label || d.date),
+              datasets: [{ label: "Completion %", data: trendData.map(d => d.completion),
+                fill: true, tension: 0.35, backgroundColor: cc.domain.bg, borderColor: cc.domain.border,
+                pointBackgroundColor: cc.domain.point, borderWidth: 2 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false,
+              scales: { y: { min:0, max:100, ticks:{ color: cc.tickColor, callback: v=>v+"%" }, grid:{color:cc.grid} },
+                        x: { ticks:{color:cc.tickColor}, grid:{color:cc.grid} } },
+              plugins: { legend: { display: false } } }
+          });
+        } else {
+          document.getElementById("execTrendWrap").innerHTML = `<div class="empty-state" style="padding:20px 0;"><p class="empty-state-body">Save at least two golden snapshots to see the trend.</p></div>`;
+        }
+      } catch (e) {
+        content.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load: ${escapeHtml(e.message)}</div>`;
+      }
     }
 
     function exportGapRegister() {
@@ -3094,6 +3311,7 @@ function buildPdfDomainRows(rows) {
         sidebarAssessmentTab:  canEdit,
         sidebarTimelineTab:    canEdit,
         sidebarDashboardTab:   isAdmin || isDashOnly,
+        sidebarSummaryTab:     isAdmin || isDashOnly || role === "assessor",
         sidebarComparisonTab:  isAdmin || isDashOnly,
         sidebarGroupsTab:      isAdmin || role === "assessor",
         sidebarAdminTab:       isAdmin,
@@ -3118,17 +3336,17 @@ function buildPdfDomainRows(rows) {
 
       /* Redirect to first allowed page if current page is not permitted */
       const PAGE_ACCESS = {
-        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups"]),
-        assessor:  new Set(["assessment","timeline","groups"]),
+        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups","summary"]),
+        assessor:  new Set(["assessment","timeline","groups","summary"]),
         user:      new Set(["assessment","timeline"]),
-        dashboard: new Set(["dashboard","comparison"]),
+        dashboard: new Set(["summary","dashboard","comparison"]),
       };
       const allowed = PAGE_ACCESS[role] || PAGE_ACCESS["user"];
       const activeTab = document.querySelector(".page-tab.active");
       if (activeTab && !allowed.has(activeTab.dataset.pageTab)) {
         setActivePage(allowed.values().next().value);
       } else if (isDashOnly && !activeTab) {
-        setActivePage("dashboard");
+        setActivePage("summary");
       }
 
       /* Show action toolbar (export/import/reset) — replaced by Actions menu */
