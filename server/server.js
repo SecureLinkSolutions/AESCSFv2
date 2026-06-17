@@ -1119,6 +1119,41 @@ app.put("/api/admin/org-goal", requireAuth, autoRegister, requireAdminOrAssessor
   res.json({ ok: true });
 });
 
+/* ── Multi-goal endpoints ─────────────────────────────────────────────────── */
+
+app.get("/api/admin/org-goals", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  /* Try new array key first */
+  const row = db.prepare("SELECT value FROM tenant_settings WHERE tenant_id = ? AND key = 'org_goals'").get(req.user.tenant);
+  if (row) {
+    try { return res.json(JSON.parse(row.value)); } catch {}
+  }
+  /* Migrate from old single-goal key */
+  const old = db.prepare("SELECT value FROM tenant_settings WHERE tenant_id = ? AND key = 'org_goal'").get(req.user.tenant);
+  if (old) {
+    try {
+      const g = JSON.parse(old.value);
+      if (g.goalName || g.targetSp || g.targetDate) return res.json([g]);
+    } catch {}
+  }
+  res.json([]);
+});
+
+app.put("/api/admin/org-goals", requireAuth, autoRegister, requireAdminOrAssessor, (req, res) => {
+  const goals = req.body;
+  if (!Array.isArray(goals)) return res.status(400).json({ error: "Expected an array" });
+  const cleaned = goals
+    .map(g => ({
+      goalName:   String(g.goalName  || "").slice(0, 120),
+      targetSp:   ["SP-1","SP-2","SP-3",""].includes(g.targetSp) ? (g.targetSp || "") : "",
+      targetDate: /^\d{4}-\d{2}-\d{2}$/.test(g.targetDate || "") ? g.targetDate : "",
+    }))
+    .filter(g => g.goalName || g.targetSp || g.targetDate);
+  db.prepare(`INSERT INTO tenant_settings (tenant_id, key, value) VALUES (?, 'org_goals', ?)
+    ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value`)
+    .run(req.user.tenant, JSON.stringify(cleaned));
+  res.json(cleaned);
+});
+
 /* ── Groups (Business Units) ─────────────────────────────────────────────── */
 
 /* Lightweight user list for group management — accessible to admin + assessor */

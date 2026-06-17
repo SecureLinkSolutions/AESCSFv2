@@ -2314,3 +2314,10 @@
       border: 1px solid rgba(6,118,71,.25); pointer-events: none;
     }
 
+    .org-goal-card {
+      display: flex; align-items: flex-start; gap: 16px;
+      padding: 14px 18px; border-radius: var(--radius-md);
+      background: var(--surface-strong); border: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+

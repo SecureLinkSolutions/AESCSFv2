@@ -269,7 +269,7 @@ window.jspdf = { jsPDF };
         document.getElementById("sidebarOverlay")?.classList.remove("open");
         document.body.style.overflow = "";
       }
-      if (page === "timeline")   { renderTimeline(); populateDomainTargetEditor(); if (window.__AESCSF_ORG_GOAL__ !== undefined) renderOrgGoal(); }
+      if (page === "timeline")   { renderTimeline(); populateDomainTargetEditor(); if (window.__AESCSF_ORG_GOALS__ !== undefined) renderOrgGoal(); }
       if (page === "dashboard")  renderDashboard();
       if (page === "comparison") renderComparison();
       if (page === "admin")      renderAdminPanel();
@@ -1178,108 +1178,131 @@ window.jspdf = { jsPDF };
 
     async function loadOrgGoal() {
       try {
-        const r = await adminFetch("/admin/org-goal");
-        window.__AESCSF_ORG_GOAL__ = r.ok ? await r.json() : {};
-      } catch { window.__AESCSF_ORG_GOAL__ = {}; }
+        const r = await adminFetch("/admin/org-goals");
+        window.__AESCSF_ORG_GOALS__ = r.ok ? await r.json() : [];
+      } catch { window.__AESCSF_ORG_GOALS__ = []; }
       renderOrgGoal();
     }
 
     function renderOrgGoal() {
       const body = document.getElementById("orgGoalBody");
       if (!body) return;
-      const goal = window.__AESCSF_ORG_GOAL__ || {};
-      const { goalName = "", targetSp = "", targetDate = "" } = goal;
-      const hasGoal = goalName || targetSp || targetDate;
+      const goals = (window.__AESCSF_ORG_GOALS__ || []);
 
-      // Calculate progress
-      const spPractices = targetSp
-        ? PRACTICES.filter(p => p.securityProfile === targetSp)
-        : PRACTICES;
-      const done  = spPractices.filter(p => isCompletedStatus((state.assessments[p.practiceId] || defaultAssessment()).status)).length;
-      const total = spPractices.length;
-      const pct   = total ? Math.round(done / total * 100) : 0;
-      const pctColor = pct >= 80 ? "var(--success)" : pct >= 50 ? "var(--warning)" : "var(--danger)";
+      /* Build progress for each goal */
+      function goalProgress(g) {
+        if (!g.targetSp) return null;
+        const sp = g.targetSp;
+        const rank = { "SP-1": 1, "SP-2": 2, "SP-3": 3 };
+        const spPractices = PRACTICES.filter(p => {
+          const r = rank[p.securityProfile];
+          return r && r <= (rank[sp] || 0);
+        });
+        const total = spPractices.length;
+        if (!total) return null;
+        let fully = 0;
+        for (const p of spPractices) {
+          const a = state.assessments[p.practiceId];
+          if (a && isCompletedStatus(a.status)) fully++;
+        }
+        return { total, fully, pct: Math.round(fully / total * 100) };
+      }
 
-      const daysLeft = targetDate ? daysUntil(targetDate) : null;
-      const dueTxt   = daysLeft === null ? "" : daysLeft < 0
-        ? `<span style="color:var(--danger);font-weight:600;">Overdue by ${Math.abs(daysLeft)} day${Math.abs(daysLeft)===1?"":"s"}</span>`
-        : daysLeft === 0 ? `<span style="color:var(--warning);font-weight:600;">Due today</span>`
-        : `<span style="color:var(--muted);">Due in ${daysLeft} day${daysLeft===1?"":"s"} (${targetDate})</span>`;
+      function goalCardHtml(g, idx) {
+        const prog = goalProgress(g);
+        const daysLeft = g.targetDate ? daysUntil(g.targetDate) : null;
+        const dueSt = daysLeft === null ? ""
+          : daysLeft < 0 ? `<span style="color:var(--danger);">${Math.abs(daysLeft)}d overdue</span>`
+          : `<span style="color:var(--muted);">Due in ${daysLeft}d (${g.targetDate})</span>`;
+        return `<div class="org-goal-card" data-goal-idx="${idx}">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:2px;">${escapeHtml(g.goalName || "Untitled goal")}</div>
+            <div style="font-size:.82rem;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              ${g.targetSp ? `<span class="role-badge assessor">${escapeHtml(g.targetSp)}</span>` : "<span style='color:var(--muted)'>All practices</span>"}
+              ${dueSt}
+              ${prog ? `<span>${prog.fully} / ${prog.total} practices (${prog.pct}%)</span>` : ""}
+            </div>
+            ${prog ? `<div style="height:6px;border-radius:999px;background:var(--border);overflow:hidden;max-width:420px;">
+              <div style="height:100%;border-radius:999px;background:linear-gradient(90deg,var(--primary),#818cf8);width:${prog.pct}%;transition:width .4s;"></div>
+            </div>` : ""}
+          </div>
+        </div>`;
+      }
+
+      const isAdmin = window.__AESCSF_RBAC__?.role === "admin" || window.__AESCSF_RBAC__?.role === "assessor";
 
       body.innerHTML = `
-        ${hasGoal ? `
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;">
-            <div>
-              <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:4px;">${escapeHtml(goalName || "Untitled goal")}</div>
-              <div style="font-size:.85rem;color:var(--muted);">
-                ${targetSp ? `<span class="role-badge assessor" style="margin-right:6px;">${escapeHtml(targetSp)}</span>` : "All practices"}
-                ${dueTxt}
-              </div>
-            </div>
-            <button class="secondary" id="orgGoalEditBtn" style="font-size:.8rem;padding:5px 12px;flex-shrink:0;">Edit goal</button>
-          </div>
-          <div style="margin-bottom:6px;">
-            <div style="display:flex;justify-content:space-between;font-size:.8rem;font-weight:600;margin-bottom:4px;">
-              <span style="color:var(--text-soft);">Progress — ${escapeHtml(targetSp || "All")} practices at Yes</span>
-              <span style="color:${pctColor};">${done} / ${total} (${pct}%)</span>
-            </div>
-            <div style="height:8px;border-radius:999px;background:var(--border);overflow:hidden;">
-              <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:999px;transition:width .4s;"></div>
-            </div>
-          </div>
-        ` : `
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-            <span style="font-size:.875rem;color:var(--muted);">No organisation goal set yet.</span>
-            <button class="secondary" id="orgGoalEditBtn" style="font-size:.8rem;padding:5px 12px;">Set goal</button>
-          </div>
-        `}
+        <div id="orgGoalDisplay">
+          ${goals.length ? goals.map((g, i) => goalCardHtml(g, i)).join("") : `<div style="color:var(--muted);font-size:.875rem;padding:8px 0;">No organisation goals set.</div>`}
+          ${isAdmin ? `<button class="secondary" id="orgGoalEditBtn" style="margin-top:12px;font-size:.8rem;padding:5px 12px;">${goals.length ? "Edit goals" : "Set goals"}</button>` : ""}
+        </div>
         <div id="orgGoalForm" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-          <div class="domain-target-grid" style="margin-bottom:12px;">
-            <div class="domain-target-row">
-              <label>Goal name</label>
-              <input type="text" id="orgGoalNameInput" value="${escapeHtml(goalName)}" placeholder="e.g. Achieve SP-2 compliance" maxlength="120" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
-            </div>
-            <div class="domain-target-row">
-              <label>Security profile target</label>
-              <select id="orgGoalSpInput" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
-                <option value="" ${!targetSp?"selected":""}>All practices</option>
-                <option value="SP-1" ${targetSp==="SP-1"?"selected":""}>SP-1 — Foundational</option>
-                <option value="SP-2" ${targetSp==="SP-2"?"selected":""}>SP-2 — Intermediate</option>
-                <option value="SP-3" ${targetSp==="SP-3"?"selected":""}>SP-3 — Advanced</option>
-              </select>
-            </div>
-            <div class="domain-target-row">
-              <label>Target date</label>
-              <input type="date" id="orgGoalDateInput" value="${escapeHtml(targetDate)}" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
-            </div>
-          </div>
-          <div class="domain-target-actions">
-            <button class="primary" id="orgGoalSaveBtn" style="font-size:.85rem;">Save goal</button>
+          <div id="orgGoalRows"></div>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="secondary" id="orgGoalAddRowBtn" style="font-size:.8rem;padding:5px 12px;">+ Add another goal</button>
+            <button class="primary" id="orgGoalSaveBtn" style="font-size:.85rem;">Save goals</button>
             <button class="secondary" id="orgGoalCancelBtn" style="font-size:.85rem;">Cancel</button>
             <span class="domain-target-status" id="orgGoalStatus"></span>
           </div>
         </div>`;
 
+      function buildEditRows(data) {
+        const container = document.getElementById("orgGoalRows");
+        if (!container) return;
+        container.innerHTML = data.map((g, i) => `
+          <div class="org-goal-edit-row" data-row="${i}" style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;margin-bottom:8px;">
+            <input type="text" class="og-name" value="${escapeHtml(g.goalName)}" placeholder="e.g. Achieve SP-2 compliance" maxlength="120"
+              style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+            <select class="og-sp" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+              <option value="" ${!g.targetSp?"selected":""}>All</option>
+              <option value="SP-1" ${g.targetSp==="SP-1"?"selected":""}>SP-1</option>
+              <option value="SP-2" ${g.targetSp==="SP-2"?"selected":""}>SP-2</option>
+              <option value="SP-3" ${g.targetSp==="SP-3"?"selected":""}>SP-3</option>
+            </select>
+            <input type="date" class="og-date" value="${escapeHtml(g.targetDate)}"
+              style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+            <button class="ghost og-remove" data-row="${i}" style="padding:4px 8px;color:var(--danger);font-size:1rem;" title="Remove goal">×</button>
+          </div>`).join("");
+        container.querySelectorAll(".og-remove").forEach(btn => {
+          btn.addEventListener("click", () => {
+            data.splice(Number(btn.dataset.row), 1);
+            buildEditRows(data);
+          });
+        });
+      }
+
+      let editData = goals.map(g => ({ ...g }));
+
       document.getElementById("orgGoalEditBtn")?.addEventListener("click", () => {
+        editData = goals.length ? goals.map(g => ({ ...g })) : [{ goalName: "", targetSp: "", targetDate: "" }];
+        buildEditRows(editData);
         document.getElementById("orgGoalForm").style.display = "";
-        document.getElementById("orgGoalEditBtn").style.display = "none";
+        document.getElementById("orgGoalDisplay").style.display = "none";
       });
+
+      document.getElementById("orgGoalAddRowBtn")?.addEventListener("click", () => {
+        editData.push({ goalName: "", targetSp: "", targetDate: "" });
+        buildEditRows(editData);
+      });
+
       document.getElementById("orgGoalCancelBtn")?.addEventListener("click", () => {
         document.getElementById("orgGoalForm").style.display = "none";
-        document.getElementById("orgGoalEditBtn").style.display = "";
+        document.getElementById("orgGoalDisplay").style.display = "";
       });
+
       document.getElementById("orgGoalSaveBtn")?.addEventListener("click", async () => {
         const statusEl = document.getElementById("orgGoalStatus");
-        const payload = {
-          goalName:   document.getElementById("orgGoalNameInput")?.value  || "",
-          targetSp:   document.getElementById("orgGoalSpInput")?.value    || "",
-          targetDate: document.getElementById("orgGoalDateInput")?.value  || "",
-        };
+        /* Collect current values from the DOM */
+        const payload = [...document.querySelectorAll("#orgGoalRows .org-goal-edit-row")].map(row => ({
+          goalName:   row.querySelector(".og-name")?.value  || "",
+          targetSp:   row.querySelector(".og-sp")?.value    || "",
+          targetDate: row.querySelector(".og-date")?.value  || "",
+        }));
         try {
-          const r = await adminFetch("/admin/org-goal", { method: "PUT", body: JSON.stringify(payload) });
+          const r = await adminFetch("/admin/org-goals", { method: "PUT", body: JSON.stringify(payload) });
           if (!r.ok) throw new Error(await r.text());
-          window.__AESCSF_ORG_GOAL__ = payload;
-          if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 2000); }
+          window.__AESCSF_ORG_GOALS__ = await r.json();
+          if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 2000); }
           renderOrgGoal();
         } catch (e) {
           if (statusEl) statusEl.textContent = "Save failed: " + e.message;
@@ -1810,45 +1833,49 @@ window.jspdf = { jsPDF };
       content.dataset.loading = "1";
       content.innerHTML = `<div class="groups-loading">Loading…</div>`;
       try {
-        const [groupData, trendData, orgGoal] = await Promise.all([
+        const [groupData, trendData, orgGoals] = await Promise.all([
           _getOrgGroupData().catch(() => null),
           fetch(`${APP_CONFIG.apiBaseUrl}/snapshots/trend`, { credentials: "same-origin" }).then(r => r.ok ? r.json() : []).catch(() => []),
-          adminFetch("/admin/org-goal").then(r => r.ok ? r.json() : {}).catch(() => {}),
+          adminFetch("/admin/org-goals").then(r => r.ok ? r.json() : []).catch(() => []),
         ]);
 
-        /* Org goal banner */
+        /* Build goal banners for all goals */
         let goalHtml = "";
-        if (orgGoal?.goalName) {
-          const spPractices = PRACTICES.filter(p => {
-            const lvl = orgGoal.targetSp || "SP-1";
-            const rank = { "SP-1": 1, "SP-2": 2, "SP-3": 3 };
-            return rank[p.securityProfile] <= rank[lvl];
-          });
-          const spTotal = spPractices.length;
-          let spDone = 0;
-          if (groupData) {
-            for (const p of spPractices) {
-              const pd = groupData[p.practiceId];
-              if (pd?.groups?.length) {
-                const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
-                if (orgStatus === "Yes") spDone++;
+        if (Array.isArray(orgGoals) && orgGoals.length) {
+          const rank = { "SP-1": 1, "SP-2": 2, "SP-3": 3 };
+          goalHtml = orgGoals.map(orgGoal => {
+            if (!orgGoal.goalName && !orgGoal.targetSp) return "";
+            const spPractices = orgGoal.targetSp
+              ? PRACTICES.filter(p => (rank[p.securityProfile] || 0) <= (rank[orgGoal.targetSp] || 0))
+              : PRACTICES;
+            const spTotal = spPractices.length;
+            let spDone = 0;
+            if (groupData) {
+              for (const p of spPractices) {
+                const pd = groupData[p.practiceId];
+                if (pd?.groups?.length) {
+                  const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+                  if (orgStatus === "Yes") spDone++;
+                }
               }
             }
-          }
-          const pct = spTotal ? Math.round(spDone / spTotal * 100) : 0;
-          const daysLeft = orgGoal.targetDate ? daysUntil(orgGoal.targetDate) : null;
-          const daysStr = daysLeft === null ? "" : daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d remaining`;
-          goalHtml = `<div class="exec-summary-goal">
-            <div>
-              <div class="exec-goal-label">Organisation Goal</div>
-              <div class="exec-goal-name">${escapeHtml(orgGoal.goalName)}</div>
-              <div class="exec-goal-meta">${escapeHtml(orgGoal.targetSp || "")}${orgGoal.targetDate ? " · Target: " + escapeHtml(orgGoal.targetDate) : ""}${daysStr ? " · " + escapeHtml(daysStr) : ""}</div>
-            </div>
-            <div class="exec-goal-bar-wrap">
-              <div style="font-size:0.78rem;color:var(--muted);margin-bottom:6px;">${spDone} / ${spTotal} practices (${pct}%)</div>
-              <div class="exec-goal-bar-shell"><div class="exec-goal-bar-fill" style="width:${pct}%"></div></div>
-            </div>
-          </div>`;
+            const pct = spTotal ? Math.round(spDone / spTotal * 100) : 0;
+            const daysLeft = orgGoal.targetDate ? daysUntil(orgGoal.targetDate) : null;
+            const daysStr = daysLeft === null ? ""
+              : daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue`
+              : `${daysLeft}d remaining`;
+            return `<div class="exec-summary-goal" style="margin-bottom:10px;">
+              <div>
+                <div class="exec-goal-label">Organisation Goal</div>
+                <div class="exec-goal-name">${escapeHtml(orgGoal.goalName || orgGoal.targetSp || "Goal")}</div>
+                <div class="exec-goal-meta">${escapeHtml(orgGoal.targetSp || "")}${orgGoal.targetDate ? " · Target: " + escapeHtml(orgGoal.targetDate) : ""}${daysStr ? " · " + escapeHtml(daysStr) : ""}</div>
+              </div>
+              <div class="exec-goal-bar-wrap">
+                <div style="font-size:0.78rem;color:var(--muted);margin-bottom:6px;">${spDone} / ${spTotal} practices (${pct}%)</div>
+                <div class="exec-goal-bar-shell"><div class="exec-goal-bar-fill" style="width:${pct}%"></div></div>
+              </div>
+            </div>`;
+          }).join("");
         }
 
         /* Aggregate stats from group data */
