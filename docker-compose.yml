@@ -199,7 +199,7 @@ services:
 
       # Set to "true" to get notifications without any automatic restarts.
       # Useful for reviewing what would be updated before enabling live updates.
-      WATCHTOWER_MONITOR_ONLY: "${WATCHTOWER_MONITOR_ONLY:-false}"
+      WATCHTOWER_MONITOR_ONLY: "${WATCHTOWER_MONITOR_ONLY:-true}"
 
       # Optional notification URL in Shoutrrr format (leave blank to disable).
       # Examples:
