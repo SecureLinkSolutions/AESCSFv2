@@ -10,6 +10,15 @@
 # oauth2-proxy is NOT the reverse proxy — it only validates sessions.
 # nginx is the sole internet-facing entry point.
 #
+# Watchtower update policy:
+#   Only containers with label com.centurylinklabs.watchtower.enable=true are
+#   ever updated automatically. nginx and api are local builds (no registry) so
+#   Watchtower cannot touch them — they update only via deploy/update.sh.
+#   oauth2-proxy is opted in: Watchtower pulls a new digest if quay.io releases
+#   a security patch under the same v7.6.0 tag.
+#   Set WATCHTOWER_MONITOR_ONLY=true in .env to receive notifications only,
+#   with no automatic restarts.
+#
 # Usage:
 #   1. cp .env.example .env  and fill in all values
 #   2. docker compose up -d --build
@@ -43,6 +52,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    # Local build — Watchtower cannot pull a registry image for this service.
+    # Updates are applied by running deploy/update.sh.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
     deploy:
       resources:
         limits:
@@ -102,6 +115,11 @@ services:
       OAUTH2_PROXY_SCOPE:                "openid email profile"
 
     restart: unless-stopped
+    # Opted in to Watchtower: receives digest-level security patches when
+    # quay.io republishes the v7.6.0 tag.  The tag itself is still pinned —
+    # a version bump (v7.7.0+) requires a manual compose file edit.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     deploy:
       resources:
         limits:
@@ -136,11 +154,68 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    # Local build — Watchtower cannot pull a registry image for this service.
+    # Updates are applied by running deploy/update.sh.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
     deploy:
       resources:
         limits:
           cpus: "1.00"
           memory: 512M
+
+  # ── Watchtower — automated image update monitor ───────────────────────────
+  # Only updates containers that opt in via the watchtower.enable=true label.
+  # nginx and api are local builds that Watchtower cannot reach; they are
+  # explicitly opted out above.  oauth2-proxy is the only container managed.
+  #
+  # Update schedule: Sundays at 03:00 UTC (cron: second minute hour dom month dow)
+  # Set WATCHTOWER_MONITOR_ONLY=true in .env to receive notifications only,
+  # without any automatic container restarts.
+  watchtower:
+    image: containrrr/watchtower:latest
+    volumes:
+      # Needs the Docker socket to inspect and restart containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Ignore all containers unless they carry watchtower.enable=true
+      WATCHTOWER_LABEL_ENABLE: "true"
+
+      # Check once a week — Sundays at 03:00 UTC
+      # Format: second minute hour day-of-month month day-of-week
+      WATCHTOWER_SCHEDULE: "0 0 3 * * 0"
+
+      # Restart one container at a time so other services stay up
+      WATCHTOWER_ROLLING_RESTART: "true"
+
+      # Delete superseded images after update to prevent disk bloat
+      WATCHTOWER_CLEANUP: "true"
+
+      # Wait up to 60 s for a container's health check to pass after restart.
+      # If the new image is unhealthy after this timeout Watchtower logs an
+      # error but does NOT automatically roll back — check logs and run
+      # deploy/update.sh to restore a known-good state if needed.
+      WATCHTOWER_TIMEOUT: "60s"
+
+      # Set to "true" to get notifications without any automatic restarts.
+      # Useful for reviewing what would be updated before enabling live updates.
+      WATCHTOWER_MONITOR_ONLY: "${WATCHTOWER_MONITOR_ONLY:-false}"
+
+      # Optional notification URL in Shoutrrr format (leave blank to disable).
+      # Examples:
+      #   Microsoft Teams: teams://xxxxx@yyyyy/zzzzz
+      #   Slack:           slack://xoxb-token@channel
+      #   Email (SMTP):    smtp://user:pass@host:587/?from=a@b.com&to=c@d.com
+      # Set WATCHTOWER_NOTIFICATION_URL in .env to enable.
+      WATCHTOWER_NOTIFICATION_URL: "${WATCHTOWER_NOTIFICATION_URL:-}"
+
+      WATCHTOWER_LOG_LEVEL: "info"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 64M
 
 volumes:
   aescsf_data:
