@@ -77,31 +77,62 @@ success "Images built"
 # ── Rolling restart ───────────────────────────────────────────────────────────
 section "Rolling Restart"
 
+# Poll the API's own health endpoint via `docker compose exec` so this works
+# regardless of the container's actual name (COMPOSE_PROJECT_NAME may differ).
+wait_for_api_health() {
+  for i in $(seq 1 50); do
+    if sudo -u "$APP_USER" docker compose exec -T api \
+        node -e "require('http').get('http://localhost:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))" \
+        2>/dev/null; then
+      return 0
+    fi
+    [[ $i -lt 50 ]] && sleep 3
+  done
+  return 1
+}
+
 # Restart API first (nginx keeps serving while API is down; requests queue briefly)
 info "Restarting API service…"
 sudo -u "$APP_USER" docker compose up -d --no-deps api
 
-# Wait for API health — poll the health endpoint directly
 info "Waiting for API health check…"
-HEALTHY=false
-for i in $(seq 1 50); do
-  if docker exec aescsf-api-1 \
-      node -e "require('http').get('http://localhost:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))" \
-      2>/dev/null; then
-    HEALTHY=true
-    success "API is healthy"
-    break
-  fi
-  [[ $i -lt 50 ]] && sleep 3
-done
+if wait_for_api_health; then
+  success "API is healthy"
+else
+  warn "API failed to become healthy after 150 s — rolling back to ${OLD_SHA}"
+  sudo -u "$APP_USER" git -C "$APP_DIR" reset --hard "$OLD_SHA"
+  sudo -u "$APP_USER" docker compose build api
+  sudo -u "$APP_USER" docker compose up -d --no-deps api
 
-if ! $HEALTHY; then
-  die "API failed to become healthy after 150 s. Check logs: docker compose logs api"
+  info "Waiting for rolled-back API to become healthy…"
+  if wait_for_api_health; then
+    warn "Rolled back to ${OLD_SHA} — API is healthy again. The ${NEW_SHA} update was NOT applied."
+    warn "Investigate the failure before retrying: docker compose logs api"
+    exit 1
+  else
+    die "Rollback to ${OLD_SHA} ALSO failed to become healthy. Manual intervention required — check: docker compose logs api"
+  fi
 fi
 
-# Restart nginx and oauth2-proxy (very fast — no data)
+# Restart nginx and verify it actually came back up before moving on —
+# a bad nginx config should not be reported as a successful update.
 info "Restarting nginx…"
 sudo -u "$APP_USER" docker compose up -d --no-deps nginx
+
+info "Verifying nginx…"
+NGINX_OK=false
+for i in $(seq 1 20); do
+  if sudo -u "$APP_USER" docker compose exec -T nginx wget -q -O /dev/null http://localhost/healthz 2>/dev/null; then
+    NGINX_OK=true
+    break
+  fi
+  [[ $i -lt 20 ]] && sleep 2
+done
+if $NGINX_OK; then
+  success "nginx is healthy"
+else
+  warn "nginx did not respond to /healthz after restart — check: docker compose logs nginx"
+fi
 
 info "Restarting oauth2-proxy…"
 sudo -u "$APP_USER" docker compose up -d --no-deps oauth2-proxy

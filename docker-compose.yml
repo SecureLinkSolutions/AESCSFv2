@@ -44,7 +44,7 @@ services:
       api:
         condition: service_healthy
       oauth2-proxy:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/healthz || exit 1"]
@@ -115,6 +115,16 @@ services:
       OAUTH2_PROXY_SCOPE:                "openid email profile"
 
     restart: unless-stopped
+    # /ping is oauth2-proxy's built-in unauthenticated health endpoint.
+    # Without this, nginx's depends_on: service_healthy below has nothing to
+    # wait on, and auth_request traffic could hit oauth2-proxy before it's
+    # finished starting up (e.g. still fetching the OIDC discovery document).
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4180/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     # Opted in to Watchtower: receives digest-level security patches when
     # quay.io republishes the v7.6.0 tag.  The tag itself is still pinned —
     # a version bump (v7.7.0+) requires a manual compose file edit.
