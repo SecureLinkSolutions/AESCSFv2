@@ -1598,6 +1598,17 @@ window.jspdf = { jsPDF };
     }
 
     async function renderDashboard() {
+      const dashboardPage = document.getElementById("dashboardPage");
+      if (dashboardPage && dashboardPage.dataset.loading === "1") return;
+      if (dashboardPage) dashboardPage.dataset.loading = "1";
+      try {
+        await _renderDashboardInner();
+      } finally {
+        if (dashboardPage) delete dashboardPage.dataset.loading;
+      }
+    }
+
+    async function _renderDashboardInner() {
       const role = window.__AESCSF_RBAC__?.role;
       const useGroupData = (role === "admin" || role === "assessor") && APP_CONFIG.storageMode === "api";
 
@@ -1782,7 +1793,8 @@ window.jspdf = { jsPDF };
 
     async function renderTrendChart() {
       const wrap = document.getElementById("trendChartWrap");
-      if (!wrap) return;
+      if (!wrap || wrap.dataset.loading === "1") return;
+      wrap.dataset.loading = "1";
       try {
         const data = await fetch(`${APP_CONFIG.apiBaseUrl}/snapshots/trend`, { credentials: "same-origin" })
           .then(r => r.ok ? r.json() : []).catch(() => []);
@@ -1824,6 +1836,8 @@ window.jspdf = { jsPDF };
         });
       } catch (e) {
         wrap.innerHTML = `<div class="empty-state" style="padding:28px 0;"><p class="empty-state-body">Could not load trend data.</p></div>`;
+      } finally {
+        delete wrap.dataset.loading;
       }
     }
 
@@ -3581,7 +3595,10 @@ function buildPdfDomainRows(rows) {
           ).join("");
       }
       repopulateObjectives();
-      domainSel.addEventListener("change", repopulateObjectives);
+      if (!domainSel.dataset.listenerAttached) {
+        domainSel.dataset.listenerAttached = "1";
+        domainSel.addEventListener("change", repopulateObjectives);
+      }
     }
 
     async function loadAndRenderResponses() {
@@ -4002,14 +4019,14 @@ function buildPdfDomainRows(rows) {
         const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/role`, {
           method: "PUT", body: JSON.stringify({ role })
         });
-        if (!resp.ok) { alert(`Failed to set role: ${resp.status}`); if (el?.tagName === "SELECT") { await loadAdminPanel(); } return; }
+        if (!resp.ok) { alert(`Failed to set role: ${resp.status}`); if (el?.tagName === "SELECT") { await renderAdminPanel(); } return; }
         /* Update badge */
         const card = document.getElementById(`user-card-${oid}`);
         if (card) {
           const badge = card.querySelector(".role-badge");
           if (badge) { badge.textContent = roleLabels[role] || role; badge.className = `role-badge ${role}`; }
         }
-      } catch (err) { alert(err.message); if (el?.tagName === "SELECT") { await loadAdminPanel(); } }
+      } catch (err) { alert(err.message); if (el?.tagName === "SELECT") { await renderAdminPanel(); } }
     }
 
     async function adminSaveAssignments(oid) {
@@ -4278,7 +4295,7 @@ function buildPdfDomainRows(rows) {
        Groups / Business Units
        ══════════════════════════════════════════════════════════════════ */
 
-    let _groupsState = { groups: [], selectedId: null, activeTab: "members" };
+    let _groupsState = { groups: [], selectedId: null, activeTab: "members", overviewVisible: false };
 
     function _allDomains() {
       return [...new Set(PRACTICES.map(p => p.domain))].sort();
@@ -4613,20 +4630,32 @@ function buildPdfDomainRows(rows) {
           </div>`;
       }
 
-      document.getElementById("createGroupBtn")?.addEventListener("click", _openCreateGroupModal);
+      const createBtn = document.getElementById("createGroupBtn");
+      if (createBtn && !createBtn.dataset.listenerAttached) {
+        createBtn.dataset.listenerAttached = "1";
+        createBtn.addEventListener("click", _openCreateGroupModal);
+      }
 
-      // Overview toggle
+      // Overview toggle — state lives on _groupsState so it survives re-render
       const overviewBtn    = document.getElementById("groupsOverviewBtn");
       const overviewPanel  = document.getElementById("groupsOverviewPanel");
       const manageLayout   = document.getElementById("groupsManageLayout");
-      let overviewVisible  = false;
-      overviewBtn?.addEventListener("click", () => {
-        overviewVisible = !overviewVisible;
-        overviewPanel.style.display  = overviewVisible ? "" : "none";
-        manageLayout.style.display   = overviewVisible ? "none" : "";
-        overviewBtn.textContent = overviewVisible ? "◀ Back to Groups" : "📊 Compliance Overview";
-        if (overviewVisible) renderGroupsOverview();
-      });
+      const applyOverviewVisibility = () => {
+        if (!overviewPanel || !manageLayout || !overviewBtn) return;
+        overviewPanel.style.display = _groupsState.overviewVisible ? "" : "none";
+        manageLayout.style.display  = _groupsState.overviewVisible ? "none" : "";
+        overviewBtn.textContent = _groupsState.overviewVisible ? "◀ Back to Groups" : "📊 Compliance Overview";
+      };
+      applyOverviewVisibility();
+      if (_groupsState.overviewVisible) renderGroupsOverview();
+      if (overviewBtn && !overviewBtn.dataset.listenerAttached) {
+        overviewBtn.dataset.listenerAttached = "1";
+        overviewBtn.addEventListener("click", () => {
+          _groupsState.overviewVisible = !_groupsState.overviewVisible;
+          applyOverviewVisibility();
+          if (_groupsState.overviewVisible) renderGroupsOverview();
+        });
+      }
     }
 
     function _renderGroupList() {
@@ -4714,7 +4743,6 @@ function buildPdfDomainRows(rows) {
           await _renderGroupTabContent(group, _groupsState.activeTab);
         });
       });
-      detailCol.getElementById?.("gdEditBtn");
       document.getElementById("gdEditBtn")?.addEventListener("click", () => _openEditGroupModal(group));
       document.getElementById("gdDeleteBtn")?.addEventListener("click", () => _deleteGroup(group));
       await _renderGroupTabContent(group, activeTab);
