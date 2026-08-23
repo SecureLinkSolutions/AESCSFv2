@@ -145,6 +145,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS files (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     user_oid     TEXT    NOT NULL,
+    tenant_id    TEXT    NOT NULL DEFAULT '',
     practice_id  TEXT    NOT NULL,
     filename     TEXT    NOT NULL,
     stored_name  TEXT    NOT NULL,
@@ -152,7 +153,7 @@ db.exec(`
     size_bytes   INTEGER NOT NULL DEFAULT 0,
     uploaded_at  INTEGER NOT NULL DEFAULT (unixepoch())
   );
-  CREATE INDEX IF NOT EXISTS idx_files_practice ON files(user_oid, practice_id);
+  CREATE INDEX IF NOT EXISTS idx_files_practice ON files(tenant_id, practice_id);
 
   CREATE TABLE IF NOT EXISTS objective_assignments (
     user_oid     TEXT    NOT NULL REFERENCES users(oid) ON DELETE CASCADE,
@@ -273,6 +274,20 @@ db.exec(`
 try { db.exec(`ALTER TABLE snapshots ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_golden ON snapshots(tenant_id, scope)`); } catch {}
 
+/* Migration: add tenant_id column to files if it doesn't exist yet, then
+ * backfill it from the uploader's known tenant so existing evidence files
+ * don't silently disappear once file queries become tenant-scoped. */
+try { db.exec(`ALTER TABLE files ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''`); } catch {}
+try {
+  db.exec(`
+    UPDATE files
+    SET tenant_id = (SELECT tenant_id FROM users WHERE users.oid = files.user_oid)
+    WHERE tenant_id = ''
+      AND EXISTS (SELECT 1 FROM users WHERE users.oid = files.user_oid AND users.tenant_id != '')
+  `);
+} catch (e) { console.error("[AESCSF API] Files tenant_id backfill failed:", e.message); }
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_files_tenant ON files(tenant_id, practice_id)`); } catch {}
+
 /* Migration: expand users role constraint from 2 to 4 values */
 try {
   const userTableSQL = db.prepare(
@@ -375,14 +390,18 @@ const stmtCountAdmins = db.prepare(
   "SELECT COUNT(*) AS n FROM users WHERE role = 'admin'"
 );
 const stmtGetAllUsers = db.prepare(
-  "SELECT oid, username, display_name, role, created_at, last_seen FROM users ORDER BY display_name"
+  "SELECT oid, username, display_name, role, created_at, last_seen FROM users WHERE tenant_id = ? ORDER BY display_name"
 );
 const stmtGetAssignments = db.prepare(
   "SELECT domain FROM assignments WHERE user_oid = ? ORDER BY domain"
 );
-const stmtGetAllAssignments = db.prepare(
-  "SELECT user_oid, domain FROM assignments ORDER BY user_oid, domain"
-);
+const stmtGetAllAssignments = db.prepare(`
+  SELECT a.user_oid, a.domain
+  FROM assignments a
+  JOIN users u ON a.user_oid = u.oid
+  WHERE u.tenant_id = ?
+  ORDER BY a.user_oid, a.domain
+`);
 const stmtDeleteAssignments = db.prepare(
   "DELETE FROM assignments WHERE user_oid = ?"
 );
@@ -390,7 +409,7 @@ const stmtInsertAssignment = db.prepare(
   "INSERT OR REPLACE INTO assignments (user_oid, domain, assigned_by, assigned_at) VALUES (?, ?, ?, unixepoch())"
 );
 const stmtGetAllAssessments = db.prepare(
-  "SELECT a.user_oid, a.data FROM assessments a JOIN users u ON a.user_oid = u.oid AND a.tenant_id = u.tenant_id"
+  "SELECT a.user_oid, a.data FROM assessments a JOIN users u ON a.user_oid = u.oid AND a.tenant_id = u.tenant_id WHERE a.tenant_id = ?"
 );
 
 const stmtListSnapshots = db.prepare(
@@ -433,11 +452,11 @@ const stmtInsertAuditBatch = db.transaction((rows) => {
 
 /* Files */
 const stmtInsertFile = db.prepare(`
-  INSERT INTO files (user_oid, practice_id, filename, stored_name, mime_type, size_bytes)
-  VALUES (?, ?, ?, ?, ?, ?)
+  INSERT INTO files (user_oid, tenant_id, practice_id, filename, stored_name, mime_type, size_bytes)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 const stmtGetFileById = db.prepare(
-  "SELECT id, user_oid, practice_id, filename, stored_name, mime_type, size_bytes, uploaded_at FROM files WHERE id = ?"
+  "SELECT id, user_oid, practice_id, filename, stored_name, mime_type, size_bytes, uploaded_at FROM files WHERE id = ? AND tenant_id = ?"
 );
 const stmtDeleteFileRecord = db.prepare("DELETE FROM files WHERE id = ?");
 const stmtGetObjectiveAssignments = db.prepare(
@@ -752,15 +771,23 @@ function getUserAssignments(oid) {
   return stmtGetGroupDomainsByUser.all(oid).map(r => r.domain);
 }
 
-function buildMergedAssessment() {
-  const allAssignments = stmtGetAllAssignments.all();
+/** Fetch a user by oid, scoped to the requesting admin's tenant. Returns undefined
+ *  (as if not found) if the user exists but belongs to a different tenant. */
+function getTenantUser(oid, tenantId) {
+  const user = stmtGetUser.get(oid);
+  if (!user || user.tenant_id !== tenantId) return undefined;
+  return user;
+}
+
+function buildMergedAssessment(tenantId) {
+  const allAssignments = stmtGetAllAssignments.all(tenantId);
   const domainOwners = {};
   for (const { user_oid, domain } of allAssignments) {
     if (!domainOwners[domain]) domainOwners[domain] = [];
     domainOwners[domain].push(user_oid);
   }
 
-  const allRows = stmtGetAllAssessments.all();
+  const allRows = stmtGetAllAssessments.all(tenantId);
   const assessmentsByOid = {};
   for (const row of allRows) {
     try { assessmentsByOid[row.user_oid] = JSON.parse(row.data); } catch { /* skip */ }
@@ -798,7 +825,7 @@ function buildMergedAssessment() {
 
   // Build contributors map: { [practiceId]: [{ user_oid, display_name, username, assessment }] }
   const usersByOid = {};
-  for (const u of stmtGetAllUsers.all()) usersByOid[u.oid] = u;
+  for (const u of stmtGetAllUsers.all(tenantId)) usersByOid[u.oid] = u;
   const contributors = {};
   for (const row of allRows) {
     const assessments = assessmentsByOid[row.user_oid]?.assessments || {};
@@ -916,13 +943,13 @@ function auditToCsv(rows) {
 }
 
 /** List files for a practice. Admins see all users' files; users see only their own. */
-function listFilesForPractice(practiceId, userOid, isAdmin) {
+function listFilesForPractice(practiceId, userOid, isAdmin, tenantId) {
   const sql = isAdmin
-    ? "SELECT id, user_oid, practice_id, filename, mime_type, size_bytes, uploaded_at FROM files WHERE practice_id = ? ORDER BY uploaded_at DESC"
-    : "SELECT id, user_oid, practice_id, filename, mime_type, size_bytes, uploaded_at FROM files WHERE practice_id = ? AND user_oid = ? ORDER BY uploaded_at DESC";
+    ? "SELECT id, user_oid, practice_id, filename, mime_type, size_bytes, uploaded_at FROM files WHERE practice_id = ? AND tenant_id = ? ORDER BY uploaded_at DESC"
+    : "SELECT id, user_oid, practice_id, filename, mime_type, size_bytes, uploaded_at FROM files WHERE practice_id = ? AND tenant_id = ? AND user_oid = ? ORDER BY uploaded_at DESC";
   return isAdmin
-    ? db.prepare(sql).all(practiceId)
-    : db.prepare(sql).all(practiceId, userOid);
+    ? db.prepare(sql).all(practiceId, tenantId)
+    : db.prepare(sql).all(practiceId, tenantId, userOid);
 }
 
 /* ── Audit log retention ─────────────────────────────────────────────────── */
@@ -1475,7 +1502,7 @@ app.post("/api/admin/groups/:groupId/endorse-responses", requireAuth, autoRegist
 /* ── Admin routes ────────────────────────────────────────────────────────── */
 
 app.get("/api/admin/users", requireAuth, autoRegister, requireAdmin, (req, res) => {
-  const users = stmtGetAllUsers.all();
+  const users = stmtGetAllUsers.all(req.user.tenant);
 
   // Group memberships (one group per user enforced at application layer)
   const allGroupMembers = db.prepare(`
@@ -1504,7 +1531,7 @@ app.put("/api/admin/users/:oid/role", requireAuth, autoRegister, requireAdmin, (
   if (!VALID_ROLES.has(role)) {
     return res.status(400).json({ error: "role must be 'admin', 'user', 'assessor', or 'dashboard'" });
   }
-  const target = stmtGetUser.get(req.params.oid);
+  const target = getTenantUser(req.params.oid, req.user.tenant);
   if (!target) return res.status(404).json({ error: "User not found" });
 
   const oldRole = target.role;
@@ -1532,7 +1559,7 @@ app.put("/api/admin/users/:oid/assignments", requireAuth, autoRegister, requireA
   if (!Array.isArray(domains)) {
     return res.status(400).json({ error: "domains must be an array of strings" });
   }
-  const target = stmtGetUser.get(req.params.oid);
+  const target = getTenantUser(req.params.oid, req.user.tenant);
   if (!target) return res.status(404).json({ error: "User not found" });
 
   const oldDomains = getUserAssignments(req.params.oid);
@@ -1572,9 +1599,9 @@ app.put("/api/admin/users/:oid/assignments", requireAuth, autoRegister, requireA
   }
 });
 
-app.get("/api/admin/assessment/merged", requireAuth, autoRegister, requireAdmin, (_req, res) => {
+app.get("/api/admin/assessment/merged", requireAuth, autoRegister, requireAdmin, (req, res) => {
   try {
-    res.json(buildMergedAssessment());
+    res.json(buildMergedAssessment(req.user.tenant));
   } catch (err) {
     console.error("[AESCSF API] Merge error:", err);
     res.status(500).json({ error: "Failed to build merged assessment" });
@@ -1593,7 +1620,7 @@ app.get("/api/admin/assessment/approved", requireAuth, autoRegister, requireAdmi
 
 app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegister, requireAdmin, (req, res) => {
   const { practiceIds } = req.body || {};
-  const target = stmtGetUser.get(req.params.oid);
+  const target = getTenantUser(req.params.oid, req.user.tenant);
   if (!target) return res.status(404).json({ error: "User not found" });
 
   const targetRow = stmtGetAssessment.get(req.params.oid, req.user.tenant);
@@ -1610,14 +1637,19 @@ app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegiste
   } else {
     const userDomains    = new Set(getUserAssignments(req.params.oid));
     const userObjectives = new Set(getUserObjectiveAssignments(req.params.oid));
-    toApprove = new Set(
-      Object.keys(targetAssessments).filter(pid => {
-        if (!userDomains.size && !userObjectives.size) return true;
-        const pDomain    = practiceDomain(pid);
-        const pObjective = practiceObjectiveId(pid);
-        return userDomains.has(pDomain) || userObjectives.has(pObjective);
-      })
-    );
+    /* Fail closed: a target with no domain/objective assignment approves
+     * nothing unless practiceIds are given explicitly. Assessors/admins
+     * whose scope is implicit rather than assignment-based must be
+     * approved via an explicit practiceIds list. */
+    toApprove = (!userDomains.size && !userObjectives.size)
+      ? new Set()
+      : new Set(
+          Object.keys(targetAssessments).filter(pid => {
+            const pDomain    = practiceDomain(pid);
+            const pObjective = practiceObjectiveId(pid);
+            return userDomains.has(pDomain) || userObjectives.has(pObjective);
+          })
+        );
   }
 
   let approvedCount = 0;
@@ -1651,7 +1683,7 @@ app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegiste
 app.post("/api/admin/users/:oid/endorse-contributions", requireAuth, autoRegister, requireAdmin, (req, res) => {
   try {
     const { practiceIds } = req.body || {};
-    const target = stmtGetUser.get(req.params.oid);
+    const target = getTenantUser(req.params.oid, req.user.tenant);
     if (!target) return res.status(404).json({ error: "User not found" });
 
     const endorsedBy  = req.dbUser.display_name || req.user.username || "";
@@ -1993,7 +2025,7 @@ app.delete("/api/audit/purge", requireAuth, autoRegister, requireAdmin, (req, re
 app.put("/api/admin/users/:oid/objective-assignments", requireAuth, autoRegister, requireAdmin, (req, res) => {
   const { objectives } = req.body || {};
   if (!Array.isArray(objectives)) return res.status(400).json({ error: "objectives must be an array" });
-  const target = stmtGetUser.get(req.params.oid);
+  const target = getTenantUser(req.params.oid, req.user.tenant);
   if (!target) return res.status(404).json({ error: "User not found" });
 
   const oldObjectives = getUserObjectiveAssignments(req.params.oid).sort().join(",");
@@ -2148,6 +2180,7 @@ app.post("/api/files/:practiceId", requireAuth, autoRegister, (req, res, next) =
     try {
       const result = stmtInsertFile.run(
         req.user.oid,
+        req.user.tenant,
         req.params.practiceId,
         req.file.originalname,
         req.file.filename,
@@ -2179,7 +2212,7 @@ app.post("/api/files/:practiceId", requireAuth, autoRegister, (req, res, next) =
 app.get("/api/files/:practiceId", requireAuth, autoRegister, (req, res) => {
   const isAdmin = req.dbUser.role === "admin";
   try {
-    const files = listFilesForPractice(req.params.practiceId, req.user.oid, isAdmin);
+    const files = listFilesForPractice(req.params.practiceId, req.user.oid, isAdmin, req.user.tenant);
     res.json(files);
   } catch (err) {
     console.error("[AESCSF API] File list error:", err);
@@ -2193,7 +2226,7 @@ app.get("/api/files/:practiceId", requireAuth, autoRegister, (req, res) => {
  * Users can only download their own files; admins can download any file.
  */
 app.get("/api/files/:id/download", requireAuth, autoRegister, (req, res) => {
-  const file = stmtGetFileById.get(req.params.id);
+  const file = stmtGetFileById.get(req.params.id, req.user.tenant);
   if (!file) return res.status(404).json({ error: "File not found" });
 
   const isAdmin = req.dbUser.role === "admin";
@@ -2217,7 +2250,7 @@ app.get("/api/files/:id/download", requireAuth, autoRegister, (req, res) => {
  * Users can only delete their own files; admins can delete any file.
  */
 app.delete("/api/files/:id", requireAuth, autoRegister, (req, res) => {
-  const file = stmtGetFileById.get(req.params.id);
+  const file = stmtGetFileById.get(req.params.id, req.user.tenant);
   if (!file) return res.status(404).json({ error: "File not found" });
 
   const isAdmin = req.dbUser.role === "admin";
