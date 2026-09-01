@@ -1,0 +1,27 @@
+# Secrets — never bake these into an image layer
+.env
+.env.*
+!.env.example
+
+# Git history
+.git
+.gitignore
+
+# Local data / uploads (never ship DB or user files)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Node dependencies (rebuilt inside the container)
+node_modules/
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Documentation (reduces build context; not needed at runtime)
+*.md
+Dashboard.png

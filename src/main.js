@@ -1,0 +1,5183 @@
+// CSS import (Vite processes this)
+import "./style.css";
+
+// npm package imports replacing CDN scripts
+import Chart from "chart.js/auto";
+import jsPDF from "jspdf";
+import "jspdf-autotable"; // side-effect: extends jsPDF.prototype.autoTable
+import html2canvas from "html2canvas";
+
+// Make them global for the existing code that references them as globals
+window.Chart = Chart;
+// Expose as both window.jsPDF and window.jspdf.jsPDF (CDN compat)
+window.jsPDF = jsPDF;
+window.jspdf = { jsPDF };
+
+// ── Paste the entire existing <script> content below ──
+    const STORAGE_KEY = "aescsf-v2-evidence-tracker";
+
+    function emptyStateHtml({ icon, title, body, actionLabel, actionId }) {
+      const icons = {
+        search:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`,
+        clipboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 12l2 2 4-4"/></svg>`,
+        network:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M10.83 16.11a6 6 0 012.34 0"/><circle cx="12" cy="20" r="1"/></svg>`,
+        timeline:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+        history:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+      };
+      const idAttr = actionId ? ` id="${actionId}"` : "";
+      return `<div class="empty-state">
+        <div class="empty-state-icon">${icons[icon] || icons.search}</div>
+        <h3 class="empty-state-title">${escapeHtml(title)}</h3>
+        <p class="empty-state-body">${escapeHtml(body)}</p>
+        ${actionLabel ? `<button class="secondary empty-state-action"${idAttr}>${escapeHtml(actionLabel)}</button>` : ""}
+      </div>`;
+    }
+    const APP_CONFIG = Object.freeze({
+      appVersion: "1.2.0",
+      storageMode: (window.__AESCSF_CONFIG__ && window.__AESCSF_CONFIG__.storageMode) || "local",
+      apiBaseUrl: (window.__AESCSF_CONFIG__ && window.__AESCSF_CONFIG__.apiBaseUrl) || "/api",
+      apiAssessmentPath: (window.__AESCSF_CONFIG__ && window.__AESCSF_CONFIG__.apiAssessmentPath) || "/assessment",
+      requestTimeoutMs: (window.__AESCSF_CONFIG__ && window.__AESCSF_CONFIG__.requestTimeoutMs) || 15000,
+      authHeaderName: (window.__AESCSF_CONFIG__ && window.__AESCSF_CONFIG__.authHeaderName) || "X-AESCSF-Auth"
+    });
+    const CSV_TEMPLATE_IDS = ["ACCESS-1a", "ACCESS-1b", "ACCESS-1c", "ACCESS-1d", "ACCESS-1e", "ACCESS-1f", "ACCESS-1g", "ACCESS-1h", "ACCESS-1i", "ACCESS-1j", "ACCESS-2a", "ACCESS-2b", "ACCESS-2c", "ACCESS-2d", "ACCESS-2e", "ACCESS-2f", "ACCESS-2g", "ACCESS-2h", "ACCESS-2i", "ACCESS-3a", "ACCESS-3b", "ACCESS-3c", "ACCESS-3d", "ACCESS-3e", "ACCESS-3f", "ACCESS-3g", "ACCESS-3h", "ACCESS-3i", "ACCESS-3j", "ACCESS-AP1", "ACCESS-AP10", "ACCESS-AP11", "ACCESS-AP2", "ACCESS-AP3", "ACCESS-AP4", "ACCESS-AP5", "ACCESS-AP6", "ACCESS-AP7", "ACCESS-AP8", "ACCESS-AP9", "ARCHITECTURE-1a", "ARCHITECTURE-1b", "ARCHITECTURE-1c", "ARCHITECTURE-1d", "ARCHITECTURE-1e", "ARCHITECTURE-1f", "ARCHITECTURE-1g", "ARCHITECTURE-1h", "ARCHITECTURE-1i", "ARCHITECTURE-1j", "ARCHITECTURE-1k", "ARCHITECTURE-2a", "ARCHITECTURE-2b", "ARCHITECTURE-2c", "ARCHITECTURE-2d", "ARCHITECTURE-2e", "ARCHITECTURE-2f", "ARCHITECTURE-2g", "ARCHITECTURE-2h", "ARCHITECTURE-2i", "ARCHITECTURE-2j", "ARCHITECTURE-2k", "ARCHITECTURE-2l", "ARCHITECTURE-3a", "ARCHITECTURE-3b", "ARCHITECTURE-3c", "ARCHITECTURE-3d", "ARCHITECTURE-3e", "ARCHITECTURE-3f", "ARCHITECTURE-3g", "ARCHITECTURE-3h", "ARCHITECTURE-3i", "ARCHITECTURE-3j", "ARCHITECTURE-3k", "ARCHITECTURE-3l", "ARCHITECTURE-3m", "ARCHITECTURE-4a", "ARCHITECTURE-4b", "ARCHITECTURE-4c", "ARCHITECTURE-4d", "ARCHITECTURE-4e", "ARCHITECTURE-4f", "ARCHITECTURE-4g", "ARCHITECTURE-4h", "ARCHITECTURE-5a", "ARCHITECTURE-5b", "ARCHITECTURE-5c", "ARCHITECTURE-5d", "ARCHITECTURE-5e", "ARCHITECTURE-5f", "ARCHITECTURE-5g", "ARCHITECTURE-5h", "ARCHITECTURE-AP1", "ARCHITECTURE-AP2", "ARCHITECTURE-AP3", "ASSET-1a", "ASSET-1b", "ASSET-1c", "ASSET-1d", "ASSET-1e", "ASSET-1f", "ASSET-1g", "ASSET-1h", "ASSET-2a", "ASSET-2b", "ASSET-2c", "ASSET-2d", "ASSET-2e", "ASSET-2f", "ASSET-2g", "ASSET-2h", "ASSET-3a", "ASSET-3b", "ASSET-3c", "ASSET-3d", "ASSET-3e", "ASSET-4a", "ASSET-4b", "ASSET-4c", "ASSET-4d", "ASSET-4e", "ASSET-4f", "ASSET-4g", "ASSET-4h", "ASSET-4i", "ASSET-AP1", "ASSET-AP2", "ASSET-AP3", "PRIVACY-1A", "PRIVACY-1B", "PRIVACY-1C", "PRIVACY-1D", "PRIVACY-1E", "PRIVACY-1F", "PRIVACY-1G", "PRIVACY-1H", "PRIVACY-1I", "PRIVACY-1J", "PRIVACY-1K", "PRIVACY-1L", "PRIVACY-1M", "PRIVACY-1N", "PRIVACY-1O", "PRIVACY-1P", "PRIVACY-AP1", "PROGRAM-1a", "PROGRAM-1b", "PROGRAM-1c", "PROGRAM-1d", "PROGRAM-1e", "PROGRAM-1f", "PROGRAM-1g", "PROGRAM-1h", "PROGRAM-2a", "PROGRAM-2b", "PROGRAM-2c", "PROGRAM-2d", "PROGRAM-2e", "PROGRAM-2f", "PROGRAM-2g", "PROGRAM-2h", "PROGRAM-2i", "PROGRAM-2j", "RESPONSE-1a", "RESPONSE-1b", "RESPONSE-1c", "RESPONSE-1d", "RESPONSE-1e", "RESPONSE-1f", "RESPONSE-2a", "RESPONSE-2b", "RESPONSE-2c", "RESPONSE-2d", "RESPONSE-2e", "RESPONSE-2f", "RESPONSE-2g", "RESPONSE-2h", "RESPONSE-2i", "RESPONSE-3a", "RESPONSE-3b", "RESPONSE-3c", "RESPONSE-3d", "RESPONSE-3e", "RESPONSE-3f", "RESPONSE-3g", "RESPONSE-3h", "RESPONSE-3i", "RESPONSE-3j", "RESPONSE-3k", "RESPONSE-3l", "RESPONSE-4a", "RESPONSE-4b", "RESPONSE-4c", "RESPONSE-4d", "RESPONSE-4e", "RESPONSE-4f", "RESPONSE-4g", "RESPONSE-4h", "RESPONSE-4i", "RESPONSE-4j", "RESPONSE-4k", "RESPONSE-4l", "RESPONSE-4m", "RESPONSE-4n", "RESPONSE-4o", "RESPONSE-4p", "RESPONSE-AP1", "RESPONSE-AP2", "RESPONSE-AP3", "RISK-1a", "RISK-1b", "RISK-1c", "RISK-1d", "RISK-1e", "RISK-1f", "RISK-1g", "RISK-1h", "RISK-2a", "RISK-2b", "RISK-2c", "RISK-2d", "RISK-2e", "RISK-2f", "RISK-2g", "RISK-2h", "RISK-2i", "RISK-2j", "RISK-2k", "RISK-2l", "RISK-2m", "RISK-3a", "RISK-3b", "RISK-3c", "RISK-3d", "RISK-3e", "RISK-3f", "RISK-3g", "RISK-4a", "RISK-4b", "RISK-4c", "RISK-4d", "RISK-4e", "RISK-AP1", "RISK-AP2", "RISK-AP3", "RISK-AP4", "SITUATION-1a", "SITUATION-1b", "SITUATION-1c", "SITUATION-1d", "SITUATION-1e", "SITUATION-1f", "SITUATION-2a", "SITUATION-2b", "SITUATION-2c", "SITUATION-2d", "SITUATION-2e", "SITUATION-2f", "SITUATION-2g", "SITUATION-2h", "SITUATION-2i", "SITUATION-3a", "SITUATION-3b", "SITUATION-3c", "SITUATION-3d", "SITUATION-3e", "SITUATION-3f", "SITUATION-3g", "SITUATION-AP1", "SITUATION-AP10", "SITUATION-AP11", "SITUATION-AP2", "SITUATION-AP3", "SITUATION-AP4", "SITUATION-AP5", "SITUATION-AP6", "SITUATION-AP7", "SITUATION-AP8", "SITUATION-AP9", "THIRD-PARTIES-1a", "THIRD-PARTIES-1b", "THIRD-PARTIES-1c", "THIRD-PARTIES-1d", "THIRD-PARTIES-1e", "THIRD-PARTIES-1f", "THIRD-PARTIES-2a", "THIRD-PARTIES-2b", "THIRD-PARTIES-2c", "THIRD-PARTIES-2d", "THIRD-PARTIES-2e", "THIRD-PARTIES-2f", "THIRD-PARTIES-2g", "THIRD-PARTIES-2h", "THIRD-PARTIES-2i", "THIRD-PARTIES-2j", "THIRD-PARTIES-2k", "THIRD-PARTIES-2l", "THIRD-PARTIES-2m", "THREAT-1a", "THREAT-1b", "THREAT-1c", "THREAT-1d", "THREAT-1e", "THREAT-1f", "THREAT-1g", "THREAT-1h", "THREAT-1i", "THREAT-1j", "THREAT-1k", "THREAT-1l", "THREAT-1m", "THREAT-2a", "THREAT-2b", "THREAT-2c", "THREAT-2d", "THREAT-2e", "THREAT-2f", "THREAT-2g", "THREAT-2h", "THREAT-2i", "THREAT-2j", "THREAT-2k", "THREAT-AP1", "THREAT-AP2", "THREAT-AP3", "WORKFORCE-1a", "WORKFORCE-1b", "WORKFORCE-1c", "WORKFORCE-1d", "WORKFORCE-1e", "WORKFORCE-1f", "WORKFORCE-1g", "WORKFORCE-2a", "WORKFORCE-2b", "WORKFORCE-2c", "WORKFORCE-2d", "WORKFORCE-2e", "WORKFORCE-2f", "WORKFORCE-2g", "WORKFORCE-3a", "WORKFORCE-3b", "WORKFORCE-3c", "WORKFORCE-3d", "WORKFORCE-3e", "WORKFORCE-3f", "WORKFORCE-4a", "WORKFORCE-4b", "WORKFORCE-4c", "WORKFORCE-4d", "WORKFORCE-4e", "WORKFORCE-4f", "WORKFORCE-AP1", "WORKFORCE-AP2", "WORKFORCE-AP3"];
+    const PRACTICES = [{"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1a", "practice": "Identities are provisioned, at least in an ad hoc manner, for personnel and other entities such as services and devices that require access to assets (note that this does not preclude shared identities)", "context": "Provisioning refers to the creation or registration of identities. This involves identifying the entity and documenting attributes such as role and position in the organisation. \nProvisioning is performed for persons, devices, systems, and processes, whether internal or external to the organisation. Thus, a vendor, agency, or business partner may be registered as an identity by the organisation, as could a system or process from an external organisation. In some cases, organisations may need to use shared identities, such as group accounts.\nA best practice for provisioning is the identity profile. The profile contains all of the relevant information necessary to describe the unique attributes, roles, and responsibilities of the associated entity. The identity profile is generally initiated and approved by the organisational unit or line of business to which the entity belongs and where decisions about use of organisational assets can be made.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1a, ACCESS-1c, ACCESS-1e, ACCESS-1f, ACCESS-1j.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1b", "practice": "Credentials (such as passwords, smartcards, certificates, and keys) are issued for personnel and other entities that require access to assets, at least in an ad hoc manner", "context": "Prior to giving personnel and other entities access to organisational assets, the organisation should issue credentials to prove that the individual requesting access has the necessary privileges to access the assets. Entities may include individuals (internal or external to the organisation) as well as devices, systems, or processes that require access to assets. The privileges associated with those credentials should be in line with the operational requirements.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1b, ACCESS-1d, ACCESS-1g, ACCESS-1h, ACCESS-1i.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1c", "practice": "Identities are deprovisioned, at least in an ad hoc manner, when no longer required", "context": "When a person, object, or entity ceases to exist in the organisation, the associated identity and all of its access privileges and restrictions should be eliminated. The failure to deprovision an identity can result in significant operational risk to an organisation because it may provide an identity to which an unauthorised (and perhaps unknown) person, object, or entity can associate. If this occurs and its access privileges have not been terminated, the identity can be stolen along with all of the existing privileges.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1a, ACCESS-1c, ACCESS-1e, ACCESS-1f, ACCESS-1j.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1d", "practice": "Password strength and reuse restrictions are defined and enforced", "context": "Password strength and reuse requirements may not be supported by all assets within the function. Where feasible, these requirements may be informed by safety and operational considerations, the organisation's risk tolerance, the organisation's threat profile (THREAT-2e), asset priority, the sensitivity of information, or other considerations.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1b, ACCESS-1d, ACCESS-1g, ACCESS-1h, ACCESS-1i.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1e", "practice": "Identity repositories are reviewed and updated periodically and according to defined triggers, such as system changes and changes to organisational structure", "context": "Periodic review of identities can help the organisation ensure they remain viable and accurate. The periodic review should be performed by the organisation with the intent of identifying identities that are no longer valid, are duplicated, or that have changed materially but were not detected by the change management process. Reviews may also uncover identities with invalid roles or responsibilities to which access privileges have been provisioned.\nInvalid or duplicated identities can result in unauthorised use and modification of information, use of systems and technology, or entry to and use of facilities.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1a, ACCESS-1c, ACCESS-1e, ACCESS-1f, ACCESS-1j.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1f", "practice": "Identities are deprovisioned within organisation-defined time thresholds when no longer required", "context": "Deprovisioning should occur as a result of the staff change or termination process. The organisation should define a time-based requirement within which the deprovisioning should be done. For example, upon a termination, deprovisioning should occur immediately; for staff transitions to new positions, the time frame might be longer.\nFor timely deprovisioning to be possible, there must be a process for human resources departments to feed termination information to those who are responsible for maintaining the organisation’s identity repositories. Deprovisioning may also be the result of corrective actions taken after a review to remedy situations where the time thresholds were Not Present.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1a, ACCESS-1c, ACCESS-1e, ACCESS-1f, ACCESS-1j.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1g", "practice": "The use of privileged credentials is limited to processes for which they are required", "context": "Privileged accounts represent higher risk to IT and OT assets. An organisation may control the use of privileged credentials through administrative means, such as a policy that restricts the use of a local administrative accounts to required tasks and prohibits use of privileged accounts for day-to-day work functions. Alternatively, an organisation may implement technical controls to restrict privileged accounts from accessing resources that do not require elevated privileges.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1b, ACCESS-1d, ACCESS-1g, ACCESS-1h, ACCESS-1i.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1h", "practice": "Stronger credentials, multifactor authentication, or single use credentials are required for higher risk access (such as privileged accounts, service accounts, shared accounts, and remote access)", "context": "The requirements for credentials used to access the organisation’s assets should be commensurate with the risk associated with the assets. If an organisation uses a matrix for determining the potential impact and priority of risks, it may develop a companion matrix that specifies credential and authentication requirements for each level of impact. For example, for remote access to a system with risks that could result in significant impact (level 4 of 5) and a high likelihood of occurrence (level 4 of 5), a commensurate requirement might establish that personnel must use strong credentials, multifactor authentication, or single use credentials. In situations where strong credentials (such as MFA) may be warranted, but are precluded by technological limitations, consider implementing the strongest available authentication configurations and implementing compensating controls if deemed appropriate based on risk and operational considerations.\nMultifactor authentication (MFA) involves the use of two or more factors to achieve verification of an identity. Factors include (1) soPresenthing you know, such as a password, (2) soPresenthing you have, such as a token, (3) soPresenthing you are, such as a fingerprint, or (4) soPresenthing that indicates you are where you say you are, such as a GPS token. For the example above, personnel could be required to authenticate using a login ID, a password, and a token. \nSingle use credentials may be Fully through a privileged access management (PAM) solution. Functionality provided by a PAM include role-based access to privileged credentials, automated rotation of passwords, integration with MFA, and auditing of privileged credential use.\n\nThese are specific examples of access that may pose higher risk to the function: \n• privileged accounts\n• service accounts\n• shared accounts (Use of these should be discouraged in general, but not possible in certain legacy IT and OT assets, where additional controls are appropriate such as stronger credentials as mentioned in this practice, strong physical access controls, or others.)\n• remote access\n• administrative accounts\n• emergency access\n• access to sensitive assets\n• access to cloud or virtual asset management systems\n• cryptographic key management accounts\n• backup accounts\n(Note that as requirements for stronger or multifactor credentials are established for more of these types of access, the higher the organisation moves on the spectrum of maturity.)\nAdditionally, it is important to note that the word risk is being used in this practice in the general sense of the word and not intended to refer to any specific risks identified in the Risk Management domain of the C2M2. However, organisations should consider access to IT and OT assets and the controls applied to that access during the risk identification, analysis and response activities discussed in the Risk Management domain.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1b, ACCESS-1d, ACCESS-1g, ACCESS-1h, ACCESS-1i.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1i", "practice": "Multifactor authentication is required for all access, where feasible", "context": "Multifactor authentication may not be supported by all assets within the function. Where feasible, stronger authentication controls, such as multifactor authentication reduce the risk of account misuse resulting from compromised credentials. Where multifactor authentication is not feasible, organisations may consider implementing mitigating controls depending on their risk appetite, threat environment, and operational needs.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1b, ACCESS-1d, ACCESS-1g, ACCESS-1h, ACCESS-1i.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ACCESS", "objectiveId": "ACCESS-1", "objective": "Establish Identities and Manage Authentication", "practiceId": "ACCESS-1j", "practice": "Identities are disabled after a defined period of inactivity, where feasible", "context": "Enforcement of identity deprovisioning based on periods of inactivity can reduce the risk of a dormant account being misused or subject to malicious activity. The period of inactivity must be established by the organisation commensurate with potential risk. For example, temporary identities supplied to contractors might be appropriately disabled after a period of 30 days or less. An organisation may implement this control by first monitoring last logon timestamp or other attributes to identify potential periods of inactivity. Using this information, identities that have been inactive for a defined period of time can be identified and disabled or removed if no longer needed. The efficiency of this activity may be improved by developing a list of accounts that by nature have long periods of dormancy but are also still necessary to meet operational requirements. While this practice may be enforced by automated means, it is important to carefully consider the impacts to operations prior to implementing automated deprovisioning.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-1a, ACCESS-1c, ACCESS-1e, ACCESS-1f, ACCESS-1j.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-2", "objective": "Control Logical Access", "practiceId": "ACCESS-2a", "practice": "Logical access controls are Fully, at least in an ad hoc manner", "context": "Access controls are a key element of the protection provided to assets. Access privileges and restrictions describe the level and extent of access provided to identities. Access privileges should be commensurate with the various roles represented by an identity.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-2a, ACCESS-2c, ACCESS-2d, ACCESS-2e, ACCESS-2f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-2", "objective": "Control Logical Access", "practiceId": "ACCESS-2b", "practice": "Logical access privileges are revoked when no longer needed, at least in an ad hoc manner", "context": "Asset owners and custodians are responsible for revoking logical access privileges when no longer required, such as upon an employee’s termination or transition to a new role. Generally, staff should maintain the minimum set of privileges needed to perform their assigned responsibilities. Revoking logical access that is no longer required helps prevent aggregation of access privileges.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-2b, ACCESS-2g, ACCESS-2h.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-2", "objective": "Control Logical Access", "practiceId": "ACCESS-2c", "practice": "Logical access requirements are established and maintained (for example, rules for which types of entities are allowed to access an asset, limits of allowed access, constraints on remote access, authentication paraPresenters)", "context": "It is the asset owner’s responsibility to ensure that requirements for protecting and sustaining assets are defined for assets under the owner’s control, including requirements for controlling logical access (for example, rules for which types of entities are allowed to access an asset, the limits of allowed access, constraints on remote access, and authentication paraPresenters). For example, the logical access requirements for a specific asset might allow remote access by a vendor only during specified and preplanned maintenance intervals and might also require multifactor authentication for such access. As another example, it may be appropriate to apply additional logical access controls (such as peer review) to high-priority assets.\nThere are several models for access control, such as discretionary access control (DAC), mandatory access control (MAC), role-based access control (RBAC), policy-based access control (PBAC), and attribute-based access control (ABAC). Selection of an access control model will vary based on several factors, such as the operating environment and feasibility of implementation. For example, an organisation may choose to implement an access control model that is supported by current infrastructure, such as RBAC, and plan for future implementation of a more advanced model, such as ABAC, as part of an acquisition of new infrastructure the supports additional access control capabilities.\nAdvanced security models, such as Zero Trust, may also inform the development of access requirements. For example, implementation of Zero Trust principles may include the ability to collect and use additional information (such as behavioral information, geolocation information, threat intelligence, and other contextual information) as part of access policy enforcement.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-2a, ACCESS-2c, ACCESS-2d, ACCESS-2e, ACCESS-2f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-2", "objective": "Control Logical Access", "practiceId": "ACCESS-2d", "practice": "Logical access requirements incorporate the principle of least privilege", "context": "The principle of least privilege is a security requirement that establishes limitations on authorised users only to the privileges they require to perform assigned tasks in accordance with their job responsibilities and roles and nothing more. Organisations employ the principle of least privilege when considering the assignment of access rights and controls for specific duties and systems (including specific functions, ports, protocols, and services). The principle of least privilege also applies to information system processes, ensuring that the processes operate at privilege levels no higher than necessary to accomplish required organisational missions and/or functions. Organisations consider the principle of least privilege in the creation of additional processes, roles, and information system accounts as necessary. Organisations also apply the principle of least privilege to the design, development, implementation, and operations of IT and OT systems. Enforcing the principle of least privilege is an important consideration for implementation of Zero Trust principles.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-2a, ACCESS-2c, ACCESS-2d, ACCESS-2e, ACCESS-2f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-2", "objective": "Control Logical Access", "practiceId": "ACCESS-2e", "practice": "Logical access requirements incorporate the principle of separation of duties", "context": "This principle should be included in access requirements to avoid or reduce the potential impact of errors or malicious activities and to prevent potential fraud. For example, the individual requesting access should not also be the person granting access, and the person requesting access should be granted only the minimum set of privileges needed to perform assigned responsibilities. As noted elsewhere in the model, it is important to consider access privileges for devices, systems, and processes that require access to assets and how separation should be applied. For example, systems performing critical safety functions may require additional scrutiny regarding which people or entities may access them, including process control systems they protect.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-2a, ACCESS-2c, ACCESS-2d, ACCESS-2e, ACCESS-2f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-2", "objective": "Control Logical Access", "practiceId": "ACCESS-2f", "practice": "Logical access requests are reviewed and approved by the asset owner", "context": "Privileges for logical access to an asset are assigned and approved by asset owners, custodians, or authorised delegates based on the role of the person, object, or entity that is requesting access. The asset owner or custodian is responsible for granting logical access privileges based on the identity’s role and the asset’s cybersecurity requirements. Asset owners and custodians must be aware of which particular identities require access to their assets and must validate the requirement with respect to business and cybersecurity requirements before granting approval.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-2a, ACCESS-2c, ACCESS-2d, ACCESS-2e, ACCESS-2f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-2", "objective": "Control Logical Access", "practiceId": "ACCESS-2g", "practice": "Logical access privileges that pose higher risk to the function receive additional scrutiny and monitoring", "context": "Privileged access, service accounts, shared accounts, and remote access should be subject to stricter control than routine user access. Additional scrutiny might require that access requests are approved by more than one person or an individual with a higher level of authority than standard user access requests. Additional monitoring might entail logging the use of elevated privileges. As an example, in a mature organisation, privileged access to shared accounts may be Fully through provisioned credentials that are valid only for the time needed to perform an approved change. Additionally, staff may be monitored through closed-circuit television and screen captures while those credentials are in use.\nThese are specific examples of access that may pose higher risk to the function: \n• privileged accounts\n• service accounts\n• shared accounts\n• remote access\n• administrative accounts\n• emergency access\n• access to sensitive assets\n• access to cloud or virtual asset management systems\n• cryptographic key management accounts\n• backup accounts\nAdditionally, it is important to note that the word risk is being used in this practice in the general sense of the word and not intended to refer to any specific risks identified in the Risk Management domain of the C2M2. However, organisations should consider access to IT and OT assets and the sufficiency of controls to manage access as potential sources of risk that should be considered in the risk identification, analysis and response activities discussed in the Risk Management domain.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-2b, ACCESS-2g, ACCESS-2h.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-2", "objective": "Control Logical Access", "practiceId": "ACCESS-2h", "practice": "Logical access privileges are reviewed and updated to ensure conformance with access requirements periodically and according to defined triggers, such as changes to organisational structure, and after any temporary elevation of privileges", "context": "Constant change in the operational environment creates the potential that at any time the current level of logical access provided to persons, objects, and entities (as reflected in access privileges) may not match the level of need based on current logical access requirements. The organisation should define a schedule for regular review of logical access privileges to ensure that the requirements they have set for their assets are being Fully through proper assignment of logical access privileges and implementation of corresponding logical access controls. \nCertain temporary events such as projects or incident responses may require granting situation-based privileged logical access. A logical access review should be a necessary step in the closeout process of those events.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-2b, ACCESS-2g, ACCESS-2h.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-2", "objective": "Control Logical Access", "practiceId": "ACCESS-2i", "practice": "Anomalous logical access attempts are monitored as indicators of cybersecurity events", "context": "Monitoring is done on logical access attempts, and any anomalies detected (such as an attempted login with a user name that doesn’t exist within the system) are tagged as requiring further review to determine whether they are indicators of cybersecurity events (rather than user error, for example).\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3a", "practice": "Physical access controls (such as fences, locks, and signage) are Fully, at least in an ad hoc manner", "context": "For the purpose of the model, these controls are intended for the protection of IT, OT, and information assets (for example, locks that control entry to a data center). Additionally, it is important to consider that the effectiveness of some types of physical access controls, such as keys and badges, may be significantly impacted by the way in which they are managed and secured.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3a, ACCESS-3d, ACCESS-3e, ACCESS-3f, ACCESS-3g.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3b", "practice": "Physical access privileges are revoked when no longer needed, at least in an ad hoc manner", "context": "Asset owners and custodians are responsible for revoking physical access privileges when they are no longer required by whoever (or whatever) they were assigned to, such as upon an employee's termination or transition to a new role. Generally, staff should maintain the minimum set of privileges needed to perform their assigned responsibilities. Revoking physical access that is no longer required helps prevent aggregation of access privileges.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3b, ACCESS-3h, ACCESS-3i.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3c", "practice": "Physical access logs are maintained, at least in an ad hoc manner", "context": "It is the asset owner's responsibility to ensure that logging of physical access meets the requirements for protecting and sustaining the asset under the owner's control. Logging may be completed via manual means such as a paper log or through automated means such as data collected via physical access control systems.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3c, ACCESS-3j.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3d", "practice": "Physical access requirements are established and maintained (for example, rules for who is allowed to access an asset, how access is granted, limits of allowed access)", "context": "It is the asset owner’s responsibility to ensure that requirements for protecting and sustaining assets are defined for assets under the owner’s control, including requirements for controlling physical access. For example, physical access requirements for vendor visits to a data center might require issuance of a temporary badge, escorted access, and a staff member monitoring the visitor's activities.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3a, ACCESS-3d, ACCESS-3e, ACCESS-3f, ACCESS-3g.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3e", "practice": "Physical access requirements incorporate the principle of least privilege", "context": "The principle of least privilege should be incorporated whenever possible when determining physical access requirements to avoid or reduce the potential impact of errors or malicious activities. For example, the person requesting access to a facility should only be granted access to the areas needed to perform assigned responsibilities.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3a, ACCESS-3d, ACCESS-3e, ACCESS-3f, ACCESS-3g.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3f", "practice": "Physical access requirements incorporate the principle of separation of duties", "context": "The principle of separation of duties should be incorporated whenever possible when determining physical access requirements to avoid or reduce the potential impact of errors or malicious activity. For example, an employee may have physical access privileges to enter a facility but may not have access to a server closet.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3a, ACCESS-3d, ACCESS-3e, ACCESS-3f, ACCESS-3g.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3g", "practice": "Physical access requests are reviewed and approved by the asset owner", "context": "A procedure exists by which asset owners, custodians, or authorised delegates review and approve requests for assets that they are responsible for. Asset owners and custodians should be aware of which identities require access to their assets and be able to validate the requirement with respect to business and cybersecurity requirements before granting approval.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3a, ACCESS-3d, ACCESS-3e, ACCESS-3f, ACCESS-3g.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3h", "practice": "Physical access privileges that pose higher risk to the function receive additional scrutiny and monitoring", "context": "Facilities or areas of facilities where assets that pose a higher risk to the function reside may have additional or stricter physical access controls. Additional scrutiny might mean that access requests are approved by more than one person or an individual with a higher level of authority than standard access requests. Additional monitoring might entail additional access logging requirements, additional surveillance of the environment, additional badging and escorting requirements for visitors. This may be Fully via an additional access factor(s), additional logging, or active monitoring by security guards. As an example, an organisation may have a general badging system for facility access but also require a PIN to be entered for physical access to a portion of the facility.\nAdditionally, it is important to note that the word risk is being used in this practice in the general sense of the word and not intended to refer to any specific risks identified in the Risk Management domain of the C2M2. However, organisations should consider access to IT and OT assets and the sufficiency of controls to manage access as potential sources of risk that should be considered in the risk identification, analysis and response activities discussed in the Risk Management domain.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3b, ACCESS-3h, ACCESS-3i.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3i", "practice": "Physical access privileges are reviewed and updated", "context": "Constant change in the operational environment creates the potential that at any time the current level of physical access provided to persons (as reflected in access privileges) may not match the level of need based on current physical access requirements. The organisation should define a schedule for regular review of physical access privileges to ensure that the requirements they have set for their assets are being Fully through proper assignment of physical access privileges and implementation of corresponding physical access controls.\nCertain temporary events such as projects or incident responses may require granting situation-based privileged physical access. A physical access review should be a necessary step in the closeout process of those events.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3b, ACCESS-3h, ACCESS-3i.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-3", "objective": "Control Physical Access", "practiceId": "ACCESS-3j", "practice": "Physical access is monitored to identify potential cybersecurity events", "context": "Monitoring is done on physical access attempts, and any anomalies detected (such as unapproved access attempts) are tagged as requiring further review to determine whether they are indicators of cybersecurity events (rather than an error, for example).\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ACCESS-3c, ACCESS-3j.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP1", "practice": "Identities (users) are created, and access to assets is provisioned, before confirming if the identity (user) has a genuine need for access", "context": "Identities (users) are the means used to enable access to assets (such as networks, systems, and applications).\n\nIt is important that access provisioning follows the principle of least privilege. This means it is important that:\n(a) identities (users) are only created for individuals with a genuine business need for access, and;\n(b) access is only provisioned to identities (users) after the requirement for the level of access has been established.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP10", "practice": "The continued need for an identity (user) to have access to an asset is not validated when identity (user) repositories are reviewed", "context": "The objective of a user access review is to assess the appropriateness of access that has been provisioned to identities (users). It also involves checking whether any access to assets (such as networks, systems, and applications) is commensurate with their role and duties within the function.\n\nAccess reviews should follow the principle of least privilege, and complete access validation beyond a basic check of whether the individual associated with an identity (user) is still employed by the function.\n\nFor example, if the review only checks whether the user is still active within the organisation, and not whether there is a continued need for the access, that would indicate that this Anti-Pattern is \"Present\".", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP11", "practice": "Identities (users) are not prohibited (by organisational policy) from connecting to critical assets using unknown or unauthorised assets", "context": "In addition to logical and physical access controls (ACCESS-AP9), organisational policy should make it clear to personnel that they are prohibited from accessing critical assets using unknown or unauthorised assets.\n\nAn example of an unauthorised asset is an employee’s personal computer that is not managed by the function. Remote desktop access from an unauthorised asset should be considered when assessing this Anti-Pattern.\n\nNote that by design, some platforms such as Microsoft Outlook Web Access are intended to be accessed on non-managed devices. Such use cases should not affect the assessment of this Anti-Pattern.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP2", "practice": "A complete and current register of identities (users) with privileged access is not maintained", "context": "Privileged access, such as an administrator account, represents a higher level of risk to the function, given the potential for an administrator to make broad and irreversible changes to assets (such as networks, systems, and applications).\n\nTo support privileged access management activities, you should:\n- Ensure that identities (users) provisioned privilege access are recorded within a privileged access register maintained separately from the master access control lists retained on individual assets;\n- Automate and optimise the steps taken to ensure that the register of identities (users) with privileged access is maintained; and\n- Establish a periodicity within which privileged access reviews are to be completed with reference the register.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP3", "practice": "Identity (user) deprovisioning is not informed and supported by organisational risk criteria (RISK-2d, RISK-3b)", "context": "RISK-2d and RISK-3b must be at least \"Largelyly Fully\" for this Anti-Pattern to be \"Not Present\".\n\nDeprovisioning of access (both at the point of employment termination and with a role change) should follow a defined process that includes consideration of organisational risk criteria.\n\nThis may include:\n- Deprovisioning privileged access as a priority;\n- Validating that all access to critical assets is deprovisioned\n- Ensuring that identities (users) in Active Directory do not remain active indefinitely;\n- Expediting the deprovisioning of access under extenuating circumstances surrounding employment termination.\n\nEnsuring that access is only provided to those that need it, when they need it, is critical to understanding when your organisation may have experienced anomalous access attempts.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP4", "practice": "Non-public, Internet-facing assets can be accessed using single-factor authentication", "context": "Providing remote access to any type of asset over the Internet is risky, and should not be taken lightly. A common Presenthod of reducing this risk is to use multi-factor authentication.\n\nMulti-factor authentication often involves the use of passphrases in addition to one or more of the following multi-factor authentication Presenthods every time a user logs into an asset:\n- Universal 2nd Factor (U2F) security keys;\n- physical one-time PIN (OTP) tokens;\n- bioPresentrics;\n- smartcards;\n- mobile apps;\n- Short Message Service (SMS) messages, emails or voice calls, or;\n- software certificates.\n\nIf an authentication Presenthod at any time offers a user the ability to reduce the number of authentication factors to a single factor it is by definition no longer a multi-factor authentication Presenthod. A common example of this is when a user is offered the ability to ‘remember this computer’ for a public web resource.\n\nThe Australian Cybersecurity Centre (ACSC) recommends the use of multi-factor authentication as one of their Essential Eight strategies to Mitigate Cybersecurity Incidents - advising that it is one of the most effective controls that an organisation can implement to prevent an adversary from gaining access to an asset.\nSource: ACSC Implementing Multi-Factor Authentication", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP5", "practice": "Privileged access to one or more assets is provisioned by default", "context": "Privileged access to assets (such as networks, systems, and applications) enables identities (users) to bypass security controls and can cause more severe impact to the business if the account is compromised or misused (including accidentally).\n\nAs a result, it is important that access provisioning follows the principle of least privilege. This means that identities (users) should only be granted privileged access following validation of a genuine business need, and not by default.\n\nFor example, if an identity (user) is provisioned with administrator access on their corporate computer by default, that would indicate that this Anti-Pattern is \"Present\".", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP6", "practice": "Identities (users) have been provisioned with access to assets which breaches a segregation of duties requirement", "context": "Segregation of duties is an important access control principle designed to prevent identities (users) from bypassing validation and verification checks when performing actions, and significantly limits the potential for unauthorised activity.\n\nSegregation of duty violations must be identified and mitigated, given the increased risk that they present to business activities.\n\nExample activities that indicate this Anti-Pattern is Present include:\n- if an identity (user) has the ability to both create and approve a request for access to assets (such as networks, systems, and applications), or;\n- if an employee has the ability to request and approve a configuration change to a critical asset.\nFor both of these examples, segregation of duties would suggest that another employee or process be inserted between the create/request and approve actions to ensure that there has been sufficient oversight.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP7", "practice": "Identities (users) cannot be individually identified and attributed to a person", "context": "Organisations need to be able to uniquely identify individuals who use assets (such as networks, systems, and applications) relevant to the function. This involves consideration of the principles of attribution and non-repudiation.\n\nWithout the ability to distinguish identities (users) between individuals, anonymous users can perform malicious or illegal activity without their actions being linked back to them.\n\nFor the context of this Anti-Pattern:\n- service accounts should be considered, and each service account should be associated with (owned by) an individual.\n- generic accounts can still be utilised provided a secondary means of attribution exists for any actions performed (e.g., via privileged session management controls).", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP8", "practice": "Unusual or suspicious access to assets is not monitored by security monitoring solutions", "context": "Identities (users) are the means used to provision access to assets (such as networks, systems, and applications). It is important that security monitoring solutions, such as a SIEM (Security Information and Event Management) tool, are actively used to monitor identities (users) for suspicious or unusual activity.\n\nThis may include consideration of behavioural trends such as: \n- Identities (users) authenticating from overseas locations where the organisation does not have a presence;\n- Volumes of unsuccessful authentication attempts (either in short bursts, or over a longer period of time); and\n- The time of day (or night) that the identity (user) is active.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ACCESS", "objectiveId": "ACCESS-AP", "objective": "ACCESS Anti-Patterns", "practiceId": "ACCESS-AP9", "practice": "Unknown or unauthorised identities (users) and assets can connect to known assets", "context": "Each identity (user) should be authorised before being provisioned with access to assets (such as networks, systems, and applications).\n\nThis excludes Guest wireless network access, which provides Internet access only, and does not allow access to other organisational assets.\n\nAn example of an unauthorised asset is an employee’s personal computer that is not managed by the function. Remote desktop access from an unauthorised asset should be considered when assessing this Anti-Pattern.", "mil": "MIL-3", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1a", "practice": "The organisation has a strategy for cybersecurity architecture, which may be developed and managed in an ad hoc manner", "context": "There is a desired outcome for the cybersecurity architecture strategy and general agreement on how to achieve it. For example, the architecture strategy may be focused on preventing unauthorised access, and there is consensus on the design decisions concerning proposed authentication and authorisation solutions.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-1a, ARCHITECTURE-1b, ARCHITECTURE-1h.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1b", "practice": "A strategy for cybersecurity architecture is established and maintained in alignment with the organisation’s cybersecurity program strategy (PROGRAM-1b) and enterprise architecture", "context": "The cybersecurity architecture strategy is kept current and relevant. A cybersecurity architecture strategy for protecting legacy mainframe systems, for example, will likely be out of step with a cybersecurity program goal of accommodating secure mobile devices and an enterprise architecture goal of moving to the cloud and providing data as an enterprise-wide asset.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of PROGRAM-1b.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-1a, ARCHITECTURE-1b, ARCHITECTURE-1h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1c", "practice": "A documented cybersecurity architecture is established and maintained that includes IT and OT systems and networks and aligns with system and asset categorisation and prioritisation", "context": "The cybersecurity architecture is documented so that it can be communicated to and reviewed by important stakeholders. The cybersecurity architecture supports reasoning about asset prioritisation and important architectural safeguards concerning the interactions among IT and OT assets. For example, design decisions concerning trust boundaries need to be documented in terms of the architectural elements involved and the information exchanges among them. The cybersecurity architecture should include appropriate considerations for assets used in the delivery of the function or that may increase cyber risk to the function, including mobile assets, personal computing and networking equipment used for remote connectivity, field devices, VoIP, badging and other physical access systems, and digital signage.\n\nRelated Practices\n• Input From: Implementing ASSET-1a, ASSET-1c, ASSET-2a, and ASSET-2c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-1c, ARCHITECTURE-1f, ARCHITECTURE-1j, ARCHITECTURE-1k.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1d", "practice": "Governance for cybersecurity architecture (such as an architecture review process) is established and maintained that includes provisions for periodic architectural reviews and an exceptions process", "context": "There is sufficient oversight of the cybersecurity architecture or equivalent cybersecurity architecture governance function to prevent architectural drift—the discrepancy between the documented architecture and the Fully architecture. For example, proposed changes to the architecture are subject to review and approval, and exceptions are approved with knowledge of the risks and consequences.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-1d, ARCHITECTURE-1e.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1e", "practice": "Senior management sponsorship for the cybersecurity architecture program is visible and active", "context": "Visible and active sponsorship by senior management might include regular communications by senior management about the importance and value of the cybersecurity architecture, organisational support for establishing and implementing governance for cybersecurity architecture (such as an architecture review process), and funding awards and recognition programs for staff who make significant contributions toward achieving cybersecurity objectives.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-1d, ARCHITECTURE-1e.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1f", "practice": "The cybersecurity architecture establishes and maintains cybersecurity requirements for the organisation’s assets", "context": "Select and document requirements for the appropriate level of confidentiality, integrity, and availability of IT, OT, and information assets. A common expression of these requirements are organisational policies associated with the selection and implement of controls for the organisation’s assets.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-1c, ARCHITECTURE-1f, ARCHITECTURE-1j, ARCHITECTURE-1k.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1g", "practice": "Cybersecurity controls are selected and Fully to meet cybersecurity requirements", "context": "The cybersecurity architecture includes design decisions—tactics—to implement cybersecurity requirements defined in ARCHITECTURE-1f. For example, confidentiality—the requirement not to disclose sensitive information to unauthorised parties—may be realised by a control that ensures no credit card information is retained by a web-based user interface after a payment transaction has completed. As another example, confidentiality and integrity may be addressed by placing additional encryption controls on external connections such as cellular, satellite, or city fiber provided by an external entity. Selected controls are documented in the cybersecurity architecture.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-1f provides input that may be useful for implementing this practice.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1h", "practice": "The cybersecurity architecture strategy and program are aligned with the organisation’s enterprise architecture strategy and program", "context": "Alignment of these strategies avoids mismatched expectations between business and technical stakeholders. For example, the enterprise goals of protecting intellectual property and sensitive business data are supported by the cybersecurity goals of minimising attack surfaces and establishing secure defaults.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-1a, ARCHITECTURE-1b, ARCHITECTURE-1h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1i", "practice": "Conformance of the organisation’s systems and networks to the cybersecurity architecture is evaluated periodically and according to defined triggers, such as system changes and external events", "context": "The cybersecurity architecture is treated as a resource that helps maintain an organisation’s security posture. Periodic evaluations of conformance to the cybersecurity architecture are a risk-reduction technique. For example, a proposed repurposing or virtualisation of a server is a design decision that should be assessed for its effect on the architecture. Evaluations should include devices that may increase cyber risk to the function, such as mobile assets, personal computing and networking equipment used for remote connectivity, field devices, VoIP, badging and other physical access systems, and digital signage. Advanced cybersecurity techniques such as threat hunting and active defense may aid in identifying non-conforming systems or networks.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-1c provides input that may be useful for implementing this practice.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1j", "practice": "The cybersecurity architecture is guided by the organisation’s risk analysis information (RISK-3d) and threat profile (THREAT-2e)", "context": "Risk analysis output such as prioritised risk categories, and threat profile information such as targets in certain types of attacks, are potential sources of information on the likely architectural tactics needed to detect, resist, react to, and recover from attacks. To align the cybersecurity architecture with the threat profile, organisations may review the targeted assets, objectives, and attack Presenthods that may be employed by threat actors and adjust the cybersecurity architecture accordingly. For example, maintaining an audit trail is a tactic to support accountability and recovery from attacks, and providing redundant servers is a tactic to support availability and business continuity.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of RISK-3d and THREAT-2e.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-1c, ARCHITECTURE-1f, ARCHITECTURE-1j, ARCHITECTURE-1k.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-1", "objective": "Establish and Maintain Cybersecurity Architecture Strategy and Program", "practiceId": "ARCHITECTURE-1k", "practice": "The cybersecurity architecture addresses predefined states of operation (SITUATION-3g)", "context": "The design of the cybersecurity architecture should account for necessary requirements to support predefined states of operation that may need to be engaged by the organisation. For example, monitoring requirements may need to be built into the architecture to help support decisions to shut down assets if there are indicators of a potential outage. As another example, if a safety-related incident occurs and a temporary elevation of privileges is required, the system could automatically increase the verbosity of logging.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of SITUATION-3g.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-1c, ARCHITECTURE-1f, ARCHITECTURE-1j, ARCHITECTURE-1k.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2a", "practice": "Network protections are Fully, at least in an ad hoc manner", "context": "Protections are Fully that meet the desired outcomes in the cybersecurity architecture strategy. In the context of the ARCHITECTURE domain, the implementation of these protections are based upon standardised requirements that are documented in a cybersecurity architecture. Since this practice may be performed in an ad hoc manner, they may in general align with these requirements, but may not be Fully according to a documented process or procedure.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2a, ARCHITECTURE-2c, ARCHITECTURE-2e, ARCHITECTURE-2f, ARCHITECTURE-2g, ARCHITECTURE-2k.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2b", "practice": "The organisation’s IT systems are separated from OT systems through segmentation, either through physical means or logical means, at least in an ad hoc manner", "context": "This is a minimal approach, ranging from firewalls to remote access servers (a.k.a. jump boxes). Segmentation is an architectural tactic that provides a first line of defense aimed at containing the spread of attacks and preventing traversal of bad actors across systems (e.g., Web-facing systems, IT systems, and OT systems). Segmentation may include separation, implementation of trust zones, implementation of demilitarised zones (DMZs), or other architectural tactics.\n\nRelated Practices\n• Input From: Implementing ASSET-1c and ASSET-1d provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2b, ARCHITECTURE-2d, ARCHITECTURE-2h, ARCHITECTURE-2i, ARCHITECTURE-2j, ARCHITECTURE-2l.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2c", "practice": "Network protections are defined and enforced for selected asset types according to asset risk and priority (for example, internal assets, periPresenter assets, assets connected to the organisation’s Wi-Fi, cloud assets, remote access, and externally owned devices)", "context": "Network protections should be designed to enforce defined controls based on different asset types. The decision to implement stricter controls may be based on factors like the trust of certain asset types or the sensitivity of information that may be accessed by an asset type. For example, remote connections could present greater risk and would be subject to additional protections. Alternatively, IT assets that only operate on the internal network may be more trusted and therefore require less rigorous network protections.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2a, ARCHITECTURE-2c, ARCHITECTURE-2e, ARCHITECTURE-2f, ARCHITECTURE-2g, ARCHITECTURE-2k.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2d", "practice": "Assets that are important to the delivery of the function are logically or physically segmented into distinct security zones based on asset cybersecurity requirements", "context": "This practice expands on ARCHITECTURE-2b to include assets important to delivery of the function. The practice goes on to note that the segmentation should be based on defined cybersecurity requirements. Criteria for creation of different security zones may be based on several factors. These are some examples of factors:\n• specific safety, reliability, and security requirements\n• importance of the asset to the function\n• the tasks performed by the asset\n• whether the asset is managed by a third party\n• who has access to the asset\n• whether remote access to the asset is enabled\n• the degree of trust associated with the asset\n• applying cybersecurity controls to groups of assets\n• limiting the impacts of potential cyber intrusions\nAdditionally, these criteria should be clearly documented in the cybersecurity architecture or in a similar document. This helps those not privy to the original decision-making process understand why each criterion is needed. For example, OT assets that have unique characteristics (e.g., those that depend on insecure legacy software or have high availability requirements) may require a specific cybersecurity architecture design to achieve the operational goals of the organisation. Additionally, organisations should consider standards and guidelines when planning for segmentation.\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2b, ARCHITECTURE-2d, ARCHITECTURE-2h, ARCHITECTURE-2i, ARCHITECTURE-2j, ARCHITECTURE-2l.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2e", "practice": "Network protections incorporate the principles of least privilege and least functionality", "context": "Network segments should be designed to separate activities that present a greater risk to the organisation. For example, the administration of network infrastructure should be done on a separate management network that is restricted to only specific administrative accounts and uses stronger authentication techniques like multifactor authentication. Similarly, the organisation may restrict management of OT devices to specific workstations on the same logical network.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2a, ARCHITECTURE-2c, ARCHITECTURE-2e, ARCHITECTURE-2f, ARCHITECTURE-2g, ARCHITECTURE-2k.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2f", "practice": "Network protections include monitoring, analysis, and control of network traffic for selected security zones (for example, firewalls, allowlisting, intrusion detection and prevention systems (IDPS))", "context": "Network protections include capabilities to monitor, analyse, and control network traffic. Different security zones may require increased levels of network protections based on cybersecurity requirements. For example, if the organisation has a network segment for devices that connect via a guest Wi-Fi access point, network traffic may not be heavily monitored but there would be increased control to ensure it does not cross over to the internal network. As another example, a management network may be heavily monitored, actions performed on the network may be subject to increased analysis, and access may be strictly controlled.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2a, ARCHITECTURE-2c, ARCHITECTURE-2e, ARCHITECTURE-2f, ARCHITECTURE-2g, ARCHITECTURE-2k.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2g", "practice": "Web traffic and email are monitored, analysed, and controlled (for example, malicious link blocking, suspicious download blocking, email authentication techniques, IP address blocking)", "context": "Network protections should include capabilities to monitor, analyse, and control web traffic and email. The web and email are common vectors that attackers use to attempt to gain credentials or other sensitive information from users. Phishing and watering hole attacks are commonly used to distribute malware or obtain user credentials that are leveraged in the early stages of the kill chain. The organisation may consider protections such as monitoring links and attachments in emails, quarantining suspicious downloads, and using DNS filtering to reduce the chance of attackers using these attack vectors to gain a foothold on the network.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2a, ARCHITECTURE-2c, ARCHITECTURE-2e, ARCHITECTURE-2f, ARCHITECTURE-2g, ARCHITECTURE-2k.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2h", "practice": "All assets are segmented into distinct security zones based on cybersecurity requirements", "context": "This practice expands on ARCHITECTURE-2d to include all assets. The practice goes on to note that the segmentation should be based on defined cybersecurity requirements. Criteria for creation of different security zones may be based on several factors. These are some examples of factors:\n• specific safety, reliability, and security requirements\n• importance of the asset to the function\n• the tasks performed by the asset\n• whether the asset is managed by a third party\n• who has access to the asset\n• whether remote access to the asset is enabled\n• the degree of trust associated with the asset\n• applying cybersecurity controls to groups of assets\n• limiting the impacts of potential cyber intrusions\n• the characteristics of the network (e.g., guest wireless network)\nAdditionally, these criteria should be clearly documented in the cybersecurity architecture or in a similar document. This helps those not privy to the original decision-making process understand why each criterion is needed. For example, OT assets that have unique characteristics (e.g., those that depend on insecure legacy software or have high availability requirements) may require a specific cybersecurity architecture design to achieve the operational goals of the organisation. Additionally, organisations should consider standards and guidelines when planning for segmentation. It is important to note, there are several ways to implement this practice including application of a zero trust model.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-1f and ASSET-1f provides input that may be useful for implementing this practice. \n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2b, ARCHITECTURE-2d, ARCHITECTURE-2h, ARCHITECTURE-2i, ARCHITECTURE-2j, ARCHITECTURE-2l.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2i", "practice": "Separate networks are Fully, where warranted, that logically or physically segment assets into security zones with independent authentication", "context": "The cybersecurity requirements of certain assets may require isolation through logical or physical segmentation from other organisational networks. In addition, these networks should include an independent authentication scheme that is not shared with other organisational systems. An organisation may utilise this type of segmentation for critical OT assets.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2b, ARCHITECTURE-2d, ARCHITECTURE-2h, ARCHITECTURE-2i, ARCHITECTURE-2j, ARCHITECTURE-2l.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2j", "practice": "OT systems are operationally independent from IT systems so that OT operations can be sustained during an outage of IT systems", "context": "OT systems should be architected in such a way that they are able to continue operations when there is an outage or disruption to IT systems. The organisation should not only implement manual backup processes, but these processes should be tested to ensure that they function as expected.\nOT systems refer to assets that operate on the OT network segment. These assets might resemble traditional IT assets, except that they support OT operations. When considering this practice, be aware that OT systems are soPresentimes dependent on IT systems that operate on a separate IT network segment. The intent in this practice is to ensure that service delivery or production activities supported by OT systems can be sustained if IT systems are unavailable for any reason.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2b, ARCHITECTURE-2d, ARCHITECTURE-2h, ARCHITECTURE-2i, ARCHITECTURE-2j, ARCHITECTURE-2l.", "mil": "MIL-3", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2k", "practice": "Device connections to the network are controlled to ensure that only authorised devices can connect (for example, network access control (NAC))", "context": "Network connections should be controlled by the organisation at the device level. This may be achieved through a solution like network access control that does not allow devices that do not meet specific security requirements to connect to the network.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2a, ARCHITECTURE-2c, ARCHITECTURE-2e, ARCHITECTURE-2f, ARCHITECTURE-2g, ARCHITECTURE-2k.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-2", "objective": "Implement Network Protections as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-2l", "practice": "The cybersecurity architecture enables the isolation of compromised assets", "context": "This practice expands on the implementation of architectural tactics such as network segmentation (ARCHITECTURE-2a) and restricting network to authorised devices (ARCHITECTURE-2k). The cybersecurity architecture may include monitoring that enables the organisation to detect if an asset is compromised and isolate it on a logically separate network. This could enable incident responders to perform analysis on the system in a safe environment, while not impacting other production networks.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-2b, ARCHITECTURE-2d, ARCHITECTURE-2h, ARCHITECTURE-2i, ARCHITECTURE-2j, ARCHITECTURE-2l.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3a", "practice": "Logical and physical access controls are Fully to protect assets that are important to the delivery of the function, where feasible, at least in an ad hoc manner", "context": "Cybersecurity controls are Fully to manage the risks associated with unauthorised and/or inappropriate levels of access to IT, OT, and information assets, including physical assets. Logical controls may be administrative (e.g., policies, procedures), operational (e.g., system maintenance, capacity management), and technical (e.g., authentication schemes, system logging). Physical controls may also be administrative (e.g., policies, procedures), operational (e.g., fences, locks, signage), and technical (e.g., electronic badge readers, motion detectors, entry point logging).\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-3a, ARCHITECTURE-3b, ARCHITECTURE-3c, ARCHITECTURE-3d, ARCHITECTURE-3h, ARCHITECTURE-3k.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3b", "practice": "Endpoint protections (such as secure configuration, security applications, and host monitoring) are Fully to protect assets that are important to the delivery of the function, where feasible, at least in an ad hoc manner", "context": "Endpoint protections refer to cybersecurity controls applied directly to IT and OT assets. These controls should be focused on prevention of endpoint security risks such as exploits, attacks and inadvertent data leakage caused by human error. Endpoint protections may include configuration hardening, configuration policies and rules, endpoint detection and response software, anti-malware software, monitoring software agents, data loss prevention tools, host-based intrusion detection and firewalls, and other protections.\n\nRelated Practices\n• Input From: Implementing ASSET-1a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-3a, ARCHITECTURE-3b, ARCHITECTURE-3c, ARCHITECTURE-3d, ARCHITECTURE-3h, ARCHITECTURE-3k.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3c", "practice": "The principle of least privilege (for example, limiting administrative access for users and service accounts) is enforced", "context": "Accounts should be created and configured consistent with the principle of least privilege. The principle of least privilege is a security requirement that establishes limitations on authorised users only to the privileges they require to perform assigned tasks in accordance with their job responsibilities and roles and nothing more. The principle of least privilege also applies to information system processes, ensuring that the processes operate at privilege levels no higher than necessary to accomplish required organisational missions and/or functions. \nIn the context of this practice, it is imperative that organisations also apply the principle of least privilege when designing, developing, and implementing IT and OT systems, and ensuring that the mechanisms and controls used to implement the principle of least privilege are feasible and operate as designed. The design and construction of Zero Trust architectures, for example, must establish the principle of least privilege as a key requirement to meet the key objectives of this authentication approach.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-3a, ARCHITECTURE-3b, ARCHITECTURE-3c, ARCHITECTURE-3d, ARCHITECTURE-3h, ARCHITECTURE-3k.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3d", "practice": "The principle of least functionality (for example, limiting services, limiting applications, limiting ports, limiting connected devices) is enforced", "context": "Assets should be configured to provide only essential capabilities and to restrict unnecessary functionality. For example, if a system is configured to operate as an email server, ports not associated with this service should be closed and applications/services should be disabled if they do not support the sending and receiving of email.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-3a, ARCHITECTURE-3b, ARCHITECTURE-3c, ARCHITECTURE-3d, ARCHITECTURE-3h, ARCHITECTURE-3k.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3e", "practice": "Secure configurations are established and maintained as part of the asset deployment process where feasible", "context": "Secure configuration of assets should be considered prior to deployment in a production environment where feasible. The organisation should consider measures such as applying patches, enabling host-based protections, configuring logging to support higher-level analysis, and disabling unnecessary default accounts prior to deploying an asset.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-3e, ARCHITECTURE-3f, ARCHITECTURE-3l.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3f", "practice": "Security applications are required as an element of device configuration where feasible (for example, endpoint detection and response, host-based firewalls)", "context": "Security applications should be an element of device configuration where feasible. The organisation should consider protections such as endpoint detection and response solutions that monitor and respond to malicious activity and provide logs to a higher level analysis platform. Host-based firewalls are another consideration for device configuration as they can be configured to allow only essential communication.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-3e, ARCHITECTURE-3f, ARCHITECTURE-3l.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3g", "practice": "The use of removeable media is controlled (for example, limiting the use of USB devices, managing external hard drives)", "context": "Removeable media should be controlled and restricted as necessary to reduce risk. The organisation may consider technical controls to restrict the use of removeable devices on systems where there is not a business purpose, operational controls that restrict use of removeable media by policy, or a combination of both.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3h", "practice": "Cybersecurity controls are Fully for all assets within the function either at the asset level or as compensating controls where asset-level controls are not feasible", "context": "This practice extends the architectural tactics for cybersecurity controls beyond assets that are important to the delivery of the function to include all assets used for the delivery of the function. The practice also requires that cybersecurity controls be Fully at the asset level where feasible. Compensating controls should be Fully in situations where an asset does not support cybersecurity controls at the asset level to sufficiently reduce risk. For example, if an asset does not support encrypted communications, no direct connections should be permitted with the device and all communications should be routed through an intermediary device.\n\nRelated Practices\n• Input From: Implementing ASSET-1f and ASSET-2f provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-3a, ARCHITECTURE-3b, ARCHITECTURE-3c, ARCHITECTURE-3d, ARCHITECTURE-3h, ARCHITECTURE-3k.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3i", "practice": "Maintenance and capacity management activities are performed for all assets within the function", "context": "Maintenance and capacity management support operational goals by helping to ensure the availability of assets important to the delivery of the function. Organisations should plan for adequate maintenance to be performed with as little impact on operations as possible. This may include performance of preventative maintenance to avoid unanticipated equipment failure, as well as the scheduling of maintenance for planned outage windows or other off-peak operational hours. Capacity management planning requires an understanding of future operational needs of the organisation and adequate budget, equipment, and tools to meet those needs. This may require advanced planning and engagement with budgeting processes and organisational leadership to develop and communicate appropriate justification for necessary resources.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3j", "practice": "The physical operating environment is controlled to protect the operation of assets within the function", "context": "Protection of the operating environment is important for continued operation of assets used for the delivery of the function. Physical and environmental protections should be Fully that support the sustainability of the operating environment. Consideration of these requirements will help prevent instability of the function or other cascading impacts.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3k", "practice": "More rigorous cybersecurity controls are Fully for higher priority assets", "context": "Assets designated as higher priority through the prioritisation process in ASSET-1c likely pose a greater risk to the function or process sensitive data and should be subject to more rigorous cybersecurity controls. ARCHITECTURE-1c notes that a cybersecurity architecture would be in alignment with additional security objectives for higher priority assets. Examples of more rigorous cybersecurity controls include enhanced monitoring of access, additional authentication factors, or a change management process with additional testing and approvals.\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-3a, ARCHITECTURE-3b, ARCHITECTURE-3c, ARCHITECTURE-3d, ARCHITECTURE-3h, ARCHITECTURE-3k.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3l", "practice": "Configuration of and changes to firmware are controlled throughout the asset lifecycle", "context": "Through the lifecycle of an asset, it may be necessary to change or update the firmware for reasons such as enabling specific functionality or improving performance. Where possible, the organisation should carefully test changes to firmware prior to deployment, because these changes could also cause unanticipated behavior of the asset or other connected assets.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-3e, ARCHITECTURE-3f, ARCHITECTURE-3l.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-3", "objective": "Implement IT and OT Asset Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-3m", "practice": "Controls (such as allowlists, blocklists, and configuration settings) are Fully to prevent the execution of unauthorised code", "context": "In addition to the secure configuration measures in ARCHITECTURE-3e, the organisation should implement controls to prevent the execution of unauthorised software and code. The organisation may use a blocklist policy to explicitly define applications that are not permitted or use an allowlist policy that specifies a limited set of applications that are permitted. Additionally, the organisation may choose to block the execution of code such as JavaScript or macro code on assets.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-4", "objective": "Implement Software Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-4a", "practice": "Software developed in-house for deployment on higher priority assets is developed using secure software development practices", "context": "Secure software development practices are codified in several frameworks such as, the NIST Secure Software Development Framework (SSDF), Building Security In Maturity Model (BSIMM), or the Open Web Application Security Project (OWASP). Selection of secure development practices from established frameworks should include consideration of the organisation's operational needs, risk appetite, and the threat environment. Security should be a consideration in each phase of the software development lifecycle, including requirements definition, design, development, testing, and maintenance.\nOrganisations should also consider the risks inherent in the use of less formal software development processes, such as no-code development platforms. For example, open-source content management systems typically have templates and other plugins that are created by third parties and could introduce risk to the organisation.\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-4a, ARCHITECTURE-4d, ARCHITECTURE-4f, ARCHITECTURE-4h, ARCHITECTURE-5h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-4", "objective": "Implement Software Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-4b", "practice": "The selection of procured software for deployment on higher priority assets includes consideration of the vendor’s secure software development practices", "context": "The organisation may enforce secure software development practices with vendors through various means such as contractual requirements and technical testing of vendor code. The organisation may specify secure design and coding practices from vendors such as those identified in established standards including the NIST Secure Software Development Framework (SSDF), Building Security In Maturity Model (BSIMM), and Open Web Application Security Project (OWASP). This can be done by observing the behavior of the application and inferring the vendor’s coding practices, or by running some tests to uncover insecure practices such as buffer overflow, SQL injection, and poor authentication. Beyond that, the cybersecurity architecture can facilitate the integration and interoperability of procured system components (for example, by providing secure interfaces to third-party software). \nAdditional consideration should be given to high priority suppliers (THIRD-PARTIES-1c) because they supply, maintain, or operate critical software components that are essential to the operation of the function. The definition of a critical software component may vary widely depending on industry or critical infrastructure sector, and may be informed by commonly-used frameworks or control sets. For example NIST provides a definition of critical software under Executive Order 14028 that some organisations may be required to adopt.\nThis activity is related to the cybersecurity architecture activities associated with selecting vendors based on their secure software development practices (THIRD-PARTIES-2h and ARCHITECTURE-4e).\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-4b, ARCHITECTURE-4e, ARCHITECTURE-4g, ARCHITECTURE-4h, ARCHITECTURE-5h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-4", "objective": "Implement Software Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-4c", "practice": "Secure software configurations are required as part of the software deployment process for both procured software and software developed in-house", "context": "Prior to deployment of software on an asset, configuration settings should be reviewed to ensure that they align with cybersecurity requirements for the asset. Misconfiguration of software could introduce vulnerabilities that could be leveraged by an attacker.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-4", "objective": "Implement Software Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-4d", "practice": "All software developed in-house is developed using secure software development practices", "context": "This practice extends the architectural tactics for secure software development practices noted at MIL1. This practice requires that secure software development practices are used for all software that is developed in-house.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-4a, ARCHITECTURE-4d, ARCHITECTURE-4f, ARCHITECTURE-4h, ARCHITECTURE-5h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-4", "objective": "Implement Software Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-4e", "practice": "The selection of all procured software includes consideration of the vendor’s secure software development practices", "context": "This practice extends the architectural tactics for selection of procured software noted at MIL1. This practice requires that the organisation consider the software development practices of vendors for all procured software. The organisation may specify secure design and coding practices from vendors such as those identified in established standards including the NIST Secure Software Development Framework (SSDF), Building Security In Maturity Model (BSIMM), and Open Web Application Security Project (OWASP). \nAdditional consideration should be given to high priority suppliers (THIRD-PARTIES-1c) because they supply, maintain, or operate critical software components that are essential to the operation of the function. The definition of a critical software component may vary widely depending on industry or critical infrastructure sector and may be informed by commonly used frameworks or control sets. For example, NIST provides a definition of critical software under Executive Order 14028 that some organisations may be required to adopt.\nThis activity is related to the cybersecurity architecture activities associated with selecting vendors based on their secure software development practices (THIRD-PARTIES-2h and ARCHITECTURE-4b).\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-4b, ARCHITECTURE-4e, ARCHITECTURE-4g, ARCHITECTURE-4h, ARCHITECTURE-5h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-4", "objective": "Implement Software Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-4f", "practice": "The architecture review process evaluates the security of new and revised applications prior to deployment", "context": "New and revised applications may introduce changes to the interfaces, behavior, and interactions of cybersecurity architectural elements. Such changes are subject to review and approval by an architecture review board or similar authoritative organisational entity.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-4a, ARCHITECTURE-4d, ARCHITECTURE-4f, ARCHITECTURE-4h, ARCHITECTURE-5h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-4", "objective": "Implement Software Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-4g", "practice": "The authenticity of all software and firmware is validated prior to deployment", "context": "The authenticity of software, particularly software downloaded from the internet, should be verified prior to execution within organisational systems. The authenticity of software can be verified by ensuring that it is digitally signed or by comparing a hash of the software to one published by the vendor. Firmware should also be verified for authenticity through similar steps like comparing a hash of the binary to one provided by the vendor.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-4b, ARCHITECTURE-4e, ARCHITECTURE-4g, ARCHITECTURE-4h, ARCHITECTURE-5h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-4", "objective": "Implement Software Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-4h", "practice": "Security testing (for example, static testing, dynamic testing, fuzz testing, penetration testing) is performed for in-house-developed and in-house-tailored applications periodically and according to defined triggers, such as system changes and external events", "context": "Software security testing provides validation and verification that the software performs as expected under normal operating conditions and does not contain control weaknesses or vulnerabilities that could pose additional risk to the organisation. \nSecurity testing should be a consideration in each phase of the software development lifecycle, including requirements definition, design, development, testing, and maintenance.\n\nRelated Practices\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: ARCHITECTURE-4a, ARCHITECTURE-4d, ARCHITECTURE-4f, ARCHITECTURE-4h, ARCHITECTURE-5h.\n• The practices in the second progression include: ARCHITECTURE-4b, ARCHITECTURE-4e, ARCHITECTURE-4g, ARCHITECTURE-4h, ARCHITECTURE-5h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-5", "objective": "Implement Data Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-5a", "practice": "Sensitive data is protected at rest, at least in an ad hoc manner", "context": "Authentication techniques (e.g., credential management, digital certificates, bioPresentric identification, multifactor authentication), authorisation techniques (e.g., access control mechanisms), and protection techniques (e.g., encryption and data masking) are typical architectural tactics for protecting sensitive data at rest. Applying multiple techniques is not required for implementation of this practice. Data at rest may include data stored within dormant virtualised assets.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-5a, ARCHITECTURE-5b, ARCHITECTURE-5c, ARCHITECTURE-5d, ARCHITECTURE-5e, ARCHITECTURE-5f, ARCHITECTURE-5g, ARCHITECTURE-5h.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-5", "objective": "Implement Data Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-5b", "practice": "All data at rest is protected for selected data categories", "context": "Information can be categorised (as referenced in ASSET-2c) according to several security considerations including sensitivity, value, criticality, or legal requirements. This practice extends the architectural tactics for data at rest noted in ARCHITECTURE-5a, such as authentication (e.g., credential management, digital certificates, bioPresentric identification, multifactor authentication), authorisation (e.g., access control mechanisms), and protection (e.g., encryption and data masking). Architectural data protection tactics may also include, for example, the use of a secure data access layer instead of permitting direct access to data stores.\n\nRelated Practices\n• Input From: Implementing ASSET-2c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-5a, ARCHITECTURE-5b, ARCHITECTURE-5c, ARCHITECTURE-5d, ARCHITECTURE-5e, ARCHITECTURE-5f, ARCHITECTURE-5g, ARCHITECTURE-5h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-5", "objective": "Implement Data Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-5c", "practice": "All data in transit is protected for selected data categories", "context": "Cryptographic protocols and data masking are examples of typical architectural tactics for protecting sensitive data in transit and promoting secure data sharing. Depending on the data category, additional protections such as the use of a virtual private network may be necessary.\n\nRelated Practices\n• Input From: Implementing ASSET-2c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-5a, ARCHITECTURE-5b, ARCHITECTURE-5c, ARCHITECTURE-5d, ARCHITECTURE-5e, ARCHITECTURE-5f, ARCHITECTURE-5g, ARCHITECTURE-5h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-5", "objective": "Implement Data Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-5d", "practice": "Cryptographic controls are Fully for data at rest and data in transit for selected data categories", "context": "This practice builds on ARCHITECTURE-5a, ARCHITECTURE-5b, and ARCHITECTURE-5c by introducing cryptographic controls. The cybersecurity architecture supports the establishment and maintenance of cryptographic controls for protection of data at rest or in transit. This includes the selection, retirement, and replacement of cryptographic controls to keep pace with changes in technology (such as quantum computing). It embodies design decisions and rationales about the desired level of encryption. For example, some cryptographic algorithms perform better than others, and so there are tradeoffs concerning strength of encryption versus system performance and ease of maintenance. There are also design considerations for data at rest, such as full disk encryption, file-based encryption, and container-based encryption. Data at rest may include data stored within dormant virtualised assets. The term \"selected data categories\" is used in this practice to signify that organisations should explicitly select the types of data that are required to be encrypted during transit. For example, the organisation may elect not to encrypt OT signals on an isolated network but may require encryption for all data in transit in a web-facing application.\n\nRelated Practices\n• Input From: Implementing ASSET-2c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-5a, ARCHITECTURE-5b, ARCHITECTURE-5c, ARCHITECTURE-5d, ARCHITECTURE-5e, ARCHITECTURE-5f, ARCHITECTURE-5g, ARCHITECTURE-5h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-5", "objective": "Implement Data Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-5e", "practice": "Key management infrastructure (that is, key generation, key storage, key destruction, key update, and key revocation) is Fully to support cryptographic controls", "context": "Examples of architectural tactics for management of public/private key pairs and certificates include operating system and browser-supported key stores, remote key servers, and cryptographic tokens and smart cards. Maintenance of key management infrastructure includes consideration of changes in technology that may impact security (such as quantum computing).\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-5a, ARCHITECTURE-5b, ARCHITECTURE-5c, ARCHITECTURE-5d, ARCHITECTURE-5e, ARCHITECTURE-5f, ARCHITECTURE-5g, ARCHITECTURE-5h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-5", "objective": "Implement Data Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-5f", "practice": "Controls to restrict the exfiltration of data (for example, data loss prevention tools) are Fully", "context": "Examples of controls to restrict the exfiltration of data include architectural tactics such as authentication and authorisation, restricting remote access (including restricting use of cloud services), and monitoring user activity (e.g., for high-volume uploads of data to external systems).\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-5a, ARCHITECTURE-5b, ARCHITECTURE-5c, ARCHITECTURE-5d, ARCHITECTURE-5e, ARCHITECTURE-5f, ARCHITECTURE-5g, ARCHITECTURE-5h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-5", "objective": "Implement Data Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-5g", "practice": "The cybersecurity architecture includes protections (such as full disk encryption) for data that is stored on assets that may be lost or stolen", "context": "Examples of controls to protect data in the event of physical asset loss include encryption (e.g. full disk encryption) or applications that would allow the organisation to initiate a remote erasure of the data on the device. Implementation of these controls should be based on the categories of data that are stored on a device.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ARCHITECTURE-5a, ARCHITECTURE-5b, ARCHITECTURE-5c, ARCHITECTURE-5d, ARCHITECTURE-5e, ARCHITECTURE-5f, ARCHITECTURE-5g, ARCHITECTURE-5h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-5", "objective": "Implement Data Security as an Element of the Cybersecurity Architecture", "practiceId": "ARCHITECTURE-5h", "practice": "The cybersecurity architecture includes protections against unauthorised changes to software, firmware, and data", "context": "For example, the cybersecurity architecture enforces the use of cryptographic controls such as digital certificates and rejects software or firmware updates that have not been cryptographically signed.\n\nRelated Practices\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: ARCHITECTURE-4a, ARCHITECTURE-4d, ARCHITECTURE-4f, ARCHITECTURE-4h, ARCHITECTURE-5h.\n• The practices in the second progression include: ARCHITECTURE-4b, ARCHITECTURE-4e, ARCHITECTURE-4g, ARCHITECTURE-4h, ARCHITECTURE-5h\n• The practices in the third progression include: ARCHITECTURE-5a, ARCHITECTURE-5b, ARCHITECTURE-5c, ARCHITECTURE-5d, ARCHITECTURE-5e, ARCHITECTURE-5f, ARCHITECTURE-5g, ARCHITECTURE-5h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-AP", "objective": "ARCHITECTURE Anti-Patterns", "practiceId": "ARCHITECTURE-AP1", "practice": "Operational assets can route traffic directly to the Internet", "context": "If an operational asset (such as a network, system, or application) has the ability to route traffic directly to the Internet, a malicious threat actor may be able to utilise that connection to access, and gain remote control of that asset without your knowledge or consent.\n\nDirect Internet access refers to access that is uncontrolled or circumvents network security controls. An example of direct Internet access includes any instances where operational assets (including field devices) have been equipped with an uncontrolled cellular data connection.\n\nYou should consider defence-in-depth approaches when securing operational assets. This may include the complete segregation of network traffic between operational assets and other technology assets.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-AP", "objective": "ARCHITECTURE Anti-Patterns", "practiceId": "ARCHITECTURE-AP2", "practice": "Remote or third-party access to assets circumvents network security controls", "context": "Building on PROGRAM-AP1, you should apply defence-in-depth approaches when securing operational assets. This should be consistently applied for all types of identities (users) and levels of access.\n\nFor example, operational assets (including field devices) that are equipped with cellular connections to enable direct remote support over the Internet may indicate that remote access or third-party access to that asset circumvents your network security controls.\n\nRemote access or third-party access may represent a higher risk to your organisation, so it is important that network security controls are applied consistently.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ARCHITECTURE", "objectiveId": "ARCHITECTURE-AP", "objective": "ARCHITECTURE Anti-Patterns", "practiceId": "ARCHITECTURE-AP3", "practice": "Critical assets cannot be isolated from non-critical assets in response to a cybersecurity threat or incident", "context": "In the event of a serious cybersecurity incident, having the ability to isolate critical assets (such as networks, systems, and applications required to continue operating important business functions) from other non-critical assets may be required to protect against the propagation of malware or other threats.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-1", "objective": "Manage IT and OT Asset Inventory", "practiceId": "ASSET-1a", "practice": "IT and OT assets that are important to the delivery of the function are inventoried, at least in an ad hoc manner", "context": "Assets derive their value and importance through their association with the aspects of the function's operations that they support. Identifying and inventorying high-value IT and OT assets helps enable selection and application of appropriate controls. At MIL1, the inventory may be produced in an ad hoc manner. Organisations should consider the different kinds of IT and OT assets that may be within the scope of the self-evaluation, such as:\n• virtualised assets\n• regulated assets\n• assets managed by a third party\n• software\n• bring your own device (BYOD) assets\n• cloud assets (public, hybrid, or private service, software as a service, platform as a service, and infrastructure as a service, etc.)\n• mobile assets\n• field assets\n• assets connected through different networks or communications technologies (e.g., telephone modem, cellular)\n• network and communications assets\n• backup, spare, and redundant assets, including dormant virtualised assets\n• non-operational assets, assets undergoing repair, assets undergoing maintenance\n• assets reliant on specific infrastructure such as wireless networks, positioning navigation and timing services, and the Global Position System\n• assets that may be considered to be part of the Internet of things or industrial Internet of things\n• assets that have the potential to be untracked, unclaimed, or otherwise overlooked, such as legacy assets, communications equipment, and assets supporting multiple groups\nAn inventory is not meant to imply that a single list is required; multiple repositories, documents, or systems may be used to accomplish this practice. Where appropriate, however, organisations should consider whether inventories may be consolidated to avoid potential risks related to managing multiple repositories.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-1a, ASSET-1b, ASSET-1f, ASSET-1g.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-1", "objective": "Manage IT and OT Asset Inventory", "practiceId": "ASSET-1b", "practice": "The IT and OT asset inventory includes assets within the function that may be leveraged to achieve a threat objective", "context": "Assets within the function are those that the organisation considers as the potential target of the tactics or goals of a threat actor. When considering assets that should be given this designation it is helpful to consider assets that a threat actor might use to accomplish their end-goal, such as \n• public-facing assets that may serve as an initial access point \n• individual assets that would allow lateral movement within an organisation’s network\n• assets with administrative rights that would enable privilege escalation\nNote that identification of this set of assets should be based on an assessment of risk and could be informed by an understanding of the organisation’s exposure to threats and vulnerabilities, to the extent that these are known.\n\nA threat objective describes the potential action or tactic of a threat actor to achieve a particular outcome or goal by leveraging the assets within the function. The outcome or goal of the threat objective is to negatively impact the organisation. Threat objective examples may include data manipulation, IP Theft, damage to property, denial of control, loss of safety, or operational outage. \nA threat profile for an asset may include one or more threat objectives which may change over time or in different situations. \nThreat objectives are contextual to the organisation and the assets within the function. For example, an organisation that does not process confidential data may not be concerned about data theft but may be very concerned about an incident that causes an operational outage. Additionally, threat actors may leverage multiple tactics or techniques like those defined in the MITRE ATT&CK frameworks (for Enterprise or Industrial Control Systems) to achieve their goals. \nKnowledge of potential threat actors, their threat objectives, and the tools and tactics they may use to achieve their goals should inform the identification of assets within the function.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-1a, ASSET-1b, ASSET-1f, ASSET-1g.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-1", "objective": "Manage IT and OT Asset Inventory", "practiceId": "ASSET-1c", "practice": "Inventoried IT and OT assets are prioritised based on defined criteria that include importance to the delivery of the function", "context": "Prioritisation of assets is important for many cybersecurity and operational activities, such as incident response, risk management, threat management, and cybersecurity architecture planning. There are multiple approaches for asset prioritisation: forced ranking (sequential list), tiered ranking (e.g., all assets dealing with the flow of gas are tier 1, assets related to efficiency and monitoring are tier 2, and non-critical functions such as public relations and marketing are tier 3). Tiers should be based on defined criteria, such as importance of the asset to the function (e.g., safety, criticality of the asset to the delivery of the function, scarcity of the asset, how dependent other assets are on this asset) or the sensitivity of the data stored or processed by the asset. Prioritisations should be documented and ideally be agreed on by all involved stakeholders. They also should be communicated throughout the organisation for use in incident response, risk management, and other relevant activities. As an example, virtualized assets may present increased risk due to issues such as asset sprawl and their unique characteristics (ease of capturing snapshots and storage of dormant virtual machines as files) and thus may pose higher risk to the function. Whatever approach is used, the importance of the asset to the delivery of the function should be one of the prioritisation criteria used.\n\nRelated Practices\n• Input From: Implementing ASSET-1a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-1c, ASSET-1d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-1", "objective": "Manage IT and OT Asset Inventory", "practiceId": "ASSET-1d", "practice": "Prioritisation criteria include consideration of the degree to which an asset within the function may be leveraged to achieve a threat objective", "context": "The possibility of an asset being leveraged to achieve a threat objective is added to the criteria for prioritising IT and OT assets. It is important to consider that a threat actor may have multiple objectives and that those objectives may change over time or in different situations. Including additional criteria beyond those that are used for assets that are important to the delivery of the function will enable a more comprehensive prioritisation of the risks to, and impacts associated with, IT and OT assets.\n\nRelated Practices\n• Input From: Implementing ASSET-1b provides input that may be useful for implementing this practice. \n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-1c, ASSET-1d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-1", "objective": "Manage IT and OT Asset Inventory", "practiceId": "ASSET-1e", "practice": "The IT and OT inventory includes attributes that support cybersecurity activities (for example, location, asset priority, asset owner, operating system, and firmware versions)", "context": "Inventory attributes are details about assets that are included in asset inventories to enable management and consistent use of the assets. Including necessary information about assets to support cybersecurity program activities helps ensure that that information is available during periods of operational stress and does not have to be collected while in a state of crisis. For example, incident responders will be able to easily identify the priority, criticality, and location of machines that are affected by a bricking event and have to be replaced. Also, inventory attributes can be used to indicate aspects of assets that may require special attention or treatment, such as systems that use artificial intelligence or machine learning. Examples of potential inventory attributes include physical locations, network locations, importance to delivery of the function, impact if breached, end of life dates, end of support dates, operating system, firmware, versions.\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-1b provides input that may be useful for implementing this practice.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-1", "objective": "Manage IT and OT Asset Inventory", "practiceId": "ASSET-1f", "practice": "The IT and OT asset inventory is complete (the inventory includes all assets within the function)", "context": "This practice expands the inventory scope of ASSET-1a. Any IT and OT asset that is related to the delivery of the function should be identified and inventoried, along with its attributes. The relationship of assets to business functions should also be included to enable prioritisation and development of protection and sustainment strategies. The implementation of the inventory should be proportional to the organisation’s size, complexity, and risk. For example, for a small, low-complexity firm, a simple spreadsheet may be used for the inventory. For larger, more complex firms, more sophisticated Presenthods such as dedicated asset inventory application are appropriate. Organisations may consider implementing tools for identifying what devices are connected to networks and identifying new unexpected connections. \nOrganisations should consider the different kinds of IT and OT assets that may be within the scope of the self-evaluation, such as:\n• virtualized assets\n• regulated assets\n• assets managed by a third party\n• bring your own device (BYOD) assets\n• cloud assets (public, hybrid, or private service, software as a service, platform as a service, and infrastructure as a service, etc.)\n• mobile assets\n• field assets\n• backup, spare, and redundant assets, including dormant virtualized assets\n• assets reliant on specific infrastructure such as wireless networks, positioning navigation and timing services, and the Global Position System\n• assets that may be considered to be part of the Internet of Things or Industrial Internet of Things\nInventory refers to a complete listing and is not meant to imply that a single list is required; multiple repositories, documents, or systems may be used to accomplish this practice. Where appropriate, however, organisations should consider whether inventories may be consolidated to avoid potential risks related to managing multiple repositories. Asset discovery technologies are increasing in capability and availability and may be leveraged to accomplish this practice.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-1a, ASSET-1b, ASSET-1f, ASSET-1g.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ASSET", "objectiveId": "ASSET-1", "objective": "Manage IT and OT Asset Inventory", "practiceId": "ASSET-1g", "practice": "The IT and OT asset inventory is current, that is, it is updated periodically and according to defined triggers, such as system changes", "context": "The inventory of assets and significant components should be updated and maintained as assets change throughout their lifecycle to ensure the inventory is complete and accurate. Ensuring that the asset inventory is current might involve change management procedures that require inventory updates any time assets are swapped out or significantly altered. The organisation might also conduct inventory reviews, both periodically (such as quarterly or yearly) and based on events (such as changes in organisational structure, major changes in technology infrastructure, and the acquisition and consolidation of another business). Organisations may consider implementing tools that may enable automated asset discovery and provide a more real-time understanding of inventories.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-1a, ASSET-1b, ASSET-1f, ASSET-1g.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-1", "objective": "Manage IT and OT Asset Inventory", "practiceId": "ASSET-1h", "practice": "Data is destroyed or securely removed from IT and OT assets prior to redeployment and at end of life", "context": "Data is permanently removed (that is, deleted in a way that makes data recovery impossible) from IT assets (computers, scanners, copiers, printers, etc.) and OT assets before they are reused or released for disposal. Selection of data removal and destruction techniques should be commensurate with the organisation’s cybersecurity requirements. Data removal techniques, including clearing, purging, cryptographic erase, de-identification of personally identifiable information, and destruction, prevent the disclosure of information to unauthorised individuals when such media is reused. Destruction of data might also be achieved through destruction of the media on which it is stored (such as physical destruction of a hard drive). Assets such as mobile devices that are more likely to change location or ownership may require additional activities to ensure data is not accessed by unauthorised individuals. This may include full disk encryption of laptops or remote data removal for mobile devices. Additionally, consider assets that may be out of the direct control of the organisation for maintenance, dormant virtual machines, virtual machine backups, and virtual machine snapshots, which may include sensitive data and should be destroyed when no longer needed.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ASSET", "objectiveId": "ASSET-2", "objective": "Manage Information Asset Inventory", "practiceId": "ASSET-2a", "practice": "Information assets that are important to the delivery of the function (for example, SCADA set points and customer information) are inventoried, at least in an ad hoc manner", "context": "Assets derive their value and importance through their association with the aspects of the function's operations that they support. Identifying and inventorying high-value information assets helps enable selection and application of appropriate controls. High-value assets may also include information assets that may create financial, regulatory, or liability risks, such as PII, sensitive operational information, and confidential business information. Organisations should consider the different kinds of IT and OT assets that may contain information that is important to the function, such as:\n• virtualised assets (including dormant and backup assets)\n• regulated assets\n• cloud assets\n• bring your own device (BYOD) assets\n\n• field assets\n• mobile assets. \n\nOrganisations should also consider different potential sources of high value information, such as:\n• information located off-premises\n• stored or archived information\n• backup data\n• information managed by a third party\n• information within different classification or sensitivity levels\n\nAt MIL1, the inventory may be produced in an ad hoc manner.\nAn inventory is not meant to imply that a single list is required; multiple repositories, documents, or systems may be used to accomplish this practice. Where appropriate, however, organisations should consider whether inventories may be consolidated to avoid potential risks related to managing multiple repositories.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-2a, ASSET-2b, ASSET-2f, ASSET-2g.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-2", "objective": "Manage Information Asset Inventory", "practiceId": "ASSET-2b", "practice": "The information asset inventory includes information assets within the function that may be leveraged to achieve a threat objective", "context": "These are assets that may be used in the pursuit of the tactics or goals of a threat actor. It is important to consider that a threat actor may have multiple objectives and that those objectives may change over time or in different situations. Achievement of a threat objective may not cause immediate harm to an organisation but would increase the likelihood of the realisation of a cyber risk. Identification of assets within the function that may be leveraged to achieve a threat objective should focus on the techniques used by threat actors and the potential for those techniques to be applied to the organisation’s assets. An example of assets within the function that may be leveraged to achieve a threat objective is information such as personally identifiable information that may cause harm to the organisation or its stakeholders if lost, stolen, or disclosed.\nNote that identification of this set of assets should be based on an assessment of risk.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-2a, ASSET-2b, ASSET-2f, ASSET-2g.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-2", "objective": "Manage Information Asset Inventory", "practiceId": "ASSET-2c", "practice": "Inventoried information assets are categorised based on defined criteria that includes importance to the delivery of the function", "context": "Categorisation of assets is important for many cybersecurity and operational activities, such as incident response, risk management, threat management, and cybersecurity architecture planning.\nInformation should be categorised according to its sensitivity, value, criticality, interdependencies with other assets, legal requirements, whether the data is collected by, held by, or shared with a third party, or other scheme, including any scheme that is required by regulation or other compliance factor. Categorisation provides another level of important description to an information asset that may affect strategies to protect and sustain it. \nThese are examples of categorisation schemes:\n• Confidential, Secret, Top Secret\n• Regulated, Unregulated, Public\n• Restricted, Private, Public\nWhatever scheme is used, the importance of the asset to the delivery of the function should be considered.\nAdditionally, when identifying categories, consider that many cybersecurity activities generate information assets that need to be protected, such as configuration baseline information, risk registers, and even asset inventories themselves.\n\nRelated Practices\n• Input From: Implementing ASSET-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-2c, ASSET-2d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-2", "objective": "Manage Information Asset Inventory", "practiceId": "ASSET-2d", "practice": "Categorisation criteria include consideration of the degree to which an asset within the function may be leveraged to achieve a threat objective", "context": "The possibility of an asset within the function being leveraged to achieve a threat objective is added to the criteria used for categorising information assets. Consideration for the way an asset may be utilised by a threat actor will enable a more comprehensive prioritisation of the risks to, and impacts associated with, IT and OT assets. It is important to consider that a threat actor may have multiple objectives and that those objectives may change over time or in different situations.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-2c, ASSET-2d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-2", "objective": "Manage Information Asset Inventory", "practiceId": "ASSET-2e", "practice": "The information asset inventory includes attributes that support cybersecurity activities (for example, asset category, backup locations and frequencies, storage locations, asset owner, cybersecurity requirements)", "context": "Information asset inventory attributes are details about assets that are included in asset inventories to enable management and consistent use of the assets. Including necessary information about assets to support the cybersecurity program strategy helps ensure that that information is available during periods of operational stress and does not have to be collected while in a state of crisis. For example, response to and recovery from a cybersecurity incident may be expedited if the information asset inventory provides the location of backups for information assets that are important to the delivery of the function (e.g., SCADA set points).Additionally, organisations should consider the different kinds of assets that may be within the scope of the evaluation, such as virtualised assets, regulated assets, cloud assets, and mobile assets.\n\nRelated Practices\n• Input From: Implementing ASSET-2a provides input that may be useful for implementing this practice.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-2", "objective": "Manage Information Asset Inventory", "practiceId": "ASSET-2f", "practice": "The information asset inventory is complete (the inventory includes all assets within the function)", "context": "This practice expands the inventory scope of ASSET-2a. The level of detail at which information assets are documented in the inventory should be determined with consideration for the importance and sensitivity of the asset to the organisation. In many cases, it may be beneficial to consolidate types of information assets into a single entry in the information asset inventory. For example, employee-created assets residing on individual workstations (such as files or databases) may not warrant separate entries in the information asset inventory, unless they have special or critical value to the delivery of the function. The relationship of assets to business functions should also be included to enable prioritisation and development of protection and sustainment strategies. The implementation of the inventory should be proportional to the organisation’s size, complexity, and risk. For example, for a small, low-complexity organisation, a simple spreadsheet may be used for the inventory. For larger, more complex organisations, more sophisticated Presenthods such as a dedicated asset inventory application is appropriate.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-2a, ASSET-2b, ASSET-2f, ASSET-2g.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ASSET", "objectiveId": "ASSET-2", "objective": "Manage Information Asset Inventory", "practiceId": "ASSET-2g", "practice": "The information asset inventory is current, that is, it is updated periodically and according to defined triggers, such as system changes", "context": "The inventory of information assets should be updated and maintained as assets change throughout their lifecycle to ensure the inventory is complete and accurate. Ensuring that the information asset inventory is current might involve change management procedures that require inventory updates any time assets are significantly altered. The organisation might also conduct inventory reviews, both periodically (such as quarterly or yearly) and based on events (such as changes in organisational structure, major changes in critical systems, and the acquisition and consolidation of another business).\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-2a, ASSET-2b, ASSET-2f, ASSET-2g.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-2", "objective": "Manage Information Asset Inventory", "practiceId": "ASSET-2h", "practice": "Information assets are sanitised or destroyed at end of life using techniques appropriate to their cybersecurity requirements", "context": "In this practice, sanitisation refers to the removal of sensitive data from an asset in preparation for its reuse. For example, sanitisation might involve removing customer-specific information from a slide presentation so that it can be used again. This should be completed in a manner that prevents the disclosure of information to unauthorised individuals when assets are reused. \nBy contrast, destruction refers to data removal so that it cannot be recovered. This involves permanent removal (that is, deletion in a way that makes recovery impossible, such as cryptographic erase, de-identification of personally identifiable information (PII), and destruction) from IT assets and OT assets when it is no longer needed. The organisation must determine which end-of-life actions are appropriate for information assets and create procedures to ensure compliance with retention guidelines that establish when information assets should be retired. . Procedures should include all possible locations where copies of the information might be stored, including system logs.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ASSET", "objectiveId": "ASSET-3", "objective": "Manage IT and OT Asset Configuration", "practiceId": "ASSET-3a", "practice": "Configuration baselines are established, at least in an ad hoc manner", "context": "Establishing a baseline for OT, IT, and information assets provides a foundation for managing the integrity of assets as they change over their lifecycle. Establishing point-in-time captures of assets (configuration items) ensures that these assets can be restored to an acceptable form when necessary—after a disruption, when an unauthorised modification has occurred, or under any circumstances where integrity is suspect and provides a level of control over changes that can potentially disrupt the assets’ support of organisational services.\nOrganisations may consider integrity checking mechanisms (manual or automatic) when performing point-in-time captures of assets and asset configurations. Using integrity checking mechanisms to verify point-in-time captures prior to restoration can help ensure they are viable and available.\nDocumented policies and procedures for the configuration or maintenance of baselines are not required to implement this practice.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-3a, ASSET-3c, ASSET-3d.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-3", "objective": "Manage IT and OT Asset Configuration", "practiceId": "ASSET-3b", "practice": "Configuration baselines are used to configure assets at deployment and restoration", "context": "The organisation has procedures in place to ensure that established configuration baselines are applied to assets when they are deployed and restored. These baselines (also referred to as standard builds) support the deployment of assets in a controlled manner.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-3b, ASSET-3e.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-3", "objective": "Manage IT and OT Asset Configuration", "practiceId": "ASSET-3c", "practice": "Configuration baselines incorporate applicable requirements from the cybersecurity architecture (ARCHITECTURE-1f)", "context": "As part of the cybersecurity architecture, the organisation selects and documents requirements for the appropriate level of confidentiality, integrity, and availability of IT, OT, and information assets. These requirements may then be used to drive the development of cybersecurity controls to be applied to assets and systems (such as configuration baselines, network protections, software security). Configuration baseline hardening guidelines, such as the Center for Internet Security Benchmarks or the Department of Defense Security Technical Implementation Guides (STIGs), may provide a starting point for selecting configuration settings that achieve cybersecurity architecture requirements.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of ARCHITECTURE-1f.\n• Input From: Implementing ARCHITECTURE-3f provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-3a, ASSET-3c, ASSET-3d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-3", "objective": "Manage IT and OT Asset Configuration", "practiceId": "ASSET-3d", "practice": "Configuration baselines are reviewed and updated periodically and according to defined triggers, such as system changes and changes to the cybersecurity architecture", "context": "The organisation has a defined schedule for reviewing baselines regularly and updating them as needed to ensure they continue to reflect appropriate security and functional requirements.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-3a, ASSET-3c, ASSET-3d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-3", "objective": "Manage IT and OT Asset Configuration", "practiceId": "ASSET-3e", "practice": "Asset configurations are monitored for consistency with baselines throughout the assets’ lifecycles", "context": "Organisations should monitor asset configurations to ensure that they continue to conform to baselines over time after their deployment. Monitoring for consistency can be done through automated means, such as using a scanning tool that compares the baselines of connected assets to established configuration baselines, or by conducting periodic audits of assets to determine whether unauthorised changes have been made. Tools can also be used to automatically revert assets to baselines.\nAutomated configuration management or monitoring tools may enable more efficient tracking of asset configurations. Tools that are able to span physical, virtual, mobile, hybrid, and other technology environments should be considered to help ensure adequate coverage of IT and OT assets. These tools may be optimized for specific products. When selecting automation tools, stakeholders with adequate training and experience should be engaged early and careful consideration should be given to ensuring the appropriate fit between automation tools and the products they are intended to integrate with.\nData integrity tools (such as cryptographic checksums) may help in the detection of unauthorised changes to configuration settings, especially when managing virtualized assets. As an example of this, an organisation may implement file integrity checks for virtualization platforms to be performed upon boot up and confirm that no unauthorised changes have occurred.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-3b, ASSET-3e.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ASSET", "objectiveId": "ASSET-4", "objective": "Manage Changes to IT and OT Assets", "practiceId": "ASSET-4a", "practice": "Changes to assets are evaluated and approved before being Fully, at least in an ad hoc manner", "context": "All proposed changes to inventoried assets are evaluated to understand their priority, benefits, risks, and impacts to functionality and security on the functions they support. Consider that these may differ across different kinds of IT, OT and information assets, such as virtualised assets, regulated assets, assets managed by a third party, bring your own device (BYOD) assets, cloud assets, mobile assets, field assets, assets reliant on specific infrastructure such as wireless networks or the Global Position System, and assets that may be considered to be part of the Internet of Things or Industrial Internet of Things.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-4a, ASSET-4d, ASSET-4e, ASSET-4f, ASSET-4h.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-4", "objective": "Manage Changes to IT and OT Assets", "practiceId": "ASSET-4b", "practice": "Changes to assets are documented, at least in an ad hoc manner", "context": "Any changes made to an inventoried asset are captured in a format that can be easily referenced during troubleshooting or incident response activities. Changes may include the alteration of settings such as routing and port configurations in network devices, the addition or removal of components, and modification of access privileges. Some of the attributes that should be captured include date and time of the change, who made the change, the assets affected by the change, and a description of any risks associated with the change.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-4b, ASSET-4c, ASSET-4i.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-4", "objective": "Manage Changes to IT and OT Assets", "practiceId": "ASSET-4c", "practice": "Documentation requirements for asset changes are established and maintained", "context": "The organisation should define the required information that should be documented when performing changes to IT and OT assets. The requirements should consider what information may be necessary for activities such as troubleshooting or incident response. Additionally, the organisation should consider the maintenance of these requirements based on changes to the operating environment.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-4b, ASSET-4c, ASSET-4i.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-4", "objective": "Manage Changes to IT and OT Assets", "practiceId": "ASSET-4d", "practice": "Changes to higher priority assets are tested prior to being deployed", "context": "Changes to assets should be tested to ensure continuity of the assets and functions they affect prior to implementing the changes across the enterprise. When possible, testing of proposed changes should be conducted in a test environment or a low-risk production environment. Testing may include stress testing, confirmation that changes were Fully, operability, and load testing. Additionally, organisations may consider whether controls preventing unauthorised changes are necessary for specific types of assets. For example, digital or hardware programming switches should be placed in a mode that does not allow programming during routine operations.\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-4a, ASSET-4d, ASSET-4e, ASSET-4f, ASSET-4h.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-4", "objective": "Manage Changes to IT and OT Assets", "practiceId": "ASSET-4e", "practice": "Changes and updates are Fully in a secure manner", "context": "Procedures and tools used to update assets should incorporate appropriate controls to ensure that unintentional or intentional vulnerabilities or misconfigurations are not introduced as part of asset change processes. This may include use of secure communications protocols, verification Presenthods, such as digital signatures, or other controls.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-4a, ASSET-4d, ASSET-4e, ASSET-4f, ASSET-4h.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-4", "objective": "Manage Changes to IT and OT Assets", "practiceId": "ASSET-4f", "practice": "The capability to reverse changes is established and maintained for assets that are important to the delivery of the function", "context": "This practice describes the development of an ability to roll back changes after they have been applied. This may be achieved through manual or automated Presenthods. This enables an organisation to revert to a known good state in the event that a change creates unforeseen or unintended operational or security consequences that cannot be addressed through other means.\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-4a, ASSET-4d, ASSET-4e, ASSET-4f, ASSET-4h.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "ASSET", "objectiveId": "ASSET-4", "objective": "Manage Changes to IT and OT Assets", "practiceId": "ASSET-4g", "practice": "Change management practices address the full lifecycle of assets (for example, acquisition, deployment, operation, retirement)", "context": "Organisational and operational conditions are continually changing, resulting in changes to staff, to the content and use of data, to technology, and so on. These changes can impact important assets throughout their lifecycles. Change management practices should not be limited to changes to operationally deployed assets but should encompass all phases of the lifecycle, including acquisition, deployment, and retirement. \nTo this end, the organisation must define and manage the process for keeping the asset inventory current and ensure that changes to the inventory do not result in gaps in strategies for protecting and sustaining assets. Also, the organisation must actively monitor for changes that significantly alter assets, identify new assets, and call for the retirement of assets for which there is no longer a need or whose relative value has been reduced.\nConsider that different types of technologies (such as virtualised assets and cloud assets) may have unique lifecycle stages and other distinctive aspects that impact how change management should be Fully.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-4", "objective": "Manage Changes to IT and OT Assets", "practiceId": "ASSET-4h", "practice": "Changes to higher priority assets are tested for cybersecurity impact prior to being deployed", "context": "Changes to an asset used in multiple services can meet an immediate need but cause a problem in other applications. Changes should be evaluated in a test environment to identify any impact of the proposed change on other assets and systems. Cybersecurity impact might include any effect on availability of an asset to authorised users, any weakening of protections, or unintended alterations of access control lists. For example, if a vendor pushes a new version of an operating system, the new OS should be tested in a controlled environment to determine whether any applications or services would be affected.\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-4a, ASSET-4d, ASSET-4e, ASSET-4f, ASSET-4h.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-4", "objective": "Manage Changes to IT and OT Assets", "practiceId": "ASSET-4i", "practice": "Change logs include information about modifications that impact the cybersecurity requirements of assets", "context": "If tests for cybersecurity impact prior to deploying asset changes reveal that cybersecurity requirements (confidentiality, integrity, and availability) will be affected, those impacts should be described in change logs when the assets are changed. For example, if IP addressing schemes are changed within a network appliance, the change log should say soPresenthing about how the availability of connected devices might be affected.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-1f provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: ASSET-4b, ASSET-4c, ASSET-4i.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "ASSET", "objectiveId": "ASSET-AP", "objective": "ASSET Anti-Patterns", "practiceId": "ASSET-AP1", "practice": "Changes to Internet-facing assets are not assessed or tested to identify potential cybersecurity vulnerabilities arising from the change itself, prior to implementation", "context": "Internet-facing assets (such as networks, systems, and applications) may be accessible to anyone on the Internet, which can increase the level of attention that they receive from malicious threat actors.\n\nAs a result, you should test and validate changes affecting an Internet-facing asset, ensuring that the change does not introduce cybersecurity vulnerabilities that could be exploited.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-AP", "objective": "ASSET Anti-Patterns", "practiceId": "ASSET-AP2", "practice": "The management of asset inventories is not linked to data governance or business impact assessment activities (ASSET-1a, PRIVACY-AP1)", "context": "Asset inventories are used as a source of truth to support other business activities. If your organisation has not established asset inventories (i.e., ASSET-1a is \"No\"), this Anti-Pattern is \"Present\".\n\nThe management of your asset inventories should be linked to data governance or business impact assessment (BIA) activities, to provide confidence that the inventories contain accurate and complete information.\n\nData governance ensures that your organisation knows what types of data it holds / processes, so that the risk associated with holding / processing that data can be appropriately managed.\n\nBIAs support you in determining which assets the organisation considers to be critical and/or sensitive.\n\nKnowing the types of data your organisation has, how important it is, and where it is stored, is critical to understanding how a threat actor may target your organisation to achieve a threat objective.\n\nPRIVACY-AP1 must be \"Not Present\" for this Anti-Pattern to be \"Not Present\".", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "ASSET", "objectiveId": "ASSET-AP", "objective": "ASSET Anti-Patterns", "practiceId": "ASSET-AP3", "practice": "Asset inventories have not been updated in the past 24 months", "context": "Building on ASSET-AP2, asset inventories are used as a source of truth to support other business activities, such as:\n- Configuration and change management\n- Threat and vulnerability management\n- Backup management\n- Service continuity and disaster recovery.\n\nGiven the reliance on asset inventories, it is important that they are periodically updated to reflect the changing organisational environment. According to the Australian Cybersecurity Centre (ACSC), asset inventories should be updated at least every 24 months, however a higher frequency is recommended.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1A", "practice": "Privacy requirements applicable to the organisation have been identified, even in an ad-hoc manner.", "context": "Privacy requirements may be imposed by applicable legislation, for example:\n- Federal legislation (Privacy Act, Consumer Data Right);\n- State-based legislation (e.g. Health Records and Information Privacy Act 2002 NSW, Health Records Act 2001 VIC, Health Records Privacy and Access Act 1997 ACT).\n\nPrivacy requirements may also be imposed by contracts/agreements with customers or suppliers.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1B", "practice": "The organisation has defined what it considers personal information in the context of its business activities, even in an ad-hoc manner.", "context": "Do you have a defined understanding of what 'personal information' means within your organisation? Does your organisation understand why they collect, use and hold personal information?", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1C", "practice": "There is a point of contact (person or role) to whom privacy issues could be reported, even in an ad-hoc manner.", "context": "Do you have a commonly acknowledged place to report perceived or real privacy issues? Is there an overall senior role accountable for coordinating the resolution of privacy issues?", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1D", "practice": "Business activities which involve the collection, processing, storage or transmission of personal information have been identified", "context": "Has your organisation identified which business activities collect, process, store, and use personal information? For example, personal information being collected to on-board a new customer.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1E", "practice": "The organisation's personal information holdings are documented", "context": "The organisation documents where (onshore or offshore) and how personal information is collected, processed, stored and transmitted as part of business activities. This might include business processes, IT systems, third party vendors, etc.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1F", "practice": "A privacy policy has been documented and communicated within the organisation and the general public", "context": "Does your organisation have a privacy policy that is available for public access?", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1G", "practice": "The organisation's requirements for handling of personal information have been defined within the privacy policy", "context": "Do you have a defined understanding of how to handle personal information? Does your understanding conform with the privacy policy?", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1H", "practice": "Specific roles and accountabilities have been assigned for privacy management within the organisation", "context": "Does your organisations have defined roles and accountabilities for privacy management? Is there a senior member of staff with overall accountability for privacy (for example, a Privacy Officer)?", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1I", "practice": "A privacy management plan has been Fully to govern the organisation's ongoing compliance with applicable privacy requirements", "context": "Does your privacy management plan drive ongoing compliance with your organisation's privacy requirements?\nA privacy management plan defined by the Office of the Australia Information Commissioner is a document that identifies specific, measurable goals and targets that identify how you will meet your privacy obligation commitments", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1J", "practice": "Privacy related risks have been identified, assessed and documented in a risk register", "context": "Does your organisation have a risk register that documents privacy related risks?", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1K", "practice": "A documented process exists for responding to privacy enquiries and complaints, including customer correction of their personal information", "context": "Does your organisation have documented procedures on how to handle enquiries and complaints, including procedures on how customers' can correct their personal information?", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1L", "practice": "The organisation provides privacy training to staff responsible for handling personal information", "context": "Does your organisation provide privacy training to your staff?", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1M", "practice": "Existing incident response plan specifically consider data breach scenarios involving personal information", "context": "Does your organisation have an incident response management plan for personal information data breach events? Does the incident response plan include the processes to notify individuals and/or regulatory bodies?", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1N", "practice": "Incident response plans for data breach scenarios are tested periodically and updated based on improvement opportunities identified", "context": "Does your organisation test the incident response plan for data breach scenarios, at least once a year?", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1O", "practice": "The organisation's compliance with applicable privacy requirements is periodically assessed and reported to senior management", "context": "Does your organisation review its privacy obligations at least once a year, to ensure compliance with state, federal and international obligations and/or licensing agreements?", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-1", "objective": "Manage Personal Information and Privacy", "practiceId": "PRIVACY-1P", "practice": "The privacy management plan is periodically updated to reflect the changing threat and regulatory environment", "context": "Does your organisation review and update your privacy management plan at least once a year?", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "PRIVACY", "objectiveId": "PRIVACY-AP", "objective": "PRIVACY Anti-Patterns", "practiceId": "PRIVACY-AP1", "practice": "The organisation is unaware whether personal information is collected", "context": "Personal Information is also referred to as Personally Identifiable Information (PII). The Australian Privacy Act defines personal information as information or an opinion about an identified individual, or an individual who is reasonably identifiable:\n(a) whether the information or opinion is true or not; and\n(b) whether the information or opinion is recorded in a material form or not.\n\nOne example of PII is a spreadsheet that contains the name, phone number, and email address of one or more individuals. There are many other examples.\n\nPII makes a valuable target for a threat actor, especially any PII that allows a threat actor to assume the identity of another individual. Protecting PII, whether customer PII or employee PII, is critical to protecting their quality of life and maintaining your organisation's social responsibility.\n\nUnder the Notifiable Data Breaches (NDB) scheme any organisation or agency the Privacy Act 1988 covers must notify affected individuals and the OAIC when a data breach is likely to result in serious harm to an individual whose personal information is involved. Additional information can be obtained from the Australian Government Office of the Australian Information Commissioner (OAIC).", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-1", "objective": "Establish Cybersecurity Program Strategy", "practiceId": "PROGRAM-1a", "practice": "The organisation has a cybersecurity program strategy, which may be developed and managed in an ad hoc manner", "context": "The organisation develops, implements, and maintains a cybersecurity program strategy that, in its simplest form, includes a list of cybersecurity objectives and related actions, activities, and tasks and a plan to implement them. For a C2M2-based program, areas of activity in the strategy could align with C2M2 domains and objectives. For example, one area of activity would be identifying and responding to cyber risks that affect the function’s assets and services. Further detail would describe how this activity is to be accomplished (again, aligning with C2M2 practices, but providing more details about how the practices are to be Fully in the function, such as use of a particular risk management framework).\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-1a, PROGRAM-1b, PROGRAM-1c, PROGRAM-1d, PROGRAM-1e, PROGRAM-1f, PROGRAM-1g, PROGRAM-1h.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-1", "objective": "Establish Cybersecurity Program Strategy", "practiceId": "PROGRAM-1b", "practice": "The cybersecurity program strategy defines goals and objectives for the organisation’s cybersecurity activities", "context": "In its simplest form, the cybersecurity program strategy should include a list of goals and objectives and at least a high-level plan for the actions, activities, and tasks that must be performed to meet them. These objectives should support the achievement and ongoing improvement of an appropriate cybersecurity posture and support the accomplishment of overall organisational strategic objectives. \nThese are examples of a cybersecurity goal and related objectives:\nGoal: Minimize the impact of cybersecurity incidents on customers.\nObjectives:\n• Maintain commitment to customers by safeguarding their sensitive information from cyber risk and responding competently and appropriately to minimise impact when incidents occur.\n• Support the availability of services through the quick detection of cybersecurity incidents that may lead to service interruptions and by expeditiously responding to those events.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-1a, PROGRAM-1b, PROGRAM-1c, PROGRAM-1d, PROGRAM-1e, PROGRAM-1f, PROGRAM-1g, PROGRAM-1h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-1", "objective": "Establish Cybersecurity Program Strategy", "practiceId": "PROGRAM-1c", "practice": "The cybersecurity program strategy and priorities are documented and aligned with the organisation’s mission, strategic objectives, and risk to critical infrastructure", "context": "The cybersecurity program strategy is developed as part of the organisation’s strategic business planning and specifically addresses the actions, activities, and tasks that must be performed to support achievement of the organisation’s strategic objectives and to manage risks to critical infrastructure within the organisation’s risk tolerances and appetite.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-1a, PROGRAM-1b, PROGRAM-1c, PROGRAM-1d, PROGRAM-1e, PROGRAM-1f, PROGRAM-1g, PROGRAM-1h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-1", "objective": "Establish Cybersecurity Program Strategy", "practiceId": "PROGRAM-1d", "practice": "The cybersecurity program strategy defines the organisation’s approach to provide program oversight and governance for cybersecurity activities", "context": "Governance is a process of providing strategic direction for the organisation while ensuring that it meets its obligations, appropriately manages risk, and efficiently uses finances and human resources to ensure that the cybersecurity program supports and sustains strategic objectives. Governance is focused on providing oversight of the cybersecurity program, not performing or managing process tasks to completion. For example, the process of overseeing the identification, definition, and inventorying of high-value assets is a governance task, while performing these tasks is part of asset management.\nProgram oversight and governance might be achieved through\n• a formal cybersecurity oversight committee\n• establishing C2M2 as standard for cybersecurity program evaluation\n• identifying and documenting the areas of the organisation and the assets that are within the purview of the cybersecurity program and those that are not\n• identifying whether data governance and data protection are to be managed as part of the cybersecurity program or separately\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-1a, PROGRAM-1b, PROGRAM-1c, PROGRAM-1d, PROGRAM-1e, PROGRAM-1f, PROGRAM-1g, PROGRAM-1h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-1", "objective": "Establish Cybersecurity Program Strategy", "practiceId": "PROGRAM-1e", "practice": "The cybersecurity program strategy defines the structure and organisation of the cybersecurity program", "context": "The program strategy should contain an organisation chart or some other descriptive document which includes the cybersecurity program’s structure, the roles in the program, and key activities associated with those roles. For example, a table could be used to describe departments (such as Security Operations Center), subfunctions within departments (such as vulnerability management), activities of the subfunction (such as scanning for, analysing, and addressing vulnerabilities), and, if applicable, any organisation that the subfunction is contracted out to (such as Corporate IT).\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-1a, PROGRAM-1b, PROGRAM-1c, PROGRAM-1d, PROGRAM-1e, PROGRAM-1f, PROGRAM-1g, PROGRAM-1h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-1", "objective": "Establish Cybersecurity Program Strategy", "practiceId": "PROGRAM-1f", "practice": "The cybersecurity program strategy identifies standards and guidelines intended to be followed by the program", "context": "Standards or guidelines are identified to inform the implementation of practices in the cybersecurity program that will have implications for activities in all C2M2 domains. These may simply be the reference sources the organisation consulted when developing the plan for performing the practices. They should include any standards or guidelines required by policy. If the organisation is using C2M2 to guide its cybersecurity program activities, C2M2 could be one of the guidelines identified in the program strategy.\nOther examples of standards and guidelines are\n• National Institute of Standards and Technology (NIST) SP 800 guidelines such as 800-53, 800-124, 800-61, 800-82, 800-30\n• NIST Framework for Improving Critical Infrastructure Cybersecurity (CSF)\n• Zero trust security models (for example, NIST SP 800-207)\n• the Center for Internet Security (CIS) Critical Security Controls\n• Control Objectives for Information and Related Technologies (COBIT)\n• International Organisation for Standardisation (ISO)\n• DOE Cybersecurity Procurement Language for Energy Delivery Systems\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-1a, PROGRAM-1b, PROGRAM-1c, PROGRAM-1d, PROGRAM-1e, PROGRAM-1f, PROGRAM-1g, PROGRAM-1h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-1", "objective": "Establish Cybersecurity Program Strategy", "practiceId": "PROGRAM-1g", "practice": "The cybersecurity program strategy identifies any applicable compliance requirements that must be satisfied by the program (for example, NERC CIP, TSA Pipeline Security Guidelines, PCI DSS, ISO, DoD CMMC)", "context": "Compliance requirements are typically imposed on the organisation by local, state, or federal governments. Different compliance requirements may apply to some but not all assets in-scope for the cybersecurity program. The cybersecurity program should be aware of what compliance requirements must be fulfilled by the program and the scope of each requirement. Listing compliance requirements in the cybersecurity program strategy helps ensure that cybersecurity program stakeholders know what they are held accountable for. For example, a strategy might include a statement that compliance to PCI DSS is required by the cybersecurity program. Organisations should consider the differences in legal and regulatory requirements within the areas in which they operate and how they may conflict with global IT, enterprise-wide IT, or cybersecurity controls.\nSome examples of compliance requirements that organisations may need to satisfy include:\n• North American Electric Reliability Corporation (NERC) Critical Infrastructure Protection (CIP) Standards\n• Transportation Security Administration (TSA) Pipeline Security Guidelines\n• Payment Card Industry Data Security Standards (PCI DSS)\n• International Organisation for Standardisation (ISO)\n• Department of Defense Cybersecurity Maturity Model Certification (DoD CMMC)\n• California Consumer Privacy Act (CCPA)\n• Health Insurance Portability and Accountability Act of 1996 (HIPAA)\n• State- and local-level cybersecurity and privacy laws\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-1a, PROGRAM-1b, PROGRAM-1c, PROGRAM-1d, PROGRAM-1e, PROGRAM-1f, PROGRAM-1g, PROGRAM-1h.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-1", "objective": "Establish Cybersecurity Program Strategy", "practiceId": "PROGRAM-1h", "practice": "The cybersecurity program strategy is updated periodically and according to defined triggers, such as business changes, changes in the operating environment, and changes in the threat profile (THREAT-2e)", "context": "The organisation should have a documented process to ensure that certain types of changes trigger an update of the cybersecurity program strategy. An example of a business change that would necessitate an update would be a change in the business that increases its exposure to cyber events, such as entering a new line of business. An example of a change in the operating environment that might necessitate an update would be the acquisition of a new customer management system that uses sensitive information. An example of a change in the threat profile of a utility company that might necessitate an update would be threat reporting that indicates increased cyber-attack activity targeting utilities.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of THREAT-2e.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-1a, PROGRAM-1b, PROGRAM-1c, PROGRAM-1d, PROGRAM-1e, PROGRAM-1f, PROGRAM-1g, PROGRAM-1h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2a", "practice": "Senior management with proper authority provides support for the cybersecurity program, at least in an ad hoc manner", "context": "Having material support from senior management is necessary for implementing a cybersecurity program. The fundamental forms of support are providing resources (people, tools, and funding) and authority to perform cybersecurity activities. To provide such support, the senior managers themselves must have sufficient and relevant authority.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-2a, PROGRAM-2c, PROGRAM-2d.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2b", "practice": "The cybersecurity program is established according to the cybersecurity program strategy", "context": "The cybersecurity program is typically responsible for ensuring that the cybersecurity objectives as documented in the cybersecurity program strategy are achieved. For example, the cybersecurity program includes activities to ensure that adequate staff will be available to fulfill the requirements of the program strategy.\n\nRelated Practices\n• Input From: Implementing PROGRAM-1b provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-2b, PROGRAM-2g, PROGRAM-2h, PROGRAM-2i.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2c", "practice": "Senior management sponsorship for the cybersecurity program is visible and active", "context": "Visible and active sponsorship by senior management might include regular communications by senior management about the importance and value of cybersecurity activities, organisational support for establishing and implementing policies or other organisational directives to guide the program, funding awards and recognition programs for staff who make significant contributions toward achieving cybersecurity objectives, and ensuring that cybersecurity concepts are included in contracts with suppliers and business partners.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-2a, PROGRAM-2c, PROGRAM-2d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2d", "practice": "Senior management sponsorship is provided for the development, maintenance, and enforcement of cybersecurity policies", "context": "Polices are an expression of senior managers’ level of commitment to the cybersecurity program. Lack of visible endorsement of cybersecurity policies by senior managers typically renders policies less effective because stakeholders may assume that the policies are not being enforced or that they are simply meant to be used as a guideline rather than a requirement. Senior managers should communicate the importance of cybersecurity policies to the mission and well-being of the organisation and express their intention to hold stakeholders responsible for compliance.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-2a, PROGRAM-2c, PROGRAM-2d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2e", "practice": "Responsibility for the cybersecurity program is assigned to a role with sufficient authority", "context": "It’s important that the role that is made responsible for executing the cybersecurity program (such as a chief information security officer) has the necessary and sufficient authority within the organisation to carry out program activities and to obtain the necessary resources to support the program.\n\nRelated Practices\n• Input From: Implementing PROGRAM-2b provides input that may be useful for implementing this practice.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2f", "practice": "Stakeholders for cybersecurity program management activities are identified and involved", "context": "Stakeholders of the cybersecurity program are identified and involved in the performance of practices. This could include stakeholders from within the function, from across the organisation, or from outside the organisation, depending on how the organisation Fully the practices. Stakeholders might include project managers, business process owners, and owners of affected assets and services, as well as staff involved in cybersecurity activities. Identification of stakeholders and their appropriate involvement should be documented in some way, such as in position descriptions or team charters.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-2f, PROGRAM-2j.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2g", "practice": "Cybersecurity program activities are periodically reviewed to ensure that they align with the cybersecurity program strategy", "context": "There should be a process in place to periodically evaluate cybersecurity program activities to ensure that they continue to support the goals and objectives of the cybersecurity program strategy. Activities that don’t contribute to the accomplishment of those goals and objectives should be evaluated to determine whether they should be continued. Any gaps in fulfillment of the objectives should also be addressed.\n\nRelated Practices\n• Input From: Implementing PROGRAM-1b provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-2b, PROGRAM-2g, PROGRAM-2h, PROGRAM-2i.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2h", "practice": "Cybersecurity activities are independently reviewed to ensure conformance with cybersecurity policies and procedures, periodically and according to defined triggers, such as process changes", "context": "The purpose of this practice is to provide additional assurance that cybersecurity activities are being performed as specified by the organisation’s cybersecurity policies and procedures. The evaluation must be independent; that is, conducted by reviewers from outside the cybersecurity program under direction from the organisation's governing body). Those directly involved in program activities cannot perform the evaluation or render an opinion on the program’s effectiveness. Such evaluations may be done through internal and external audits, post-event reviews, and capability appraisals and should be initiated by and accountable to the board of directors or a similar group. Advanced cybersecurity techniques such as threat hunting and active defense can be used to provide insight into the performance of the overall cybersecurity program.\n\nRelated Practices\n• Input From: Implementing ACCESS-4a, ACCESS-4c, ARCHITECTURE-6a, ARCHITECTURE-6c, ASSET-5a, ASSET-5c, RESPONSE-5a, RESPONSE-5c, RISK-5a, RISK-5c, SITUATION-4a, SITUATION-4c, THIRD-PARTIES-3a, THIRD-PARTIES-3c, THREAT-3a, THREAT-3c, WORKFORCE-5a, WORKFORCE-5c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-2b, PROGRAM-2g, PROGRAM-2h, PROGRAM-2i.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2i", "practice": "The cybersecurity program addresses and enables the achievement of legal and regulatory compliance, as appropriate", "context": "The organisation should have personnel who are responsible for ensuring that it is aware of all regulatory compliance obligations that it is subject to from governments and other sources. Cybersecurity program objectives should align with and support the meeting of any of those obligations that are relevant to cybersecurity, and the program should develop and implement the proper procedures and activities to ensure compliance in a timely and accurate manner.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-2b, PROGRAM-2g, PROGRAM-2h, PROGRAM-2i.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "PROGRAM", "objectiveId": "PROGRAM-2", "objective": "Establish and Maintain Cybersecurity Program", "practiceId": "PROGRAM-2j", "practice": "The organisation collaborates with external entities to contribute to the development and implementation of cybersecurity standards, guidelines, leading practices, lessons learned, and emerging technologies", "context": "In addition to maintaining awareness of any industry cybersecurity standards that the organisation is obligated to comply with (such as the North American Energy Reliability Corporation Critical Infrastructure Protection standard), the organisation should assign responsibility to selected personnel to contribute to industry efforts to develop cybersecurity practices or guidelines. For example, the Payment Card Industry practices were developed by stakeholders in the credit card industry for voluntary implementation.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: PROGRAM-2f, PROGRAM-2j.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-1", "objective": "Detect Cybersecurity Events", "practiceId": "RESPONSE-1a", "practice": "Detected cybersecurity events are reported to a specified person or role and documented, at least in an ad hoc manner", "context": "Establish a collection point for reporting actual or suspected cyber events, such as a help desk. Contact information for that person, role, or group should be made known to all of the function’s stakeholders. The contact should be someone who has knowledge of cybersecurity practices and issues and who can accurately document reported event information and possibly even do basic troubleshooting. Alternatively or additionally, events might be reported via an internal system such as a virtual help desk on an intranet.\n\nRelated Practices\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RESPONSE-1a, RESPONSE-1b, RESPONSE-1c, RESPONSE-1f.\n• The practices in the second progression include: RESPONSE-1a, RESPONSE-2f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-1", "objective": "Detect Cybersecurity Events", "practiceId": "RESPONSE-1b", "practice": "Criteria are established for cybersecurity event detection (for example, what constitutes a cybersecurity event, where to look for cybersecurity events)", "context": "The organisation should define cybersecurity event detection criteria that specify what distinguishes cybersecurity events from the multitude of other events. These criteria should relate to the cybersecurity requirements of the IT, OT, and information assets important for the delivery of the function. They allow the organisation to focus valuable resources (people, tools, etc.) on events that may potentially affect the productivity of those assets. Regarding \"where to look for cybersecurity events,\" be sure to consider potential events originating from third parties such as cloud resource providers.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-1a, RESPONSE-1b, RESPONSE-1c, RESPONSE-1f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-1", "objective": "Detect Cybersecurity Events", "practiceId": "RESPONSE-1c", "practice": "Cybersecurity events are documented based on the established criteria", "context": "Anything that is an event according to the criteria defined in RESPONSE-1b should be documented in a consistent manner. The organisation should decide what details about events should be documented to enable, for example, (1) decisions about declaring events to be incidents, (2) collection of data for any event Presentrics the organisation might be tracking, and (3) correlation of event information, if the organisation is doing that. \n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-1a, RESPONSE-1b, RESPONSE-1c, RESPONSE-1f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-1", "objective": "Detect Cybersecurity Events", "practiceId": "RESPONSE-1d", "practice": "Event information is correlated to support incident analysis by identifying patterns, trends, and other common features", "context": "Event correlation may help identify issues that may be more serious than when events are considered independently. For example, brute force attacks can be obfuscated by conducting them from multiple machines, thereby circumventing traditional lockout rules for 3 or 5 failed logins from a single IP address. And the issue is recognised as a more serious issue only when taken in a larger context. Event correlation requires the comparison of two or more events and establishes potential relationships between events. \nThese are examples of correlation activities:\n• Viewing and comparing separate events from the same information source\n• Viewing and comparing separate events from different information sources\n• Viewing and comparing events over time for common characteristics", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-1", "objective": "Detect Cybersecurity Events", "practiceId": "RESPONSE-1e", "practice": "Cybersecurity event detection activities are adjusted based on identified risks and the organisation’s threat profile (THREAT-2e)", "context": "Event detection is largely dependent on the degree to which there is broad awareness of the potential range of events that can affect the organisation. One source that is useful for expanding the organisation’s event awareness is risks that have been identified and are being addressed in the organisation risk management process. (See RISK-2a.) \nAlerts should be developed to function as early warning indicators for each risk or threat. To adjust event detection activities based on the organisation’s threat profile, organisations should review the targeted assets, objectives, and attack Presenthods that may be employed by threat actors and tune alerting accordingly. For example, if threat reporting indicates adversaries are targeting certain SCADA systems, existing alerts could be modified to trigger on anomalies that match aspects of that adversarial activity.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of THREAT-2e.\n• Input From: Implementing RISK-2a provides input that may be useful for implementing this practice.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-1", "objective": "Detect Cybersecurity Events", "practiceId": "RESPONSE-1f", "practice": "Situational awareness for the function is monitored to support the identification of cybersecurity events", "context": "Information collected through situational awareness activities is reviewed and used to help identify cybersecurity events. This information could be collected from multiple sources, including across functions within the organisation and outside of the organisation.\n\nRelated Practices\n• Input From: Implementing SITUATION-3d and SITUATION-3f provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-1a, RESPONSE-1b, RESPONSE-1c, RESPONSE-1f.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-2", "objective": "Analyse Cybersecurity Events and Declare Incidents", "practiceId": "RESPONSE-2a", "practice": "Criteria for declaring cybersecurity incidents are established, at least in an ad hoc manner", "context": "Criteria for declaring cybersecurity incidents are used to determine whether an event should be treated as an incident and the potential severity of the event. A ranking scale, such as high, medium, and low, may help to communicate incident severity to stakeholders and aid in prioritising response actions to be taken. \n\nIncident declaration criteria should be developed from experience and may Largelyly be derived from risk evaluation criteria (such as impact thresholds) established as part of Risk Management domain activities. Criteria might be based on the type of event (such as unauthorised access), level of impact (e.g., local versus organisation-wide), type of impact (internal systems versus critical external services), compliance obligations (internal-only versus reportable event), or mean time to recovery. For some events, the time between event detection and incident declaration may be immediate, requiring little additional analysis. In other cases, the organisation may wish to leverage previously developed criteria to help guide incident declaration.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-2a, RESPONSE-2c, RESPONSE-2e, RESPONSE-2h.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-2", "objective": "Analyse Cybersecurity Events and Declare Incidents", "practiceId": "RESPONSE-2b", "practice": "Cybersecurity events are analysed to support the declaration of cybersecurity incidents, at least in an ad hoc manner", "context": "The analysis of cybersecurity events helps the organisation gather additional information for event resolution and to assist in incident declaration, handling, and response. This analysis may consist of categorising, correlating, and prioritising events. Through analysis, the organisation determines the type and extent of an event (e.g., physical versus technical), whether the event correlates to other events (to determine if they are symptomatic of a larger issue, problem, or incident), and in what order events should be addressed or assigned for incident declaration, handling, and response. Analysis also helps the organisation to determine if the event needs to be escalated to other organisational or external staff (outside of the incident management staff) for additional analysis and resolution.\n\nRelated Practices\n• Input From: Implementing RESPONSE-1a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-2b, RESPONSE-2d, RESPONSE-2f, RESPONSE-2i.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-2", "objective": "Analyse Cybersecurity Events and Declare Incidents", "practiceId": "RESPONSE-2c", "practice": "Cybersecurity incident declaration criteria are formally established based on potential impact to the function", "context": "Each organisation has many unique factors that must be considered in determining when an event should be declared to be an incident. Through experience, an organisation may have a baseline set of types of events that define standard incidents, such as a virus outbreak, unauthorised access to a user account, or a denial-of-service attack. However, in reality, incident declaration may occur on an event-by-event basis.\nTo guide the organisation in determining when to declare an incident (particularly if incident declaration is not immediately apparent), the organisation must define incident declaration criteria. Incident declaration criteria should include factors that indicate the potential impact to the function, such as:\n• potential safety impacts\n• functional impact (priority and scope of impacted assets)\n• information impact (impact to information assets)\n• recoverability from the incident (resources necessary to recover from the incident)\n• the potential cause of the incident (malicious activity vs. unintentional actions)\nAdditionally, incident declaration criteria should consider impact to the organisation's cybersecurity goals, such as:\n• potential financial loss\n• number of customers affected\n• outage of major IT system\n• theft of customer information\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-2a, RESPONSE-2c, RESPONSE-2e, RESPONSE-2h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-2", "objective": "Analyse Cybersecurity Events and Declare Incidents", "practiceId": "RESPONSE-2d", "practice": "Cybersecurity events are declared to be incidents based on established criteria", "context": "The cybersecurity incident declaration criteria established according to RESPONSE-2c are used to determine whether an event should be declared to be an incident. Declaring an incident initiates the incident response activities in RESPONSE-3.\n\nRelated Practices\n• Input From: Implementing RESPONSE-2c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-2b, RESPONSE-2d, RESPONSE-2f, RESPONSE-2i.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-2", "objective": "Analyse Cybersecurity Events and Declare Incidents", "practiceId": "RESPONSE-2e", "practice": "Cybersecurity incident declaration criteria are updated periodically and according to defined triggers, such as organisational changes, lessons learned from plan execution, or newly identified threats", "context": "To maximise the investment in the incident detection and response process, incident declaration criteria should be maintained to reflect an organisation's evolving risk tolerance and threat environment. Also, updating the criteria based on lessons learned in this process can help the organisation to be more efficient and effective in dealing with future events.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-2a, RESPONSE-2c, RESPONSE-2e, RESPONSE-2h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-2", "objective": "Analyse Cybersecurity Events and Declare Incidents", "practiceId": "RESPONSE-2f", "practice": "There is a repository where cybersecurity events and incidents are documented and tracked to closure", "context": "Documenting and tracking ensure that an incident is properly progressing through the incident lifecycle and, most important, is closed when an appropriate response and post-incident review have been completed.\n\nRelated Practices\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RESPONSE-2b, RESPONSE-2d, RESPONSE-2f, RESPONSE-2i.\n• The practices in the second progression include: RESPONSE-1a, RESPONSE-2f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-2", "objective": "Analyse Cybersecurity Events and Declare Incidents", "practiceId": "RESPONSE-2g", "practice": "Internal and external stakeholders (for example, executives, attorneys, government agencies, connected organisations, vendors, sector organisations, regulators) are identified and notified of incidents based on situational awareness reporting requirements (SITUATION-3d)", "context": "Incidents that have been declared and that require a response must be communicated to stakeholders whose involvement is necessary in implementing, managing, and bringing to closure an appropriate and timely solution.\nEvent and incident notification should be guided by the reporting requirements defined in SITUATION-3d. Miscommunications or inaccurate information about organisational incidents can have dire effects that far exceed the potential damage caused by an incident itself. Therefore, the function must proactively manage communications when incidents are detected and throughout their life cycle.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of SITUATION-3d.\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-2", "objective": "Analyse Cybersecurity Events and Declare Incidents", "practiceId": "RESPONSE-2h", "practice": "Criteria for cybersecurity incident declaration are aligned with cyber risk prioritisation criteria (RISK-3b)", "context": "Aligning incident declaration criteria with the risk criteria established in RISK-3b ensures that the organisation is recognising and addressing incidents that involve risks that the organisation is particularly concerned about.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of RISK-3b.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-2a, RESPONSE-2c, RESPONSE-2e, RESPONSE-2h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-2", "objective": "Analyse Cybersecurity Events and Declare Incidents", "practiceId": "RESPONSE-2i", "practice": "Cybersecurity incidents are correlated to identify patterns, trends, and other common features across multiple incidents", "context": "Correlation of incidents can be done through analysis, incident tracking tools, use of incident categories, and matching terms in logs. For example, system access logs can be checked for system authentication failures, and the IP addresses from those can be correlated with known malicious IP addresses gathered through intelligence sources.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-2b, RESPONSE-2d, RESPONSE-2f, RESPONSE-2i.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3a", "practice": "Cybersecurity incident response personnel are identified, and roles are assigned, at least in an ad hoc manner", "context": "Identify the roles and responsibilities necessary to perform cybersecurity incident response activities and ensure that staff are assigned to those roles and have the necessary skills. Staff should be provided sufficient autonomy and authority to carry out their duties. The organisation may create job descriptions for cybersecurity incident response roles and responsibilities and keep track of skill gaps and gaps in the availability of staff so that suitable personnel can be hired as needed.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-3a, RESPONSE-3d, RESPONSE-3f, RESPONSE-3g, RESPONSE-3h, RESPONSE-3i.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3b", "practice": "Responses to cybersecurity incidents are executed, at least in an ad hoc manner, to limit impact to the function and restore normal operations", "context": "Responding to an incident describes the actions the organisation takes to prevent or contain the impact of an incident while it is occurring or shortly after it has occurred. The range, scope, and breadth of the response will vary widely depending on the nature of the incident. This may include potential incidents that may occur due to new vulnerabilities or technological advances that have a significant potential impact on the organisation, such as vulnerabilities in commonly used technologies (e.g., MS17-010) and emerging technologies that would reduce the effectiveness of current cybersecurity controls (e.g., quantum computing). Incident response may be as simple as notifying users to avoid opening a specific type of email message or as complicated as having to implement service continuity plans that require relocation of services and operations to an off-site provider. \nThe actions related to incident response might include, for example, containing damage (e.g., by taking hardware or systems offline), communicating to asset owners about the incident, and developing and implementing corrective actions and controls.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-3b, RESPONSE-3e, RESPONSE-3h, RESPONSE-3i, RESPONSE-3l.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3c", "practice": "Reporting of incidents is performed (for example, internal reporting, ICS-CERT, relevant ISACs), at least in an ad hoc manner", "context": "Cybersecurity incident response staff must know what incident information should be reported to various internal and external stakeholders, within what timeframe, and whether there are any constraints (such as legal review of the information to be shared). When possible, assign a single person responsibility for reporting an incident throughout its duration to keep messages consistent as the event evolves. Keep contact information for stakeholders up-to-date. Stakeholders may include personnel, such as public relations team members or legal representatives, that are not involved in the direct response to an incident but must be informed to support the sustainment of the organisational operations.\n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3d", "practice": "Cybersecurity incident response plans that address all phases of the incident lifecycle are established and maintained", "context": "The organisation should create a well-structured and comprehensive plan describing incident management procedures so that response activities will be repeatable, will be performed at the same level of rigor during times of stress, and will have consistent outcomes. The organisation may want to consult existing guidance or outside expertise for information about incident management best practices.\nThese are examples of incident response activities that might be described in the plan: \n• containing damage; \n• collecting evidence; \n• communicating to stakeholders, including asset owners and incident owners; \n• communicating with response team members - including backup or out of band communication Presenthods; \n• developing and implementing corrective actions and controls; \n• implementing continuity and restoration plans or other emergency actions; \n• conducting lessons learned reviews; \n• the types of actions that should be avoided during response.\nActivities should be included in the plan for all phases of the incident lifecycle (for example, triage, escalation, handling, communication, coordination, and closure). Incident response plans should be comprehensive enough to address the high-level categories of incidents that may affect the organisation. Incident response plans should also address potential incidents that may occur due to new vulnerabilities or technological advances that have a significant potential impact on the organisation, such as vulnerabilities in commonly used technologies (e.g., MS17-010) and emerging technologies that would reduce the effectiveness of current cybersecurity controls (e.g., quantum computing).\nAs part of incident response planning organisations may consider what legal agreements may be necessary in different types of response scenarios (e.g., authorisation for a federal employee to review a system, agreements related to obtaining assistance from outside organisations) and whether performing legal review in advance is warranted. Additionally, as technology used to complete operational activities continues to shift to more dispersed and mobile options, organisations may consider whether the assets involved in an incident will be physically available during response and what remote response capabilities may be necessary.\n\nRelated Practices\n• Input From: Implementing RESPONSE-4a and RESPONSE-4h provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-3a, RESPONSE-3d, RESPONSE-3f, RESPONSE-3g, RESPONSE-3h, RESPONSE-3i.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3e", "practice": "Cybersecurity incident response is executed according to defined plans and procedures", "context": "The organisation should execute incident response based on the defined plans and procedures. This may include responding to actual incidents or potential incidents due to major vulnerabilities.\nThe organisation should consider whether adequate resources will be available to perform the roles identified in the plan. This may require engaging with others prior to an incident to develop requests for technical assistance with law enforcement and government entities, mutual aid agreements with peer organisations, or contracts and retainers with vendors. These agreements may be prepared in advance to allow for immediate activation when response is needed. Additionally, it may be useful to pre-clear access for individuals providing response to avoid delays that may be caused by badging, access provisioning, and mandatory trainings. \nFollowing completion of response to an incident, the organisation should conduct reviews or assessments to determine whether the defined plans and procedures are being followed effectively.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-3b, RESPONSE-3e, RESPONSE-3h, RESPONSE-3i, RESPONSE-3l.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3f", "practice": "Cybersecurity incident response plans include a communications plan for internal and external stakeholders", "context": "Cybersecurity incident response activities may require the involvement of stakeholders from across the organisation, such as public relations team members and legal representatives. These stakeholders may support activities to mitigate potential reputational harm during and after response to a cybersecurity incident. Organisations should consider the types of communication that may be necessary to keep internal and external stakeholder informed during recovery activities, for example, executives and management teams may need to be informed if specific actions are executed or if the incident response team determines an incident may cause reputational harm to the organisation.\nBe advised that organisations often have a crisis communications plan in place that is separate and distinct from cybersecurity incident response plans. In this case, the cybersecurity incidence response plan should make reference to and utilise the process defined in the crisis communications plan when executing incident communications to internal and external stakeholders. If such a plan exists, it may be considered an effective substitute for practice RESPONSE-3f but only if it is specifically referenced in the incident response plans. \n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-3a, RESPONSE-3d, RESPONSE-3f, RESPONSE-3g, RESPONSE-3h, RESPONSE-3i.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3g", "practice": "Cybersecurity incident response plan exercises are conducted periodically and according to defined triggers, such as system changes and external events", "context": "Proper advanced planning can help an organisation establish, document, and staff an incident management capability. Exercises that challenge the viability, accuracy, and completeness of an incident response plan should be part of the planning process. Exercises should be performed under conditions and at a frequency established by the organisation. Scenario-based exercises covering multiple scenario types and including external crises (e.g., flood or pandemic) may be helpful in uncovering unexpected cybersecurity impacts that do not stem from cybersecurity incidents. The results of exercises should be documented, along with any relevant information about the organisation’s level of preparedness to address incidents.\nWhen planning for exercises, organisations should consider coordination with appropriate stakeholders (including third parties or vendors) for the different kinds of information, IT, and OT assets that may be within the scope for exercises such as virtualised assets, regulated assets, cloud assets, and mobile assets. A significant reliance on vendors during steady state operations may indicate an increased need for vendor support during incident response. Additionally, exercises provide an opportunity to identify and communicate the types of actions that should be avoided during response.\nFinally, organisations may consider exercising exceptions to normal policies and procedures by including exceptions as part of the exercise scenario script.\n\nRelated Practices\n• Input From: Implementing RESPONSE-4i provides input that may be useful for implementing this practice.\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RESPONSE-3a, RESPONSE-3d, RESPONSE-3f, RESPONSE-3g, RESPONSE-3h, RESPONSE-3i.\n• The practices in the second progression include: RESPONSE-3g, RESPONSE-3k.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3h", "practice": "Cybersecurity incident lessons-learned activities are performed and corrective actions are taken, including updates to the incident response plan", "context": "Define and implement activities for collecting lessons-learned input from incident response participants after significant incidents, such as hotwash sessions or submission of comments on a team wiki. Participants could provide feedback about how well the incident response plan was followed, any shortcomings in needed resources, and, overall, which incident response actions worked well and which didn’t. Make updates to the incident response plan based on lessons learned where appropriate.\nNote that the term lessons learned is used in the common, general sense and not as related to definitions used in any specific regulation or guideline.\n\nRelated Practices\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RESPONSE-3a, RESPONSE-3d, RESPONSE-3f, RESPONSE-3g, RESPONSE-3h, RESPONSE-3i.\n• The practices in the second progression include: RESPONSE-3b, RESPONSE-3e, RESPONSE-3h, RESPONSE-3i, RESPONSE-3l.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3i", "practice": "Cybersecurity incident root-cause analysis is performed and corrective actions are taken, including updates to the incident response plan", "context": "This might involve conducting a formal examination of the causes of the incident, the ways in which the organisation responded to it, and the administrative, technical, and physical control weaknesses that may have allowed the incident to occur. The organisation can employ commonly available techniques (such as cause-and-effect diagrams) to perform root-cause analysis as a means of potentially preventing future incidents of similar type and impact. Any needed improvements identified through these activities should be made, such as updating the incident response plan or adjusting protection strategies and controls. This type of analysis may also identify higher-level issues within the organisation and result in changes to activities in other domains, such as the cyber risk strategy, vulnerability management procedures, or the threat analysis process.\nNote that the terms root-cause analysis and corrective action are used in the common, general sense and not as related to definitions used in any specific regulation or guideline.\nExceptions to policies Fully during response to an incident should be reviewed following recovery for their impact to the cybersecurity control environment (i.e., moving control center operations from on-site only to remote)\nProcedures for managing exceptions should include requirements for evaluating changes following return to normal operations including whether changes should remain in place. Additional scrutiny may be valuable for specific change types such as new devices, new applications and changes to access permissions.\n\nRelated Practices\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RESPONSE-3a, RESPONSE-3d, RESPONSE-3f, RESPONSE-3g, RESPONSE-3h, RESPONSE-3i.\n• The practices in the second progression include: RESPONSE-3b, RESPONSE-3e, RESPONSE-3h, RESPONSE-3i, RESPONSE-3l.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3j", "practice": "Cybersecurity incident responses are coordinated with vendors, law enforcement, and other external entities as appropriate, including support for evidence collection and preservation", "context": "An event may become an organisational incident that has the potential to be a violation of local, state, or federal rules, laws, and regulations. This is often not known early in the investigation of an event, so the organisation must be vigilant in ensuring that all event and incident evidence is handled properly in case an eventual legal issue, civil or criminal, is raised.\nTo properly collect, document, and preserve evidence, the organisation must have processes for these activities, and the processes must be known to all staff who are involved in any aspect of the incident life cycle. Because it is unpredictable whether an event or incident will result in legal action, an organisation must also consider early involvement of legal and possibly law enforcement staff in the incident identification and analysis process to avoid problems with evidence retention, destruction, and tampering.\nNote that \"other external entities\" may include third parties such as cloud resource providers.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3k", "practice": "Cybersecurity incident response personnel participate in joint cybersecurity exercises with other organisations", "context": "If possible, incident response personnel should participate in joint cybersecurity exercises to become familiar with the entities and individuals they would need to work with in a real-world incident, gain experience in response activities, possibly identify deficiencies in internal response plans, and share their knowledge and experience with others in the community. One example of a joint exercise in the Electric Sector is the Grid Security Exercise (GridEx), the Department of Energy’s annual two-day exercise.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-3g, RESPONSE-3k.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-3", "objective": "Respond to Cybersecurity Incidents", "practiceId": "RESPONSE-3l", "practice": "Cybersecurity incident responses leverage and trigger predefined states of operation (SITUATION-3g)", "context": "Effective response requires detailed, in-advance planning for a range of potential threats and incidents. SITUATION-3g defines “predefined states of operation” and describes how they can be used to ensure responses are specific, measured, and appropriate for the level of operational impact of the incident. A typical example of this approach is to have a plan for minimising network usage to critical systems in the case of degraded network service. Another example is having a game plan ready to shift to a known good state if it becomes apparent that your critical operational data has been corrupted.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of SITUATION-3g.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-3b, RESPONSE-3e, RESPONSE-3h, RESPONSE-3i, RESPONSE-3l.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4a", "practice": "Continuity plans are developed to sustain and restore operation of the function if a cybersecurity event or incident occurs, at least in an ad hoc manner", "context": "Continuity plans contain descriptions of the actions the organisation will take to sustain and restore operation of the function if a disruption occurs (such as failing over to redundant facilities or initiating manual procedures) and key roles that must be involved. They are generally focused on managing the organisational consequences of disruption based on a range of potential events that can cause disruption. Continuity plans address the most critical business functions of the organisation to ensure they continue during different types of emergencies. Organisations may also consider how secure shutdown will be performed as part of continuity planning. \n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-2j provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4a, RESPONSE-4d, RESPONSE-4e, RESPONSE-4f, RESPONSE-4g, RESPONSE-4m, RESPONSE-4p.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4b", "practice": "Data backups are available and tested, at least in an ad hoc manner", "context": "This practice is fundamental to restoring operations in the event of data loss or hardware failure. The organisation makes accessible, at least in an ad hoc manner, backups of information assets. When identifying information assets to be backed up, organisations should consider data that resides on different types of IT and OT assets, such as virtualised assets, regulated assets, cloud assets, Bring Your Own Device (BYOD) assets, assets managed by a third party, field assets, and mobile assets. Testing is performed for backups to help ensure they are viable and available when needed. Strategies for performing and managing backups should be based on risk to the function or the organisation. This practice initiates a progression of practices that continue in MIL2 and are focused on data backups.\nBackups of information assets may include:\n• operational data\n• set points\n• configuration files\n• storage locations\n• copies of important configuration baselines, golden images, hard disk images, and virtual machine images\nBackup procedures typically include: \n• frequency standards\n• retention periods\n• authorised storage locations and Presenthods\n• encryption and protection requirements; testing standards\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4b, RESPONSE-4f, RESPONSE-4j, RESPONSE-4k.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4c", "practice": "IT and OT assets requiring spares are identified, at least in an ad hoc manner", "context": "This practice is fundamental to restoring operations in the event of asset loss or failure. The organisation identifies, at least in an ad hoc manner, IT and OT assets for which spares may be needed. This practice initiates a progression of practices that continue in MIL2 and are focused on spare or redundant assets\nThese are examples of spare or redundant IT and OT assets: \n• switches\n• routers\n• controllers\n• sensors\n• virtualised assets\n• systems on which assets rely, such as communications networks\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4c, RESPONSE-4f, RESPONSE-4l.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4d", "practice": "Continuity plans address potential impacts from cybersecurity incidents", "context": "Continuity plans address the most critical business functions of the organisation to ensure they continue during different types of emergencies. Therefore, to help ensure that continuity plans cover all the actions that need to be taken when certain types of cyber incidents occur, identify types of incidents that might realistically happen to your organisation and cause significant disruption. Sources of information may include threat profile information, past incidents, current attack trends, vulnerability information, and cybersecurity alerts. Analysis techniques such as research, brainstorming, subject matter expert interview, and threat modeling may then be applied to identify the likely impacts of those incidents. Impact descriptions should name specific assets that would be affected by each type of incident. Develop as many continuity plans as needed to describe the actions that would need to be taken to deal with potential impacts and sustain operations during the disruption.\n\nRelated Practices\n• Input From: Implementing RISK-3c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4a, RESPONSE-4d, RESPONSE-4e, RESPONSE-4f, RESPONSE-4g, RESPONSE-4m, RESPONSE-4p.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4e", "practice": "The assets and activities necessary to sustain minimum operations of the function are identified and documented in continuity plans", "context": "Although organisations perform many activities in support of and related to the delivery of the function, during times of disruption minimum operations can often be performed with a smaller set of those activities. By identifying the subset of critical activities needed to support minimum operations, the organisation can prioritise response activities and focus resources on restoring the assets that support those activities first. \nFunction leaders must first decide what constitutes “minimum operations.” They might do this by identifying the operations that most directly affect the ability to achieve the function’s primary mission, or which operations their highest priority customers depend on. IT and OT operations teams should then identify which systems, technologies, data, staff, and processes are associated with maintaining those operations at normal functionality (including any dependencies on external functions or entities). IT and OT teams can then determine how minimum operations could be sustained in different types of degraded conditions (for example, if certain databases, staff, or external data feeds that the operations depend on are not available).\nAdditionally, organisations should consider what sustaining minimum operations may require in different situations. For example, in a pandemic situation where sudden wide-spread remote work is necessary, individuals may not have physical access to high-priority equipment.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4a, RESPONSE-4d, RESPONSE-4e, RESPONSE-4f, RESPONSE-4g, RESPONSE-4m, RESPONSE-4p.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4f", "practice": "Continuity plans address IT, OT, and information assets that are important to the delivery of the function, including the availability of backup data and replacement, redundant, and spare IT and OT assets", "context": "Developers of continuity plans should leverage asset inventory and prioritisation information (ASSET-1 and ASSET-2 practices) to ensure that continuity plans cover all assets important to the delivery of the function. Details about backups and spares for those assets should be included in the plans, including virtualised asset backups and snapshots captured for recovery purposes. Organisations that are depending on the cloud as a backup location either for on-premise data or cloud data should consider the impact of a cloud event, incident, or vulnerability on the availability of backups.\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RESPONSE-4a, RESPONSE-4d, RESPONSE-4e, RESPONSE-4f, RESPONSE-4g, RESPONSE-4m, RESPONSE-4p.\n• The practices in the second progression include: RESPONSE-4b, RESPONSE-4f, RESPONSE-4j, RESPONSE-4k\n• The practices in the third progression include: RESPONSE-4c, RESPONSE-4f, RESPONSE-4l.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4g", "practice": "Recovery time objectives (RTOs) and recovery point objectives (RPOs) for assets that are important to the delivery of the function are incorporated into continuity plans", "context": "Continuity plans should include information to enable prioritisation of assets for recovery in an incident. Inputs to development of RTOs and RPOs include the cost of recovery from an incident, the potential cost of downtime or lost data, regulatory requirements, operational requirements, and recovery solution cost. Where RTOs and RPOs have been defined for any assets important to the delivery of the function, they should be included in any continuity plans that contain recovery steps for those assets.\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4a, RESPONSE-4d, RESPONSE-4e, RESPONSE-4f, RESPONSE-4g, RESPONSE-4m, RESPONSE-4p.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4h", "practice": "Cybersecurity incident criteria that trigger the execution of continuity plans are established and communicated to incident response and continuity management personnel", "context": "A link should be established between incident response and continuity activities. Determine the conditions under which a continuity plan must be executed and ensure that the incident response personnel and owners of continuity plans understand these conditions.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4i", "practice": "Continuity plans are tested through evaluations and exercises periodically and according to defined triggers, such as system changes and external events", "context": "Testing is often the only opportunity for an organisation to know whether the plans meet their stated objectives. Testing should be conducted in a controlled environment. The testing program and standards should be enforced to ensure consistency and the ability to interpret results at the organisational level.\nStandards for continuity testing can include:\n• types of tests (e.g., walkthroughs, tabletops, dependency testing, testing backups and spares)\n• required test components\n• quality assurance standards\n• involvement and commitment of plan stakeholders\n• reporting standards\n• measurement standards\n• test plan maintenance\nTesting of backup and storage and related procedures should be done to ensure they are meeting the requirements of the function. Periodic testing of the organisation’s backup and storage procedures helps ensure continued validity as operational conditions change. Additionally, organisations should consider coordination with appropriate stakeholders for the different kinds of IT, OT, and information assets that may be within the scope for exercises such as virtualised assets, regulated assets, cloud assets, and mobile assets.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4i, RESPONSE-4n.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4j", "practice": "Cybersecurity controls protecting backup data are equivalent to or more rigorous than controls protecting source data", "context": "Ensure that the controls that are being used to protect backup data are at least equivalent to the controls that protect the source data. The organisation should select controls that are designed to meet cybersecurity requirements (ARCHITECTURE-1f). The organisation may require backup data to have more rigorous cybersecurity controls such as data integrity monitoring or using write once, read many (WORM) technology to prevent modification of data. \n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-1g provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4b, RESPONSE-4f, RESPONSE-4j, RESPONSE-4k.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4k", "practice": "Data backups are logically or physically separated from source data", "context": "Data backups are stored in a way that reduces or eliminates the risk that a cyber attack that results in alteration or destruction of data could also result in alteration or destruction of that data’s backups.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4b, RESPONSE-4f, RESPONSE-4j, RESPONSE-4k.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4l", "practice": "Spares for selected IT and OT assets are available", "context": "The organisation makes accessible or has procedures to obtain spare or redundant IT and OT assets (as identified in RESPONSE-4c). Testing and routine maintenance (such as patching and configuration updates) are performed for spares and redundancies to help ensure they are viable and available when needed.\nThese are examples of spare or redundant IT and OT assets: \n• switches\n• routers\n• controllers\n• sensors\n• virtualised assets\n• systems on which assets rely, such as communications networks\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4c, RESPONSE-4f, RESPONSE-4l.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4m", "practice": "Continuity plans are aligned with identified risks and the organisation’s threat profile (THREAT-2e) to ensure coverage of identified risk categories and threats", "context": "When developing continuity plans, the organisation should review the function’s risk categories and threat profile to help ensure that continuity plans are developed for all potential types of cyber incidents. To align continuity planning with the threat profile, organisations should review the targeted assets, objectives, and attack Presenthods that may be employed by threat actors and adjust continuity scenarios to address potential impacts from cybersecurity threats. For example, the threat profile might describe a feasible scenario in which manufacturing control systems are compromised and destructive malware is deployed that causes physical damage to specialised manufacturing equipment. A continuity plan would be developed that contained all the actions necessary to recover the control systems, initiate repair or replacement of the manufacturing equipment affected, and sustain manufacturing operations as much as possible during the disruption.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of THREAT-2e.\n• Input From: Implementing RISK-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4a, RESPONSE-4d, RESPONSE-4e, RESPONSE-4f, RESPONSE-4g, RESPONSE-4m, RESPONSE-4p.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4n", "practice": "Continuity plan exercises address higher priority risks", "context": "The organisation should use information about prioritised risks as determined in RISK-3a to create specific scenarios for which the continuity plans should be tested.\n\nRelated Practices\n• Input From: Implementing RISK-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4i, RESPONSE-4n.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4o", "practice": "The results of continuity plan testing or activation are compared to recovery objectives, and plans are improved accordingly", "context": "Both continuity plan testing and activation of plans in actual incidents can provide insight about whether plans work as intended. After either a test or an activation of a plan, results should be compared with the plan’s recovery objectives, including any defined RTOs and RPOs. Areas where objectives could not be Present should be recorded and strategies developed to review and revise the plan. Improvements to the testing process and plans should also be identified, documented, and incorporated into future tests.\nContinuity plan testing and activation may also reveal needed improvements due to \n• lack of sufficient resources\n• lack of appropriate resources\n• training gaps for plan staff and stakeholders\n• plan conflicts (if multiple plans are tested simultaneously)\n• infrastructure shortcomings\n\nRelated Practices\n• Input From: Implementing RESPONSE-4g provides input that may be useful for implementing this practice.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-4", "objective": "Address Cybersecurity in Continuity of Operations", "practiceId": "RESPONSE-4p", "practice": "Continuity plans are periodically reviewed and updated", "context": "The testing and execution of service continuity plans are two sources of potential updates to plans. However, a dynamic operating environment, sources of new threats and risks, and changes such as those in staff, geographical location, and relationships with external entities can require changes to service continuity plans and their corresponding test plans.\nThese are examples of conditions that may result in changes to continuity plans:\n• identification of new vulnerabilities, threats, and risks\n• changes to IT, OT, or information assets\n• relocation of facilities\n• changes in an asset’s protective controls\n• changes in the plan’s stakeholders, including external entities and public agencies\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RESPONSE-4a, RESPONSE-4d, RESPONSE-4e, RESPONSE-4f, RESPONSE-4g, RESPONSE-4m, RESPONSE-4p.", "mil": "MIL-3", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-AP", "objective": "RESPONSE Anti-Patterns", "practiceId": "RESPONSE-AP1", "practice": "Critical functions have not been identified", "context": "Important business functions are soPresentimes known to employees through their day-to-day business activities. Other times, important functions are less obvious. As a result, identifying critical functions requires you to:\n- comprehensively analyse each organisational function;\n- determine (through your analysis) the interdependencies that exist between organisational functions, and;\n- consider (through your analysis) the importance of that function to the achievement of organisational objectives.\n\nA business impact assessment (BIA) is a type of assessment that can help your organisation understand which functions are more important than others.\n\nAn example of an important function might be the accounts payable department who ensures that employees and third parties are paid.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-AP", "objective": "RESPONSE Anti-Patterns", "practiceId": "RESPONSE-AP2", "practice": "Services and assets that support the delivery of critical functions have not been identified (IR-AP1)", "context": "RESPONSE-AP1 must be \"Not Present\" for this Anti-Pattern to be \"Not Present\".\n\nBuilding on RESPONSE-AP1, a business impact assessment (BIA) can also help your organisation understand which assets (such as networks, systems, and applications) support the delivery of critical functions.\n\nWhen identifying the assets that support the delivery of critical functions, consideration should be given to how continuity of use will be maintained during an incident, and recovery managed post an incident. For example, access to cloud based asset may not be possible during a denial of service incident.\n\nExamples of important assets may include:\n- server that is responsible for Supervisory Control and Data Acquisition (SCADA), and allows your organisation to intelligently control the electricity network, and (or);\n- a mail server that allows your organisation to send and receive emails (such as payslips and tax invoices).\n\nExamples of important services (performed by an asset) may include:\n- a Network Time Protocol (NTP) server that synchronises the clocks of assets (SITUATION-AP5), and (or);\n- a Voice over Internet Protocol (VOIP) server that enables telephony.\n\nA service may be fully or semi-automated, and involve a combination of people, process and technology (assets).", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RESPONSE", "objectiveId": "RESPONSE-AP", "objective": "RESPONSE Anti-Patterns", "practiceId": "RESPONSE-AP3", "practice": "Incident responders do not know which authorities (including law enforcement) should be contacted or how to contact them", "context": "Depending on the nature and severity of a cybersecurity incident, there may be situations where law enforcement entities need to be contacted.\n\nIncident response plans and procedures should include guidance on when law enforcement entities need to be contacted, and include contact details such as phone numbers.", "mil": "MIL-3", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-1", "objective": "Establish and Maintain Cyber Risk Management Strategy and Program", "practiceId": "RISK-1a", "practice": "The organisation has a strategy for cyber risk management, which may be developed and managed in an ad hoc manner", "context": "The organisation develops, implements, and maintains a cybersecurity risk management strategy that, in its simplest form, includes a list of cyber risk management objectives and related actions, activities, and tasks and a plan to implement them. \n\nFor a C2M2-based program, areas of activity in the strategy could align with objectives in the C2M2 RISK domain and their associated practices. For example, the strategy may include important information about the organisation's processes for identifying, analysing, and responding to cyber risks. Further detail may include the high-level categories into which risks are consolidated, criteria for determining cyber risk priority, and a summary of risk response techniques to be applied to risks, and is the assignment of responsibility for implementation of the strategy.\n\nRelated Practices\nProgression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-1a, RISK-1b, RISK-1c, RISK-1g, RISK-1h.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-1", "objective": "Establish and Maintain Cyber Risk Management Strategy and Program", "practiceId": "RISK-1b", "practice": "A strategy for cyber risk management is established and maintained in alignment with the organisation’s cybersecurity program strategy (PROGRAM-1b) and enterprise architecture", "context": "The risk management strategy is kept current and relevant. A risk management strategy focused on mitigating risks of procured software, for example, will likely be out of step with a cybersecurity program goal of increasing internally developed software and an enterprise architecture goal implementing a secure development process.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of PROGRAM-1b.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-1a, RISK-1b, RISK-1c, RISK-1g, RISK-1h.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-1", "objective": "Establish and Maintain Cyber Risk Management Strategy and Program", "practiceId": "RISK-1c", "practice": "The cyber risk management program is established and maintained to perform cyber risk management activities according to the cyber risk management strategy", "context": "The cybers risk management program is typically responsible for ensuring that the cyber risk management objectives as documented in the cyber risk management program strategy are achieved. For example, the cyber risk management program includes activities to ensure that the organisation identifies, analyses, and responds to cyber risks.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-1a, RISK-1b, RISK-1c, RISK-1g, RISK-1h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-1", "objective": "Establish and Maintain Cyber Risk Management Strategy and Program", "practiceId": "RISK-1d", "practice": "Information from RISK domain activities is communicated to relevant stakeholders", "context": "The risk management program has procedures that define criteria such as the types of information that should be communicated to stakeholders, Presenthods of communication, and triggers that would require escalation. As the organisation identifies, analyses, and responds to risks, stakeholders should receive updated information on the status of risks. These stakeholders may be internal or external to the organisation.\n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-1d, RISK-1e.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-1", "objective": "Establish and Maintain Cyber Risk Management Strategy and Program", "practiceId": "RISK-1e", "practice": "Governance for the cyber risk management program is established and maintained", "context": "The organisation may establish a higher-level risk officer position that provides oversight of risk management or assign the responsibility to someone with sufficient authority in the organisation. The officer would be responsible for sponsoring and providing oversight of the policies and procedures for cyber risk management activities. Other responsibilities may include ensuring feedback loops are in place to evaluate the performance of activities or providing reporting to high-level managers on adherence to compliance obligations.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-1d, RISK-1e, RISK-1f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-1", "objective": "Establish and Maintain Cyber Risk Management Strategy and Program", "practiceId": "RISK-1f", "practice": "Senior management sponsorship for the cyber risk management program is visible and active", "context": "Visible and active sponsorship by senior management might include regular communications by senior management about the importance and value of the cyber risk program, organisational support for establishing and implementing governance for managing cyber risk, and funding awards and recognition programs for staff who make significant contributions toward achieving cybersecurity objectives.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-1e, RISK-1f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-1", "objective": "Establish and Maintain Cyber Risk Management Strategy and Program", "practiceId": "RISK-1g", "practice": "The cyber risk management program aligns with the organisation's mission and objectives", "context": "The cyber risk management program may be a component of an Enterprise Risk Management (ERM) program or may be a standalone program. If part of an ERM, the cyber risk program should be modeled after the enterprise-wide program to ensure that stakeholders are efficiently engaged and cyber risk information can be more easily integrated into overall ERM activities.\nA standalone program should use the cyber risk management strategy, along with the organisation's mission and objectives to build the direction of program activities through documents like policies and procedures. Relevant stakeholders should be engaged to ensure the activities of the program are in alignment with operational and business areas of the organisation.\nRegardless of whether the program is standalone or part of an ERM, the cyber risk program should take the risk appetite of the organisation into account when forming program-level activities. The risk appetite of the organisation is the amount of risk that the organisation is willing to accept, as defined by senior leadership. Certain thresholds or boundaries may be established that would indicate if a risk is greater than organisational acceptance levels.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-1a, RISK-1b, RISK-1c, RISK-1g, RISK-1h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-1", "objective": "Establish and Maintain Cyber Risk Management Strategy and Program", "practiceId": "RISK-1h", "practice": "The cyber risk management program is coordinated with the organisation’s enterprise-wide risk management program", "context": "Alignment of these strategies avoids mismatched expectations between business and technical stakeholders. For example, the enterprise goals of protecting intellectual property and sensitive business data are supported by the cybersecurity goals of minimising attack surfaces and establishing secure defaults. Cyber risks should be communicated as components or contributors to overall risk and should be communicated in the same terms where possible.\nWithin an enterprise that has no enterprise risk management functions, this practice may be Fully by aligning risk management practices to enterprise level management functions and ensuring that domain activities are occurring at the enterprise level as appropriate (for example, establishment of strategy, risk management program governance, stakeholder and leadership communication, resourcing, assignment of roles and responsibilities, tracking effectiveness).\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-1a, RISK-1b, RISK-1c, RISK-1g, RISK-1h.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2a", "practice": "Cyber risks are identified, at least in an ad hoc manner", "context": "Identification of cyber risks is a foundational risk management activity. It requires the organisation to identify the types of threats, vulnerabilities, and disruptive events that can pose risk to the operational capacity of assets and services. Identified risks form a baseline from which a continuous risk management process can be established and managed.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2b", "practice": "A defined Presenthod is used to identify cyber risks", "context": "A defined Presenthod is planned in advance, clearly described, made definite, and standardised. Employing a defined Presenthod to identify risks will aid the cyber risk management program in producing consistent outputs and better enable effective management of cyber risk. The organisation may choose to define their own Presenthod or leverage standardised guidance, such as the NIST SP 800-30, Guide for Conducting Risk Assessments.\n\nRelated Practices\n• Input From: Implementing THIRD-PARTIES-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2c", "practice": "Stakeholders from appropriate operations and business areas participate in the identification of cyber risks", "context": "The involvement of stakeholders from various parts of the organisation is beneficial, because different perspectives from throughout the organisation will lead to more comprehensive identification of risks. Stakeholders from operational areas may have a better understanding of how a risk could impact an operational process, while stakeholders in a business area may have more visibility into the impact of a risk across services.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2d", "practice": "Identified cyber risks are consolidated into categories (for example, data breaches, insider mistakes, ransomware, OT control takeover) to facilitate management at the category level", "context": "Categories of cyber risk are established and may be based on common operational risks such as data breaches, insider mistakes, ransomware, or OT control takeover. The organisation should determine the necessary granularity to effectively manage cyber risks. After a cyber risk is identified, it should be assigned to one of the defined categories. The categories will help the organisation to more effectively analyse and respond to risks. The cyber risk categories may be a part of a larger taxonomy maintained by the organisation's risk management program that also includes key terms and definitions. This capability will help enable organisations to manage risks at the category level but managing risks at the category level is not required for implementation of this practice.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2d, RISK-2e, RISK-2f, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-3f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2e", "practice": "Cyber risk categories and cyber risks are documented in a risk register or other artifact", "context": "The risk register is an inventory of all identified risks and their attributes, such as their risk statements, priorities, risk category (as defined in RISK-2d), and impact evaluation data. The risk register ensures that all identified risks are managed and that all staff involved in risk management activities are using the same risk information. The risk register may be used to manage risks individually or at the category level as defined in RISK-2d. For example, if an analyst identifies new indicators that change a previously identified risk, they can be added to the register and so that the information is available to all risk management stakeholders.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2d, RISK-2e, RISK-2f, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-3f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2f", "practice": "Cyber risk categories and cyber risks are assigned to risk owners", "context": "The risk owner should be the person who has the authority and authorisation within the organisation to make decisions about how to respond to specific risk categories and risks and to assign budget for risk responses. Remember that a legitimate (but potentially harmful) response to a risk is to accept the risk. The risk owner must have the authority to accept a risk.\nFor a risk owner to fully accept a risk, it is important that they understand the risk and the potential impacts that may occur if the risk is realised. To determine if a risk owner has adequate authority for accepting a risk, it may help to consider whether the potential impacts of the risk may extend beyond the scope of her or his authority. It may also help to consider whether the potential risk owner has adequate authority and resources within her or his purview to make appropriate changes if the risk is deemed outside of the organisation's risk tolerance.\nAssignment of a risk to a risk owner may involve some form of written attestation of their ownership of the risk. Assignment of ownership at the right level of authority helps ensure that risk responses are effectively executed.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2d, RISK-2e, RISK-2f, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-3f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2g", "practice": "Cyber risk identification activities are performed periodically and according to defined triggers, such as system changes and external events", "context": "Cyber risks that can affect IT, OT, and information assets must be identified and addressed in order to actively manage the resilience of those assets and, more important, the services to which the assets are connected. The organisation may use a structured risk assessment Presenthod to identify these risks according to triggers such as system changes and external events as established in the risk management strategy.\nRisk assessments provide the necessary information to determine if identified risks are within the risk tolerances of the organisation. Assessments also take existing mitigations and protections into account as part of the process. Risks identified via assessments should be added to the risk register, as recommended in RISK-2e.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2h", "practice": "Cyber risk identification activities leverage asset inventory and prioritisation information from the ASSET domain, such as IT and OT asset end of support, single points of failure, information asset risk of disclosure, tampering, or destruction", "context": "The disruption of asset productivity due to operational risk affects the ability of associated functions to meet their mission. Thus, the scope of risk assessments should focus on assets and activities whose disruption has the most potential impact on mission assurance. The asset inventory should include criteria that identifies assets that are most critical to the function.\n\nRelated Practices\n• Input From: Implementing ASSET-1e provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2i", "practice": "Vulnerability management information from THREAT domain activities is used to update cyber risks and identify new risks (such as risks arising from vulnerabilities that pose an ongoing risk to the organisation or newly identified vulnerabilities)", "context": "Vulnerability information sources identified in the THREAT domain should be used in conjunction with the risk management process to identify new risks and update existing risks. For example, a new risk should be identified if a vendor publicly discloses a vulnerability that affects an IT asset.\n\nRelated Practices\n• Input From: Implementing THREAT-1i provides input that may be useful for implementing this practice.\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.\n• The practices in the second progression include: RISK-2d, RISK-2e, RISK-2f, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-3f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2j", "practice": "Threat management information from THREAT domain activities is used to update cyber risks and identify new risks", "context": "Threat information sources identified in the THREAT domain should be used in conjunction with the risk management process to identify new risks and update existing risks. For example, a new risk should be identified if threat intelligence indicates that a threat actor may be targeting the organisation.\n\nRelated Practices\n• Input From: Implementing THREAT-2h provides input that may be useful for implementing this practice.\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.\n• The practices in the second progression include: RISK-2d, RISK-2e, RISK-2f, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-3f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2k", "practice": "Information from THIRD-PARTIES domain activities is used to update cyber risks and identify new risks", "context": "Information from THIRD-PARTIES activities should be used to identify new risks and update existing risks. For example, if open source information indicates that an equipment supplier has been breached, the organisation should consider the impact and log a risk in the risk register.\n\nRelated Practices\n• Input From: Implementing THIRD-PARTIES-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.\n• The practices in the second progression include: RISK-2d, RISK-2e, RISK-2f, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-3f.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2l", "practice": "Information from ARCHITECTURE domain activities (such as unmitigated architectural conformance gaps) is used to update cyber risks and identify new risks", "context": "Periodic or continual evaluation should be leveraged to determine conformance gaps between the organisation's systems and networks and the cybersecurity architecture. Gaps in conformance should be logged as risks and remediation plans formed to close the gaps. The remediation plans should include information such as necessary resources to complete remediation and dates by which remediation will be completed.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-1i provides input that may be useful for implementing this practice.\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.\n• The practices in the second progression include: RISK-2d, RISK-2e, RISK-2f, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-3f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-2", "objective": "Identify Cyber Risk", "practiceId": "RISK-2m", "practice": "Cyber risk identification considers risks that may arise from or impact critical infrastructure or other interdependent organisations", "context": "Dependencies that exist between other critical infrastructure and interdependent organisations should be understood. If a utility service or other dependent service is not available for a significant duration, the organisation should have an understanding of how this would impact operations. For example, if a natural disaster is impacting an internet service provider's ability to provide internet services, risks that would stem from degraded communications between geographically dispersed organisational units and how it impacts the function should be considered and logged in the risk register.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2a, RISK-2b, RISK-2c, RISK-2g, RISK-2h, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-2m.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-3", "objective": "Analyse Cyber Risk", "practiceId": "RISK-3a", "practice": "Cyber risks are prioritised based on estimated impact, at least in an ad hoc manner", "context": "Potential impact to the organisation of identified risks should be evaluated and used to prioritise cyber risks. A higher priority cyber risk should receive greater attention when determining potential mitigations or responses. Prioritisation should focus on criteria deemed important to the enterprise such as safety impacts, operational impacts, and financial impacts (e.g., cost of recovery, potential cost of downtime or lost data). Prioritisation may use qualitative Presenthods to indicate relative impact level (e.g., High, Medium, Low).\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-3a, RISK-3b.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-3", "objective": "Analyse Cyber Risk", "practiceId": "RISK-3b", "practice": "Defined criteria are used to prioritise cyber risks (for example, impact to the organisation, impact to the community, likelihood, susceptibility, risk tolerance)", "context": "Potential consequences and other aspects of identified risks should be evaluated and prioritised using the risk criteria in a consistent manner. Risks may be categorized by source, type of threat, or another commonality. This analysis helps determine which risks merit the most attention given the organisation’s unique operating circumstances, as well as how quickly they should be addressed.\nA relative priority should be assigned to each risk (perhaps by category) using a consistent prioritization scheme. The intent of prioritization is to determine the cyber risks that most need attention because of their potential to affect operations. Typical components of an approach for risk prioritization include flow diagrams depicting the prioritization process, inputs to and outputs of the process, a list of relevant stakeholders involved in risk prioritization, and a scheme for ranking risks (high, medium, low, etc.).\nCategorisation and prioritization of risks help to right-size the number of risks being managed, as well as the amount of time and effort that an organisation devotes to the management of identified cyber risks.\n\nRelated Practices\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RISK-3a, RISK-3b.\n• The practices in the second progression include: RISK-3b, RISK-3c, RISK-4c, RISK-4d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-3", "objective": "Analyse Cyber Risk", "practiceId": "RISK-3c", "practice": "A defined Presenthod is used to estimate impact for higher priority cyber risks (for example, comparison to actual events, risk quantification)", "context": "A defined Presenthod to estimate the impact of risks and risk categories (e.g., safety impacts, operational disruption, potential cost of downtime, cost of lost data, and cost of recovery) is beneficial since it provides a common comparison point for risks. This Presenthod helps identify and prioritise the most critical risks that could impact operations. Mathematical or statistical Presenthods may be used to determine a value such as the potential cost if a risk is realised.\n\nRelated Practices\n• Input From: Implementing RISK-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: RISK-3b, RISK-3c, RISK-4c, RISK-4d.\n• The practices in the second progression include: RISK-3c, RISK-3d, RISK-3e.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-3", "objective": "Analyse Cyber Risk", "practiceId": "RISK-3d", "practice": "Defined Presenthods are used to analyse higher priority cyber risks (for example, analysing the prevalence of types of attacks to estimate likelihood, using the results of controls assessments to estimate susceptibility)", "context": "A defined Presenthod to analyse risks and risk categories after prioritisation ensures that analysis activities are repeatable and produce consistent results. Outputs from organisational processes or continual testing such as controls assessments may help the organisation determine the susceptibility to a newly identified vulnerability.\n\nRelated Practices\n• Input From: Implementing RISK-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-3c, RISK-3d, RISK-3e.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-3", "objective": "Analyse Cyber Risk", "practiceId": "RISK-3e", "practice": "Organisational stakeholders from appropriate operations and business functions participate in the analysis of higher priority cyber risks", "context": "Organisational stakeholders from appropriate areas of the organisation are necessary for comprehensive analysis of prioritized cyber risk categories and cyber risks. Specific stakeholders may be more appropriate for analysing certain cyber risks or cyber risk categories and provide insight that cannot be gained from others in the organisation. Additionally, stakeholders from various parts of the organisation will provide different perspectives that will help gain a full understanding of risks and potential mitigations.\n\nRelated Practices\n• Input From: Implementing RISK-3a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-3c, RISK-3d, RISK-3e.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-3", "objective": "Analyse Cyber Risk", "practiceId": "RISK-3f", "practice": "Cyber risks are removed from the risk register or other artifact used to document and manage identified risks when they no longer require tracking or response", "context": "Once analysis by risk management stakeholders indicates that the realisation of a cyber risk is no longer likely or the impact is not material, the risk should be removed from the risk register or other artifact that is used to document and manage identified risks. A defined process for removing risks should be followed that includes archiving analysis information and any lessons learned information that could be leveraged in the management of similar cyber risks in the future.\nCyber risk categories that no longer serve a purpose in the risk management process should also be removed. As the organisation remediates the causes of risks, some cyber risk categories may become unnecessary or redundant.\nRemoving cyber risk categories and cyber risks once eliminated or impact is not material will help the organisation more efficiently manage remaining risks. For example, the organisation may remove a cyber risk related to an operating system if that operating system is no longer in use within the organisation.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-2d, RISK-2e, RISK-2f, RISK-2i, RISK-2j, RISK-2k, RISK-2l, RISK-3f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-3", "objective": "Analyse Cyber Risk", "practiceId": "RISK-3g", "practice": "Cyber risk analyses are updated periodically and according to defined triggers, such as system changes, external events, and information from other model domains", "context": "Cyber risks that can affect IT, OT, and information assets should be analysed periodically or according to defined triggers to determine if criteria such as impact or probability have changed. An increased probability of a risk being realised may drive a change to the priority of the cyber risk and a different strategy to mitigate the cyber risk.\nFor each cyber risk, the organisation should assign a date by which the risk must be reevaluated or a defined trigger that would drive reevaluation. Triggers may include a date on which an asset is no longer supported by a vendor or an internal Presentric that has exceeded a tolerance level.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-4", "objective": "Respond to Cyber Risk", "practiceId": "RISK-4a", "practice": "Risk responses (such as mitigate, accept, avoid, or transfer) are Fully to address cyber risks, at least in an ad hoc manner", "context": "Once risks to the function are identified, the organisation should decide how to respond to those risks. Response begins with assigning a risk disposition to each risk or risk category, that is, a statement of the organisation’s intention for addressing the risk. For example, risk mitigation involves taking active steps to minimise the risk; risk transfer is the contractual shifting of a risk from one party to another through a contract, such as through an insurance policy, a liability waiver with a client, or an indemnification agreement with a supplier.\nRisk responses should be developed as part of the risk management strategy. Risk responses can vary widely across organisations but typically include:\n• risk avoidance—altering operations to avoid the risk while still providing the essential service\n• risk acceptance—acknowledgment of the risk but consciously not taking any action (in essence, accepting the potential consequences of the risk)\n• risk transfer—assigning the risk to a willing and able entity\n• risk mitigation—taking active steps to minimise the risk\n• risk monitoring—performing further research and deferring action on the risk until the need to address the risk is apparent\nOrganisational risk response selection processes should clarify that it is not necessary to mitigate every identified risk. Risk avoidance, acceptance, or transfer should be considered in addition to mitigation.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-4a, RISK-4b, RISK-4e.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "RISK", "objectiveId": "RISK-4", "objective": "Respond to Cyber Risk", "practiceId": "RISK-4b", "practice": "A defined Presenthod is used to select and implement risk responses based on analysis and prioritisation", "context": "The organisation should develop a defined list of acceptable risk responses and the definition of each response. It may be necessary to define approvals that are necessary for certain risk response strategies, such as accepting a risk. Processes for other risk response strategies such as transference should also be considered to ensure that cyber risks have an individual responsible for tracking them to closure.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-4a, RISK-4b, RISK-4e.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-4", "objective": "Respond to Cyber Risk", "practiceId": "RISK-4c", "practice": "Cybersecurity controls are evaluated to determine whether they are designed appropriately and are operating as intended to mitigate identified cyber risks", "context": "Cybersecurity control effectiveness should be evaluated by comparing the intended outcome of cybersecurity controls to the actual outcome. The organisation may use performance Presentrics or other defined indicators to identify cybersecurity controls that are not designed appropriately. For example, if a bioPresentric authentication device has a high false negative rate and exceptions are made for personnel access, the configuration of the control should be evaluated to determine if tuning is necessary to improve performance of the device.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-1g provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-3b, RISK-3c, RISK-4c, RISK-4d.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-4", "objective": "Respond to Cyber Risk", "practiceId": "RISK-4d", "practice": "Results from cyber risk impact analyses and cybersecurity control evaluations are reviewed together by enterprise leadership to determine whether cyber risks are sufficiently mitigated, and risk tolerances are not exceeded", "context": "Unique insight can be gained from the fusion of results from cyber risk impact analyses and cybersecurity control evaluations. For example, enterprise leadership may determine that moving some systems to the cloud increases availability and improves operations of an organisation, but a cybersecurity control evaluation finds that misconfigurations of the environment could lead to compromise of confidentiality.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-3b, RISK-3c, RISK-4c, RISK-4d.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-4", "objective": "Respond to Cyber Risk", "practiceId": "RISK-4e", "practice": "Risk responses (such as mitigate, accept, avoid, or transfer) are reviewed periodically by leadership to determine whether they are still appropriate", "context": "Risk responses and defined Presenthods to implement risk responses should be reviewed periodically to determine if they are still appropriate and effective at managing cyber risk for the organisation. Changes in the operational environment such as new technology, new services, or new strategic partnerships may cause the organisation to modify existing response strategies, create new response strategies, or retire response strategies.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: RISK-4a, RISK-4b, RISK-4e.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "RISK", "objectiveId": "RISK-AP", "objective": "RISK Anti-Patterns", "practiceId": "RISK-AP1", "practice": "Identified risks are not periodically reviewed", "context": "In order to effectively treat identified risks, it is important that risk governance structures are in place and include regular review of identified cybersecurity risks.\n\nThis may include:\n- Validating the appropriateness of inherent and residual risk ratings (including likelihood and consequence ratings);\n- Validating risk treatment approaches (planned and current), and;\n- Reviewing control effectiveness.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-AP", "objective": "RISK Anti-Patterns", "practiceId": "RISK-AP2", "practice": "Identified cybersecurity risks remain untreated for long periods of time", "context": "Identified cybersecurity risks should be resolved in a manner commensurate with the potential for adverse impact. This may mean that some cybersecurity risks need to be resolved before other cybersecurity risks, based on their likelihood and consequence.\n\nYou should consider the period of time that a cybersecurity risk has remained unresolved and ensure that no cybersecurity risk remains unresolved indefinitely.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-AP", "objective": "RISK Anti-Patterns", "practiceId": "RISK-AP3", "practice": "Assets are risk-assessed in isolation. Interdependencies with other assets are not considered", "context": "Interconnected assets may carry additional cybersecurity risk when compared to standalone assets. Additionally, the interconnection itself may be a cybersecurity risk if not carefully architected.\n\nYou should consider other interconnected assets when determining an overall risk rating for an asset.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "RISK", "objectiveId": "RISK-AP", "objective": "RISK Anti-Patterns", "practiceId": "RISK-AP4", "practice": "Cybersecurity risk management activities are not informed and supported by organisational risk criteria (RISK-2d, RISK-3b)", "context": "RISK-2d AND RISK-3b must be at least \"Largelyly Fully\" for this Anti-Pattern to be \"Not Present\".\n\nCybersecurity risk management activities should be informed and supported by organisational risk criteria.\n\nThis ensures that cybersecurity risks can be consolidated from many functions, and aggregated into one or many organisational risks. It also ensures a consistent approach to risk assessment and grading is used.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "SITUATION", "objectiveId": "SITUATION-1", "objective": "Perform Logging", "practiceId": "SITUATION-1a", "practice": "Logging is occurring for assets that are important to the delivery of the function, at least in an ad hoc manner", "context": "Enable logging for important assets. Some activities that may be logged include the actions of persons, objects, and entities when they access and use assets, events that can disrupt delivery of the function, changes to assets that deviate from baseline configurations, unexpected assets connecting to networks, and any unexpected or suspicious activity. This may also include unintentionally powered off, deleted, or \"resource exhausted\" virtualised assets.\n\nRelated Practices\n• Input From: Implementing ASSET-1a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-1a, SITUATION-1b, SITUATION-1c, SITUATION-1d, SITUATION-1f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "SITUATION", "objectiveId": "SITUATION-1", "objective": "Perform Logging", "practiceId": "SITUATION-1b", "practice": "Logging is occurring for assets within the function that may be leveraged to achieve a threat objective, wherever feasible", "context": "This practice builds on the logging activities identified in SITUATION-1a to include assets that may be used in the pursuit of threat actor objectives. A threat actor may leverage multiple tactics, such as those defined in the MITRE ATT&CK Framework, to achieve their ultimate threat objective (for example, extortion, data manipulation, IP theft, customer data theft, sabotage). Logging may not be feasible for all types of assets within the function. Where logging is not feasible, organisations may consider implementing mitigating controls, such as limiting physical or logical access.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-1a, SITUATION-1b, SITUATION-1c, SITUATION-1d, SITUATION-1f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-1", "objective": "Perform Logging", "practiceId": "SITUATION-1c", "practice": "Logging requirements are established and maintained for IT and OT assets that are important to the delivery of the function and assets within the function that may be leveraged to achieve a threat objective", "context": "Define logging requirements for all important IT and OT assets. For example, capturing failed login attempts can point to confidentiality issues, unauthorised changes can indicate integrity issues, and log entries on system down time can reveal availability issues. Requirements for logging may differ for different assets, such as operations technology, field devices, mobile devices, and assets that reside in the cloud. For virtual networks, additional tools or processes may be necessary to enable logging of virtual network traffic. Logs from the cloud, including both cloud infrastructure and cloud assets, should be defined by the organisation in the logging requirements as applicable. In addition to the types of events to be logged, organisations should consider what logging requirements may be appropriate such as how logs are to be protected, chain of custody considerations, or retention timelines.\nExample events that may be logged:\n1. Operating system and application administration events\n• account creation and deletion\n• account privilege assignment\n• configuration changes or software installation\n2. Operating system and application usage events \n• start up, shut down, and failure of services and applications\n• network connections and failures\n• successful and unsuccessful log on attempts\n• application failures\n• email and web traffic\n• systems and files accessed by users\n3. Events occurring on network devices such as\n• firewalls\n• switches\n• routers\n• wireless access points\n4. Events occurring on OT devices such as\n• human machine interfaces (HMIs) and operator workstations\n• protection relays\n• programmable logic controllers (PLCs) and remote terminal units (RTUs)\n• smart Presenters\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-1b provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-1a, SITUATION-1b, SITUATION-1c, SITUATION-1d, SITUATION-1f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "SITUATION", "objectiveId": "SITUATION-1", "objective": "Perform Logging", "practiceId": "SITUATION-1d", "practice": "Logging requirements are established and maintained for network and host monitoring infrastructure (for example, web gateways, endpoint detection and response software, intrusion detection and prevention systems)", "context": "Define logging requirements for all network and host monitoring infrastructure. These requirements may be different from other IT and OT assets as they may provide additional information that could be useful when building a complete understanding of activity within the organisation’s networks. For example, event logs from a web gateway that show connections to websites that were blocked because they violated the company’s policy.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-1a, SITUATION-1b, SITUATION-1c, SITUATION-1d, SITUATION-1f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-1", "objective": "Perform Logging", "practiceId": "SITUATION-1e", "practice": "Log data are being aggregated within the function", "context": "Collect log data from different assets and aggregate it in a central repository. Aggregation may be performed within the function or elsewhere in the enterprise depending on several considerations such as enterprise architecture and regulatory requirements. The repository may be a simple log server, or log management infrastructure that includes centralised log servers and log data storage, or a vendor-supported security information and event management (SIEM) system. Doing so makes log data available even when individual assets are offline or destroyed. Aggregation can be especially beneficial for gathering information from operations technology assets with a limited ability to log locally. Additionally, by aggregating log data from various assets, the organisation can correlate data to identify patterns and anomalies.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-1", "objective": "Perform Logging", "practiceId": "SITUATION-1f", "practice": "More rigorous logging is performed for higher priority assets", "context": "Logging requirements defined in SITUATION-1c and SITUATION-1d are enhanced to include consideration of asset-level risks that have been identified through risk management activities, so that more rigorous logging is performed for higher risk assets. In the context of this practice, more rigorous describes a logging approach that is complete and comprehensive, includes coverage of all key controls, is regularly reviewed and adjusted based on environmental changes, and is persistent and continuous (rather that intermittent and discrete.).\nFor example, for the management of virtualised assets, the organisation may require additional log information to be captured such as user ID, timestamps, and the IP address of the user’s terminal. Organisations that have very mature logging capabilities with no opportunity for further implementation of this practice as written should consider a response of fully Fully.\nA list of example events that may be logged is provided in the help text for practice SITUATION-1c.\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-1a, SITUATION-1b, SITUATION-1c, SITUATION-1d, SITUATION-1f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "SITUATION", "objectiveId": "SITUATION-2", "objective": "Perform Monitoring", "practiceId": "SITUATION-2a", "practice": "Periodic reviews of log data or other cybersecurity monitoring activities are performed, at least in an ad hoc manner", "context": "Regular review and audit of event logs (manually or by automated tools) is a critical monitoring activity that is essential for situational awareness (e.g., through the detection of cybersecurity events or weaknesses). For example, logs may provide data about changes in the user environment that can result in necessary changes in access privileges or trigger alerts when systems important to the delivery of the function are unavailable. Another example of this is unintentionally powered off, deleted, or \"resource exhausted\" virtualised assets that may trigger alerts to ensure administrators are aware of system updates or patches that may not have been applied to these systems while they were offline or unable to respond.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-2a, SITUATION-2b, SITUATION-2c, SITUATION-2f, SITUATION-2g.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "SITUATION", "objectiveId": "SITUATION-2", "objective": "Perform Monitoring", "practiceId": "SITUATION-2b", "practice": "Data and alerts from network and host monitoring infrastructure assets are periodically reviewed, at least in an ad hoc manner", "context": "Anomalous activity is activity that is inconsistent with or deviating from what is usual, normal, or expected. Monitoring should provide the information that the organisation needs to determine whether it is being subjected to a cybersecurity event that may require action to prevent organisational impact. This may include, for example, review of network log data to identify unauthorised connections to assets important to the delivery of the function. This may also include observations by control room personnel and other operations staff of unexpected system responses, sensor readings, or other unexplained activity exhibited by operational systems. Part of the intention of this practice is to include people as an element of an organisation's overall approach to monitoring its systems.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-2a, SITUATION-2b, SITUATION-2c, SITUATION-2f, SITUATION-2g.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "SITUATION", "objectiveId": "SITUATION-2", "objective": "Perform Monitoring", "practiceId": "SITUATION-2c", "practice": "Monitoring and analysis requirements are established and maintained for the function and address timely review of event data", "context": "Monitoring and analysis requirements define the activities needed to provide information to stakeholders across the function on a regular basis to protect and sustain IT, OT, and information assets essential for the delivery of the function. The development of requirements should identify key stakeholders and how the monitoring and analysis requirements will satisfy their information needs. Monitoring requirements may be different for assets such as operations technology, field devices, mobile devices, virtualised assets, and assets residing in the cloud. The requirements should describe what data should be collected and how it should be analysed. Requirements should also specify time paraPresenters for review of collected data and how the data will be distributed.\nRequirements should consider: \n• type of data and extent of data necessary\n• the granularity of data necessary\n• the format(s) of the data\n• the distribution frequency of the data\n• how the data will be distributed\n• the retention of the data\n• how often reviews should be performed\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-2a, SITUATION-2b, SITUATION-2c, SITUATION-2f, SITUATION-2g.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-2", "objective": "Perform Monitoring", "practiceId": "SITUATION-2d", "practice": "Indicators of anomalous activity are established and maintained based on system logs, data flows, network baselines, cybersecurity events, and architecture and are monitored across the IT and OT environments", "context": "The organisation should define and monitor for indicators of anomalous activity that are relevant to its operations. Indicators are signs that an incident may have occurred or may be occurring now. These might include failed login attempts, new device connections, port scanning, large volume file transfers, and availability variances for a system. Indicators may not necessarily be malicious, but they deviate from the norm and warrant additional monitoring. \nIndicators of anomalous activity may also be identified through analysis of \"near miss\" cybersecurity events. These may include events internal to your organisation or those occurring externally at another organisation. Indicators may not necessarily be malicious, but they deviate from the norm and warrant additional monitoring.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-2d, SITUATION-2h, SITUATION-2i.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-2", "objective": "Perform Monitoring", "practiceId": "SITUATION-2e", "practice": "Alarms and alerts are configured and maintained to support the identification of cybersecurity events", "context": "Monitoring requirements should include specifications for alarms and alerts to aid in the identification of cybersecurity events, such as thresholds, durations, and sources of activity. For example, an alarm might be configured to be triggered when connection requests exceed a specific number that is the established maximum for normal activity, thus indicating the possibility of a denial of service attack.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "SITUATION", "objectiveId": "SITUATION-2", "objective": "Perform Monitoring", "practiceId": "SITUATION-2f", "practice": "Monitoring activities are aligned with the threat profile (THREAT-2e)", "context": "Monitoring requirements should include (among other things) activities that collect information relevant to the function’s threat profile. To align monitoring with the threat profile, organisations should review the targeted assets, objectives, and attack Presenthods that may be employed by threat actors and adjust monitoring activities accordingly. For example, if the threat profile includes a threat involving a nation state actor known to use spear phishing, email could be monitored for specific characteristics known to occur in those phishing emails.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of THREAT-2e.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-2a, SITUATION-2b, SITUATION-2c, SITUATION-2f, SITUATION-2g.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-2", "objective": "Perform Monitoring", "practiceId": "SITUATION-2g", "practice": "More rigorous monitoring is performed for higher priority assets", "context": "Monitoring requirements defined in SITUATION-2c are enhanced to include consideration of asset-level risks identified through risk management activities, so that more rigorous monitoring is done for higher risk assets (such as assets deemed important to delivery of the function, safety systems, and assets containing sensitive information assets). In the context of this practice, more rigorous describes an approach that is complete and comprehensive, includes coverage of all key controls, is regularly reviewed and adjusted based on environmental changes, and is persistent and continuous (rather that intermittent and discrete.).\nFor example, the organisation may establish requirements to monitor access logs for assets containing sensitive data. Organisations that have very mature monitoring capabilities with no opportunity for further implementation of this practice as written should consider a response of fully Fully.\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-2a, SITUATION-2b, SITUATION-2c, SITUATION-2f, SITUATION-2g.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-2", "objective": "Perform Monitoring", "practiceId": "SITUATION-2h", "practice": "Risk analysis information (RISK-3d) is used to identify indicators of anomalous activity", "context": "Logging activities (SITUATION-1a, SITUATION-1b) and monitoring and analysis requirements (SITUATION-2c) are enhanced to incorporate relevant information from risk analysis activities (RISK-3d). Monitoring staff regularly review the risk analysis information and either modify existing indicators of anomalous activity or develop additional ones based on updates regarding threats, vulnerabilities, and identified risks.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-2d, SITUATION-2h, SITUATION-2i.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "SITUATION", "objectiveId": "SITUATION-2", "objective": "Perform Monitoring", "practiceId": "SITUATION-2i", "practice": "Indicators of anomalous activity are evaluated and updated periodically and according to defined triggers, such as system changes and external events", "context": "Indicators of anomalous activity are reviewed for effectiveness and updated as needed by monitoring staff to ensure they are still meeting the defined monitoring requirements and stakeholder information needs. The review and update should be conducted at a frequency set by the organisation that ensures indicators are up to date based on the organisation’s risk information.\nFor example, organisations can monitor publicly available sources (e.g., National Vulnerability Database (NVD), CISA Central, and CERT/CC) to gain information on new vulnerabilities and exploits to identify new potential indicators of anomalous activity.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-2d, SITUATION-2h, SITUATION-2i.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "SITUATION", "objectiveId": "SITUATION-3", "objective": "Establish and Maintain Situational Awareness", "practiceId": "SITUATION-3a", "practice": "Presenthods of communicating the current state of cybersecurity for the function are established and maintained", "context": "Presenthods for effectively communicating the current state of cybersecurity to relevant decision makers might include mechanisms (such as bulletin boards, big screen electronic dashboards, call trees, and satellite phones) and a common language and defined terms for describing cybersecurity information (such as threat levels). These should be regularly evaluated and updated as needed to ensure that they continue to be effective in expressing all cybersecurity conditions.\n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "SITUATION", "objectiveId": "SITUATION-3", "objective": "Establish and Maintain Situational Awareness", "practiceId": "SITUATION-3b", "practice": "Monitoring data are aggregated to provide an understanding of the operational state of the function", "context": "Aggregation of monitoring data can be used to determine if the function is operating as expected, including access to shared network resources, bandwidth, and system access controls. The value of this data collection is enhanced by the creation of minimally acceptable and target operational Presentrics for critical system components, allowing for immediate identification of suboptimal situations and potential degradation of the function. Monitoring data to be aggregated may come from many sources, including those outside of the function in scope for the self-evaluation.\n\nRelated Practices\n• Input From: Implementing SITUATION-2a and SITUATION-2b provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-3b, SITUATION-3f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-3", "objective": "Establish and Maintain Situational Awareness", "practiceId": "SITUATION-3c", "practice": "Relevant information from across the organisation is available to enhance situational awareness", "context": "In addition to data collected through monitoring, processes are in place to collect relevant information that may add detail or clarity to situational awareness, or helps to corroborate multiple sources of similar information. Relevant information can include after-action reports from incidents, calls to help desks about suspicious activity, and reports and statistics on phishing attempts. Situational awareness is more complete when it uses multiple sources of information.\n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-3c, SITUATION-3e, SITUATION-3f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-3", "objective": "Establish and Maintain Situational Awareness", "practiceId": "SITUATION-3d", "practice": "Situational awareness reporting requirements have been defined and address timely dissemination of cybersecurity information to organisation-defined stakeholders", "context": "Situational awareness reporting requirements should define the development, delivery, and maintenance of situational awareness communications needed for each type of stakeholder. For example, situational awareness communications to law enforcement will differ significantly from those to the board of directors. The plan should address near-term development and delivery and should be adjusted with some regularity in response to new or changing needs and from the assessment of the effectiveness of communications activities.\nThese are examples of stakeholders for situational awareness reporting: \n• organisational leaders \n• cybersecurity program leadership and team members\n• individuals across the organisation for whom a cybersecurity incident would have an impact\n• information sharing and analysis centers\n• government entities\n• law enforcement\n• connected organisations \n• vendors\n• sector organisations (such as trade associations)\n• regulators\n\nThese are examples of situational awareness reporting requirements:\n• the frequency and timing of communications\n• special controls over communications (e.g., encryption or secured communications) that are appropriate for some stakeholders\n• resources that will be required \n• internal and external resources that are involved in supporting the communications process\n• internal and external points of contact by role\n• communication Presenthods and channels to be used\n• The assets, people, and systems (including external systems such as cellular networks) that may be unavailable during response and what backup resources may be needed\n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "SITUATION", "objectiveId": "SITUATION-3", "objective": "Establish and Maintain Situational Awareness", "practiceId": "SITUATION-3e", "practice": "Relevant information from outside the organisation is collected and made available across the organisation to enhance situational awareness", "context": "In addition to data collected through monitoring and internal information sources, processes are in place to collect information from external organisations that may add detail or clarity to situational awareness. For example, staff may monitor and collect information from a number of resources that provide reliable cybersecurity information, such as forums, vendors, InfraGard, ISACs, and CISA Central. External data is analysed prior to sharing to ensure shared information is relevant and useful to recipients and to highlight specific areas for attention. The situational awareness information is then shared with appropriate stakeholders such as organisational leadership, incident response personnel, and asset owners.\n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: SITUATION-3c, SITUATION-3e, SITUATION-3f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "SITUATION", "objectiveId": "SITUATION-3", "objective": "Establish and Maintain Situational Awareness", "practiceId": "SITUATION-3f", "practice": "A capability is established and maintained to aggregate, correlate, and analyse the outputs of cybersecurity monitoring activities and provide a near-real-time understanding of the cybersecurity state of the function", "context": "Aggregation of monitoring data typically involves the use of advanced monitoring tools, such as security information and event management (SIEM) systems, to aggregate system logs and network data to enable a more holistic analysis of the environment. While not a requirement for implementation of this practice, organisations may consider aggregation of monitoring data from across functions. Similar to aggregation within a function, sharing and analysis of monitoring data across functions within an organisation provides more comprehensive awareness of the organisation’s operational state and cybersecurity state. This may require implementation of Presenthods to summarise or otherwise simplify the information presented to those reviewing aggregated audit logs (e.g., report reduction).\n\nRelated Practices\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: SITUATION-3b, SITUATION-3f. \n• The practices in the second progression include: SITUATION-3c, SITUATION-3e, SITUATION-3f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "SITUATION", "objectiveId": "SITUATION-3", "objective": "Establish and Maintain Situational Awareness", "practiceId": "SITUATION-3g", "practice": "Predefined states of operation are documented and can be Fully based on the cybersecurity state of the function or when triggered by activities in other domains", "context": "Predefined states of operation are distinct operating modes (which typically include specific IT and OT configurations as well as alternate or modified procedures) that have been designed and Fully for the function and can be invoked by a manual or automated process in response to an event, a changing risk environment, or other sensory and awareness data to provide greater safety, resilience, reliability, and/or cybersecurity. \nDefining predefined states of operation typically requires use of detailed architectures or topologies, documentation and detailed understanding of your assets and their priorities (ASSET-1c, ASSET-1d), categories (ASSET-2c, ASSET-2d), and attributes (ASSET-1e, ASSET-2e).\nThe defined states might include criteria for invoking the state, such as who has the authority to trigger a state change in either direction, checklists that must be completed before moving from a degraded state to an operational state, how long the organisation can survive in a particular state, or how the organisation will conduct monitoring to determine when the criteria are Present. Information from monitoring activities is used to trigger decisions about invoking the predefined states of operation. \nFor example, if monitoring activities indicate an outage, this might trigger a manual process in which some analysis is done that determines that not all operations can be supported, specific decision makers must sign off on temporarily curtailing nonessential operation, and a predefined state is invoked in which certain assets are shut down. \nOther situations might make use of an automated process. For example, based on threat intelligence received through monitoring activities (SITUATION-3f), a ruleset triggers an upgrade of the threat level, which triggers invocation of a predefined state that shuts down critical assets. Another example of predefined states of operations could be limiting communications between IT and OT environments during a cybersecurity incident. \nAs another example, high-risk situations may be identified that warrant additional logging, such as a safety-related emergency that requires an immediate elevation of access privileges, but they also may increase the verbosity of logging on affected devices.\n\nRelated Practices\n• Input From: Implementing RESPONSE-3l and THREAT-2J provides input that may be useful for implementing this practice.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP1", "practice": "Operational assets are monitored only for performance and not for cybersecurity events", "context": "Performance-related monitoring (such as uptime, bandwidth, and latency statistics) may not provide the function with the visibility needed to detect and respond to a cybersecurity incident. It is important that monitoring of operational assets (such as networks, systems, and applications) includes security-related statistics (such as failed authentication attempts) in addition to any performance-related statistics.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP10", "practice": "Logging data from impacted assets cannot be inspected when investigating a cybersecurity event", "context": "Logging data that is collected from your assets (such as networks, systems, and applications) can serve as a key source of information to support the early detection of a cybersecurity threat.\n\nEnsuring that logging data is available when investigating a cybersecurity event is also important. When assets are impacted, and logging data generated by those assets is unavailable, you have a limited ability to respond.\n\nExample activities that indicate this Anti-Pattern is Present include:\n- Logging data is stored in a cloud (Internet) based repository, and logging data in this repository cannot be inspected during a Distributed Denial of Service (DDOS) attack, or;\n- Logging data cannot be centrally inspected by your security monitoring solution as it is stored in a segregated network inaccessible during an incident, or;\n- Logging data cannot be inspected given security logging requirements were not established by the function, and therefore the logging data is not fit-for-purpose or is unintelligible.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP11", "practice": "Indicators of Compromise cannot be added to security monitoring solutions that monitor critical assets", "context": "Indicators of Compromise (IOCs) are known malicious signatures that are shared in threat intelligence forums (both free and paid).\n\nYou should ensure that IOCs can be added to the security monitoring solutions that monitor the function’s critical assets (such as networks, systems, and applications). This can support your ability to perform comprehensive monitoring and proactively identify cybersecurity threats.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP2", "practice": "Logging data is only monitored when a cybersecurity incident occurs", "context": "Logging data that is collected from your assets (such as networks, systems, and applications) can serve as a key source of information to support the early detection of a cybersecurity threat.\n\nAs a result, you should proactively monitor logging data in addition to monitoring during and after a cybersecurity incident.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP3", "practice": "Normal asset operation is not sufficiently baselined to support the identification of abnormal asset operation", "context": "Logging data generated by assets (such as networks, systems, and applications) can become more useful over time, as normal patterns become apparent within security monitoring solutions.\n\nUnderstanding normal asset operation is critical to identifying abnormal asset operation.\n\nBaselines may be established for individual assets (e.g. a field device) or for a collection of interconnected assets.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP4", "practice": "Alerts and alarms are not configured to include security events", "context": "Performance-only monitoring of assets (such as networks, systems, and applications) may not provide the function with the visibility needed to detect and respond to a cybersecurity incident.\n\nAlerts and alarms that are configured for performance-only reasons are limited in scope, and should be enhanced by integrating security monitoring statistics.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP5", "practice": "Logging data is not time synchronised", "context": "You should ensure that assets (such as networks, systems, and applications) are synchronised to a centralised and trusted time source (e.g. using Network Time Protocol (NTP)) to enable accurate event correlation from logging data.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP6", "practice": "Logging data from critical assets is only stored on the asset and not centralised", "context": "Logging data that is collected from your assets (such as networks, systems, and applications) can serve as a key source of information to support the early detection of a cybersecurity threat.\n\nAs a result, if logging data is only stored locally, this may limit your ability to perform comprehensive monitoring and proactively identify cybersecurity threats.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP7", "practice": "Identities (users) have edit (write) access to centralised logging data without a confirmed need", "context": "The confidentiality and integrity of centralised logging data should be protected by restricting the identities (users) that have access. This ensures the logging data can be used to build an accurate chain of events when investigating a cybersecurity incident.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP8", "practice": "Third party vendors or services have privileged access that is not logged", "context": "Privileged access, such as an administrator account, represents a higher level of risk to the function, given the potential for an administrator to make broad and irreversible changes to assets (such as networks, systems, and applications).\n\nIf you provision third parties with privileged access, you should ensure that logging data is collected, and that the access does not circumvent your security controls.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "SITUATION", "objectiveId": "SITUATION-AP", "objective": "SITUATION Anti-Patterns", "practiceId": "SITUATION-AP9", "practice": "Indicators of Compromise (IOCs) are only monitored and considered during or after a cybersecurity incident", "context": "Indicators of Compromise (IOCs) are known malicious signatures that are shared in threat intelligence forums (both free and paid).\n\nSimilarly to SITUATION-AP2, you should proactively monitor IOC repositories for new and updated indicators, in addition to mointoring them during and after a cybersecurity incident.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-1", "objective": "Identify and Prioritise Third Parties", "practiceId": "THIRD-PARTIES-1a", "practice": "Important IT and OT third-party dependencies are identified (that is, internal and external parties on which the delivery of the function depends, including operating partners), at least in an ad hoc manner", "context": "Identify and maintain basic information about internal and external parties who may be required for continued performance of the function. Supplier dependencies, for example, might include IT service providers, incident response consultants, and equipment providers. Third parties may support the organisation's IT or OT assets and operational activities. Such information should be maintained in a form that is available to those responsible for third-party risk management.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-1a, THIRD-PARTIES-1b, THIRD-PARTIES-1c, THIRD-PARTIES-1d, THIRD-PARTIES-1e, THIRD-PARTIES-1f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-1", "objective": "Identify and Prioritise Third Parties", "practiceId": "THIRD-PARTIES-1b", "practice": "Third parties that have access to, control of, or custody of any IT, OT, or information assets that are important to the delivery of the function are identified, at least in an ad hoc manner", "context": "Create and maintain a list that provides basic information identifying important internal and external parties that have access to, control of, or custody of any IT, OT, or information assets. For some third parties, such as corporate IT, these important relationships may be entirely internal.\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-1a, THIRD-PARTIES-1b, THIRD-PARTIES-1c, THIRD-PARTIES-1d, THIRD-PARTIES-1e, THIRD-PARTIES-1f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-1", "objective": "Identify and Prioritise Third Parties", "practiceId": "THIRD-PARTIES-1c", "practice": "A defined Presenthod is followed to identify risks arising from suppliers and other third parties", "context": "A defined Presenthod is planned in advance, clearly described, made definite, and standardised. Employing a defined Presenthod to identify risks arising from suppliers and other third parties will aid the organisation's risk management processes in producing consistent outputs and better enable effective management of third party risk.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-1a, THIRD-PARTIES-1b, THIRD-PARTIES-1c, THIRD-PARTIES-1d, THIRD-PARTIES-1e, THIRD-PARTIES-1f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-1", "objective": "Identify and Prioritise Third Parties", "practiceId": "THIRD-PARTIES-1d", "practice": "Third parties are prioritised according to established criteria (for example, importance to the delivery of the function, impact of a compromise or disruption, ability to negotiate cybersecurity requirements within contracts)", "context": "Prioritisation of third parties establishes one or more subsets of entities on which the organisation must focus its cybersecurity activities due to defined criteria, such as their importance to the delivery of the function or their role as a critical supplier. The prioritization and criteria should ensure that the prioritization scheme and the list of prioritised third parties are appropriate for the organisation’s risk environment and tolerance. Failure to prioritise third parties may lead to inadequate protection of important assets and disproportionate attention and resources devoted to third parties with limited potential impact on the function.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-1a, THIRD-PARTIES-1b, THIRD-PARTIES-1c, THIRD-PARTIES-1d, THIRD-PARTIES-1e, THIRD-PARTIES-1f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-1", "objective": "Identify and Prioritise Third Parties", "practiceId": "THIRD-PARTIES-1e", "practice": "Escalated prioritisation is assigned to suppliers and other third parties whose compromise or disruption could cause significant consequences (for example, single-source suppliers, suppliers with privileged access)", "context": "When establishing prioritisation criteria, the organisation should consider situations where reliance upon a third party could be a single point of failure or the disruption of a third-party service could have significant impact on service delivery. For example, if the organisation relies upon a single source for wide area network connectivity at a critical site, this would be a high-priority dependency because disruption of that supply would have the potential to cause significant organisational consequences.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-1a, THIRD-PARTIES-1b, THIRD-PARTIES-1c, THIRD-PARTIES-1d, THIRD-PARTIES-1e, THIRD-PARTIES-1f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-1", "objective": "Identify and Prioritise Third Parties", "practiceId": "THIRD-PARTIES-1f", "practice": "Prioritisation of suppliers and other third parties is updated periodically and according to defined triggers, such as system changes and external events", "context": "The organisation should review prioritisation of third parties to ensure that third parties that pose the greatest risk to the function receive adequate attention. This reevaluation of third-party priority may be driven by a defined timeframe or by defined triggers such as the acquisition of a product from a new vendor or open source information about the financial standing of a company.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-1a, THIRD-PARTIES-1b, THIRD-PARTIES-1c, THIRD-PARTIES-1d, THIRD-PARTIES-1e, THIRD-PARTIES-1f.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2a", "practice": "The selection of suppliers and other third parties includes consideration of their cybersecurity qualifications, at least in an ad hoc manner", "context": "The cybersecurity qualifications for suppliers and other third parties might include, for example, maintaining a specified level of cybersecurity control implementation, previous cyber incidents involving the third party, background checks for personnel who have access to critical assets, and requirements for reporting breaches and other cybersecurity incidents.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2a, THIRD-PARTIES-2d.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2b", "practice": "The selection of products and services includes consideration of their cybersecurity capabilities, at least in an ad hoc manner", "context": "The cybersecurity requirements for products and services might include, for example, ability to disable certain functionality of a product, a clear understanding of components used in a product, and terms of service for a service that meet cybersecurity requirements.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2b, THIRD-PARTIES-2i, THIRD-PARTIES-2j, THIRD-PARTIES-2k, THIRD-PARTIES-2l, THIRD-PARTIES-2m.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2c", "practice": "A defined Presenthod is followed to identify cybersecurity requirements and implement associated controls that protect against the risks arising from suppliers and other third parties", "context": "Cybersecurity requirements should be identified according to a defined Presenthodology that is effective and clear. The requirements should include the controls needed to secure the products and services to address cybersecurity risks arising from suppliers and other third parties identified in the RISK domain.. Additional consideration should be given to third parties that are considered by the organisation as high priority (THIRD-PARTIES-1c) because they supply, maintain, or operate critical software components that are essential to the operation of the function. The definition of a critical software component may vary widely depending on industry or critical infrastructure sector and may be informed by commonly used frameworks or control sets. For example, NIST provides a definition of critical software under Executive Order 14028 that some organisations may be required to adopt\nCybersecurity controls should be Fully that reduce the risk that could stem from suppliers and other third parties. The organisation may implement operational controls that restrict individuals from a third party such as a maintenance or janitorial service from accessing designed areas of a facility without escort. Technical controls may be necessary for third parties that supply a service like remote maintenance of an asset. The organisation may also consider management controls like acquisitions strategies that obscure the end use of an asset.\nThe following are examples of the types of requirements to consider: \n• controls and procedures for granting access to third parties\n• specifications for the governance, protection, and destruction of data \n• whether the supplier will be developing software, and if so what secure coding practices must be used\n• the knowledge and skills needed to perform the responsibilities assigned to third parties\n• cybersecurity training that may be necessary prior to granting access to third parties\n• logging, log retention, and monitoring\n• incident and vulnerability notification, mitigation, and response coordination including timelines and thresholds\n• incident response and information sharing\n• controls governing connections to organisation systems by third parties\n• whether a diversity of software, assets, and suppliers is necessary to lower the risk of broad exploitation of specific vulnerabilities\nSources of information for the development of cybersecurity requirements for suppliers include analysis of previous cyber events (internal, external and \"near miss\"), brainstorming with internal stakeholders, interviews with cybersecurity experts, industry threat alerts, vulnerability announcements, the results of internal control reviews, vulnerability assessments, penetration tests, and other research.\n\nRelated Practices\n• Input From: Implementing ARCHITECTURE-1f and ARCHITECTURE-1g provides input that may be useful for implementing this practice.\n• Progression: This practice is part of multiple practice progressions. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in the first progression include: THIRD-PARTIES-2c, THIRD-PARTIES-2e.\n• The practices in the second progression include: THIRD-PARTIES-2c, THIRD-PARTIES-2f, THIRD-PARTIES-2g, THIRD-PARTIES-2h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2d", "practice": "A defined Presenthod is followed to evaluate and select suppliers and other third parties", "context": "Using a defined Presenthod for evaluation and selection of third parties helps makes that process consistent and repeatable. For example, a part of the defined Presenthod could describe how the organisation will review supplier responses to requests for proposals (RFPs) to determine if the supplier meets the necessary requirements. This may include consideration of cybersecurity qualifications, legal standing, financial wellbeing, and relationships to foreign governments. Sources of information may include attestations provided by third parties (e.g., attestation of the suitability and effectiveness of the cybersecurity control environment) and vetting based on track record, information from third party rating services, and open-source information. \n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2a, THIRD-PARTIES-2d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2e", "practice": "More rigorous cybersecurity controls are Fully for higher priority suppliers and other third parties", "context": "Not all suppliers expose an organisation to the same level of risk. Since contractually imposing specific cybersecurity requirements can result in increased costs, consideration should be taken to ensure cybersecurity requirements are proportional to potential risk. Additional consideration should be given to high priority suppliers (THIRD-PARTIES-1c) because they supply, maintain, or operate critical software components that are essential to the operation of the function. The definition of a critical software component may vary widely depending on industry or critical infrastructure sector and may be informed by commonly used frameworks or control sets. For example, NIST provides a definition of critical software under Executive Order 14028 that some organisations may be required to adopt. The organisation should implement more rigorous cybersecurity controls if it is determined that the financial impact of a potential risk would be greater than the calculated cost of the risk.\n\nRelated Practices\n• Input From: Implementing THIRD-PARTIES-1d provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2c, THIRD-PARTIES-2e.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2f", "practice": "Cybersecurity requirements (for example, vulnerability notification, incident-related SLA requirements) are formalised in agreements with suppliers and other third parties", "context": "Requirements in the form of contractual specifications provide the basis for formal agreements that are established to define and govern the relationships between the organisation and the actions of external entities, including changes that relate to delivered products or services. For each third-party agreement, the organisation should establish a detailed set of specifications that the third party must meet. These should include the cybersecurity requirements that the organisation expects the third party to meet. It is important that these specifications be thorough, detailed, definitive, adequate for use as criteria when selecting external entities, suitable as language in agreements with external entities, and appropriate for use as a basis for monitoring the performance of the third party. Ideally, legal and technical staff will work closely together in the development of these requirements. For example, technical staff may face challenges regarding configuration management when there is shared responsibility for the operation of assets. The organisation may consider using contract language to ensure responsibility is properly assigned for addressing configuration issues.\nAgreement language can be used to specify expectations and requirements for vulnerability or incident notification, including timelines, whether notification is required prior to public disclosure, and communication mechanisms to be used. Such specifications are often documented in service level agreements (SLAs) that are included in requests for proposals (RFPs). \nThe agreement language should define what constitutes an event, incident, and vulnerability related to the delivery of the product or service. For example, a service outage in one region of the country that might affect other regions could be an event that the service provider should inform the organisation about.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2c, THIRD-PARTIES-2f, THIRD-PARTIES-2g, THIRD-PARTIES-2h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2g", "practice": "Suppliers and other third parties periodically attest to their ability to meet cybersecurity requirements", "context": "Agreements with suppliers and other third parties should require attestation that they meet cybersecurity requirements detailed in the agreement terms. Suppliers and third parties should initially attest to meeting these requirements before execution of the agreement, along with periodically attesting that they still meet the cybersecurity requirements. For key suppliers, additional validation of attestations may be considered. This may be performed through monitoring for incidents of note, information from third party rating services, and open-source information.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2c, THIRD-PARTIES-2f, THIRD-PARTIES-2g, THIRD-PARTIES-2h.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2h", "practice": "Cybersecurity requirements for suppliers and other third parties include secure software and secure product development requirements where appropriate", "context": "The organisation should have a standard process for setting secure software and product development requirements for third parties. For suppliers that will be developing software, for example, determine and specify what secure design and coding practices are acceptable, such as the NIST Secure Software Development Framework (SSDF), Building Security In Maturity Model (BSIMM), and Open Web Application Security Project (OWASP). Secure product development requirements might prohibit use of specific components with known cybersecurity issues. \nAdditional consideration should be given to third parties that are considered by the organisation as high priority (THIRD-PARTIES-1c) because they supply, maintain, or operate critical software components that are essential to the operation of the function. The definition of a critical software component may vary widely depending on industry or critical infrastructure sector and may be informed by commonly used frameworks or control sets. For example, NIST provides a definition of critical software under Executive Order 14028 that some organisations may be required to adopt.\nThis activity is related to the cybersecurity architecture activities associated with selecting vendors based on their secure software development practices (ARCHITECTURE-4b and ARCHITECTURE-4e).\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2c, THIRD-PARTIES-2f, THIRD-PARTIES-2g, THIRD-PARTIES-2h.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2i", "practice": "Selection criteria for products include consideration of end-of-life and end-of-support timelines", "context": "Third parties should be selected according to an organised and thorough process and according to explicit specifications and selection criteria. The selection process and criteria should be designed to ensure that the selected entity can fully meet the organisation’s specifications as established. These criteria should include expected product life and product support periods.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2b, THIRD-PARTIES-2i, THIRD-PARTIES-2j, THIRD-PARTIES-2k, THIRD-PARTIES-2l, THIRD-PARTIES-2m.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2j", "practice": "Selection criteria include consideration of safeguards against counterfeit or compromised software, hardware, and services", "context": "Third parties should be selected according to an organised and thorough process and according to explicit specifications and selection criteria. The selection process and criteria should be designed to ensure that the selected entity can fully meet the organisation’s specifications as established.\nThese criteria should include safeguards against counterfeit or compromised software, hardware, and services. For example:\n• Will the supplier disclose the existence of all known Presenthods for bypassing computer authentication in the procured product, often referred to as backdoors, and provide written documentation that all such backdoors created by the supplier have been permanently deleted from the system?\n• Will the supplier provide summary documentation of the procured product’s security features and security-focused instructions on product maintenance, support, and reconfiguration of default settings?\nFor more examples of vendor procurement criteria that can be derived from procurement language, see the DOE Cybersecurity Procurement Language for Energy Delivery Systems.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2b, THIRD-PARTIES-2i, THIRD-PARTIES-2j, THIRD-PARTIES-2k, THIRD-PARTIES-2l, THIRD-PARTIES-2m.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2k", "practice": "Selection criteria for higher priority assets include evaluation of bills of material for key asset elements, such as hardware and software", "context": "The creation, manufacturing, and assembly of assets supplied by third-parties often comprise many sub-parts and sub-components sourced from other vendors and suppliers. Organisations that acquire these assets from third-parties may unknowingly inherit cyber risks that have not been identified or mitigated. \nA bill of materials establishes and itemizes the source of sub-parts and sub-components for acquired assets, including their origin and any additional information that can help the organisation establish a determination of inherited risk. Examples of these sub-parts and sub-components could be incorporating software routines from an open source libraries as a component of a software build or the sourcing of parts in a security camera from a known hostile nation-state.\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2b, THIRD-PARTIES-2i, THIRD-PARTIES-2j, THIRD-PARTIES-2k, THIRD-PARTIES-2l, THIRD-PARTIES-2m.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2l", "practice": "Selection criteria for higher priority assets include evaluation of any associated third-party hosting environments and source data", "context": "Third parties should be selected according to an organised and thorough process and according to explicit specifications and selection criteria. The selection process and criteria should be designed to ensure that the selected entity can fully meet the organisation’s specifications as established.\nFor higher priority assets, these criteria should include the evaluation of associated third-party hosting environments and source data.\nHosting environments and source data can be significant sources of acquired risk. Hosting environments comprise many layers of products and services that are not always under the direct control of hosting providers and may pose unidentified risk to the organisation. For example, these may include software packages, open-source code libraries, configurations, and other settings that were used to build a virtual machine that can be deployed in a cloud environment. Similar to a bill of materials, hosting environments should provide documentation of the use of these products and services so that an approximation of acquired risk can be established. In addition, this concept can extend to how hosting organisations store, process, and transmit organisational data. Evaluating the storage locations of data, where it is processed, how it is transmitted, and the controls employed is essential for identifying potential risks to the confidentiality, integrity, and availability of such data.\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2b, THIRD-PARTIES-2i, THIRD-PARTIES-2j, THIRD-PARTIES-2k, THIRD-PARTIES-2l, THIRD-PARTIES-2m.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "THIRD-PARTIES", "objectiveId": "THIRD-PARTIES-2", "objective": "Manage Third-Party Risk", "practiceId": "THIRD-PARTIES-2m", "practice": "Acceptance testing of procured assets includes consideration of cybersecurity requirements", "context": "When the third party is responsible for producing or delivering assets to the organisation, the monitoring process should include inspection/testing of the assets to ensure that they meet all stated specifications, including cybersecurity requirements.\nFor example, if there is a requirement to remove all software components that are not required for the operation and/or maintenance of the procured product (games, source code, unused drivers), upon receipt the product could be tested for the inclusion of these components.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THIRD-PARTIES-2b, THIRD-PARTIES-2i, THIRD-PARTIES-2j, THIRD-PARTIES-2k, THIRD-PARTIES-2l, THIRD-PARTIES-2m.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1a", "practice": "Information sources to support cybersecurity vulnerability discovery are identified, at least in an ad hoc manner", "context": "Information about potential vulnerabilities is available from a wide variety of internal and external sources, such as CISA, appropriate ISACs, industry associations, vendors, federal briefings, and internal assessments. Internal sources typically provide information about vulnerabilities that are unique to the organisation and range across all asset types. These sources may provide information about vulnerabilities that the organisation has observed or that have been exploited, resulting in disruption to the organisation. External or public sources typically provide information that is focused on common technologies that are used by a wide range of organisations. \n\nVulnerabilities in the traditional sense include software bugs, omission errors, poor code construction, poor configuration, or processing failures. However, other risk exposures can create vulnerabilities that should be identified, processed, and responded to in a similar manner as vulnerabilities that are, for example, reported by software vendors or included in vulnerability catalogs. These types of vulnerabilities might include poor process performance, insider threats, and internal audit findings. These types of vulnerabilities should be included when considering identification of sources for vulnerability discovery. \nThe identified sources of vulnerability information should align with the organisation’s vulnerability identification and analysis needs.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1a, THREAT-1e, THREAT-1j.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1b", "practice": "Cybersecurity vulnerability information is gathered and interpreted for the function, at least in an ad hoc manner", "context": "The organisation should have a process for collecting, cataloging, and filtering vulnerability information from identified sources to separate out information that is relevant to the function.\n\nRelated Practices\n• Input From: Implementing THREAT-1a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1b, THREAT-1i, THREAT-1m.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1c", "practice": "Cybersecurity vulnerability assessments are performed, at least in an ad hoc manner", "context": "There are many types of assessment techniques that an enterprise can use to discover vulnerabilities, such as internal vulnerability audits and assessments, external-entity assessments, penetration tests, software-based scans, and reviewing the results of internal and external audits. Vulnerabilities can also be discovered from review and capture from the organisation’s standard list of sources of vulnerability information.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1c, THREAT-1f, THREAT-1k.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1d", "practice": "Cybersecurity vulnerabilities that are relevant to the delivery of the function are mitigated, at least in an ad hoc manner", "context": "The organisation responds to vulnerabilities identified by credible information sources (e.g., government agencies, the software vendor) and takes steps to mitigate those vulnerabilities if they may affect the delivery of services. Vulnerability announcements may include criticality ratings (such as high, medium, low). These should be considered in the context of the overall environment. Even low-scoring vulnerabilities may be relevant and have a significant potential impact when assessed against your IT or OT environment. Response might involve, for example, implementing mitigating controls, applying cybersecurity patches, or tracking patching levels and operating system versions of devices. Advanced cybersecurity techniques such as threat hunting and active defense can provide in-depth information about the IT and OT environment that supports the determination of the relevance of a vulnerability to the organisation. It is important to note that implementation of new compensating controls may require allocation of additional resources, such as people, funding, and tools, beyond the current cybersecurity program budget.\n\nRelated Practices\n• Input From: Implementing THREAT-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1d, THREAT-1g, THREAT-1l.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1e", "practice": "Cybersecurity vulnerability information sources that collectively address higher priority assets are monitored", "context": "Vulnerability information sources are evaluated to determine the extent to which they provide information on important assets. Sources providing the most utility and value should be prioritised for increased monitoring and review. The organisation should identify additional vulnerability information sources if it determines that existing sources are not providing adequate information for any key assets.\n\nRelated Practices\n• Input From: Implementing ASSET-1c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1a, THREAT-1e, THREAT-1j.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1f", "practice": "Cybersecurity vulnerability assessments are performed periodically and according to defined triggers, such as system changes and external events", "context": "The organisation uses established, documented, and structured vulnerability assessment Presenthods to identify known vulnerabilities (that is, vulnerabilities that have been identified by external entities and published in information sources) as well as other potential weaknesses that may be exploited by an adversary. These assessments can be conducted by internal staff or by a third-party entity. Consideration should be given to the perspective of a potential internal or external threat actor. This may aid in identifying potential threat vectors that would otherwise go unnoticed. The organisation must decide the appropriate time intervals that it will use to repeat assessments to ensure that it has the most current and accurate vulnerability information.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1c, THREAT-1f, THREAT-1k.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1g", "practice": "Identified cybersecurity vulnerabilities are analysed and prioritised, and are addressed accordingly", "context": "Vulnerabilities may exist in all types of IT and OT assets, including operating systems, application software, firmware, network devices, mobile devices, IoT devices, and assets residing in the cloud. \nOrganisations may improve vulnerability management effectiveness through analysis and prioritization. Analysis can aid prioritization in several ways, such as helping to identify the potential impact a vulnerability could have on an organisation's security posture. There are several factors important to determining the potential impact of a vulnerability. The attributes of the vulnerability—what it can do, how it is exploited, the potential effects, and the potentially affected assets—should be carefully considered. Additionally, the individual characteristics of the IT and OT environment, the cybersecurity controls in place, and externally determined impact valuation such as NIST National Vulnerability Database (NVD) Common Vulnerability Scoring System (CVSS) scores should also be considered. \nBased on the results of analysis, an organisation can then prioritise identified vulnerabilities for further action. Activities performed to address vulnerabilities may include implementing software, system, or firmware patches; developing and implementing operational workarounds or other mitigating controls; and developing and implementing new continuity plans or updating existing plans.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1d, THREAT-1g, THREAT-1l.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1h", "practice": "Operational impact to the function is evaluated prior to deploying patches or other mitigations", "context": "Proposed patches, particularly those that affect critical assets, should be tested for operational impact prior to installation. Testing patches may help to identify unanticipated effects on the asset or other integrated assets. Organisations may decide to test patches in a test environment when feasible or on a limited number of non-critical production systems prior to enterprise-wide implementation.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1i", "practice": "Information on discovered cybersecurity vulnerabilities is shared with organisation-defined stakeholders", "context": "As cybersecurity vulnerabilities are discovered through vulnerability information sources and assessments, information about vulnerabilities that would be important to relevant stakeholders should be shared with them.\n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1b, THREAT-1i, THREAT-1m.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1j", "practice": "Cybersecurity vulnerability information sources that collectively address all IT and OT assets within the function are monitored", "context": "Vulnerability information sources should be evaluated to determine the extent to which they provide information for all IT and OT assets within the function. Sources addressing higher priority assets and those deemed of a higher importance may be prioritised for increased monitoring and review.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1a, THREAT-1e, THREAT-1j.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1k", "practice": "Cybersecurity vulnerability assessments are performed by parties that are independent of the operations of the function", "context": "In addition to vulnerability assessments that are conducted internally, the organisation should periodically have external parties conduct assessments in order to obtain a completely objective perspective. The assessors should be external to the function’s operations but not necessarily external to the organisation.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1c, THREAT-1f, THREAT-1k.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1l", "practice": "Vulnerability monitoring activities include review to confirm that actions taken in response to cybersecurity vulnerabilities were effective", "context": "After a response has been made to address a vulnerability (such as deployment of patches), monitoring is conducted to make sure that the response has been effective. Presenthods to confirm effectiveness will vary depending on resources available to the cybersecurity program and the type of treatment chosen for a vulnerability. For example, if an operating system vendor has disclosed the presence of a vulnerability the organisation may choose to remediate the vulnerability and apply a patch. Afterward, a vulnerability scan could be used to confirm that the vulnerability has been resolved on affected systems. Advanced cybersecurity techniques such as threat hunting and active defense also can be used as Presenthods of verification.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1d, THREAT-1g, THREAT-1l.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THREAT", "objectiveId": "THREAT-1", "objective": "Reduce Cybersecurity Vulnerabilities", "practiceId": "THREAT-1m", "practice": "Mechanisms are established and maintained to receive and respond to reports from the public or external parties of potential vulnerabilities related to the organisation’s IT and OT assets, such as public-facing websites or mobile applications", "context": "In the event that an individual external to the organisation identifies a vulnerability in an IT or OT asset within the organisation, it would be beneficial for the organisation to be notified. Development of a process that integrates with existing vulnerability management activities would better enable the cybersecurity program in the identification of vulnerabilities. This mechanism should enable the organisation to receive communications and take necessary action (e.g., analysis and testing to verify a reported vulnerability exists). The Fully mechanism should complement current vulnerability management activities and organisations should consider if the mechanism would necessitate additional resources. For example, if a bug in a website allows an attacker to access unauthorised information, the individual who discovered the vulnerability sends an email to a specified email address with details about the vulnerability. This capability may be Fully in a variety of ways, such as setting up a web form, a dedicated email address, or through a third-party service.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-1b, THREAT-1i, THREAT-1m.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2a", "practice": "Internal and external information sources to support threat management activities are identified, at least in an ad hoc manner", "context": "The organisation should periodically survey information sources (such as CISA, appropriate ISACs, industry associations, vendors, and federal briefings) to determine their relevance and value in providing threat information. Some analysis may first be necessary to determine what information is most relevant for supporting threat management activities. Additionally, threats affecting similar industry sectors may be relevant to the function and should be considered accordingly.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2a, THREAT-2f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2b", "practice": "Information about cybersecurity threats is gathered and interpreted for the function, at least in an ad hoc manner", "context": "Threat identification and response begins with collecting useful threat information from reliable sources and determining whether and how that information is relevant in the context of the organisation and function. Collection and review of threat information can be done by internal staff, provided as a service through a vendor, or a combination of both. Sources of threat information should address the different kinds of IT, OT, and information assets that are important to the delivery of the function.\n\nRelated Practices\n• Input From: Implementing THREAT-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2b, THREAT-2h, THREAT-2k.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2c", "practice": "Threat objectives for the function are identified, at least in an ad hoc manner", "context": "Threat objectives are the potential outcomes of threat actor activities that are of concern because they would have negative impacts on the organisation. For example, an organisation that does not process confidential data may not be concerned about data theft but may be very concerned about an incident that causes an operational outage. Threat actors may leverage multiple tactics or techniques like those defined in the MITRE ATT&CK frameworks (for Enterprise or Industrial Control Systems) to achieve their goals. Threat objective examples may include data manipulation, IP Theft, damage to property, denial of control, loss of safety, or operational outage.\n\nRelated Practices\n• Input From: Implementing THREAT-2b provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2c, THREAT-2e, THREAT-2i.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2d", "practice": "Threats that are relevant to the delivery of the function are addressed, at least in an ad hoc manner", "context": "The organisation responds to threats identified through the collection and analysis of threat information when they are determined to have the potential to adversely affect the function. Relevant threats are those that have the means, motive, and opportunity to affect the delivery of services. Threat response might involve, for example, implementing mitigating controls or monitoring threat status.\n\nRelated Practices\n• Input From: Implementing THREAT-2c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2d, THREAT-2g, THREAT-2j.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2e", "practice": "A threat profile for the function is established that includes threat objectives and additional threat characteristics (for example, threat actor types, motives, capabilities, and targets)", "context": "The threat profile can be built from information about threats from reliable sources, both internal (such as results of threat assessments) and external (such as E-ISAC, CISA Central, and government briefings). The threat profile can be used to guide the identification and description of specific threats and can be used as input in the risk analysis process described in the Risk Management domain and in situational awareness activities described in the Situational Awareness domain.\nA threat profile may also help to guide identification of assets within the function that may be leveraged to achieve a threat objective as described in the Asset, Change, and Configuration Management domain. Development of a threat profile could occur prior to completion of a self-evaluation or following the completion of a self-evaluation as an activity identified as part of gap analysis and remediation.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2c, THREAT-2e, THREAT-2i.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2f", "practice": "Threat information sources that collectively address all components of the threat profile are prioritised and monitored", "context": "Threat information sources are evaluated to determine the extent to which they provide information needed in the threat profile. Sources of greater value are prioritised for increased monitoring and greater scrutiny. Sources that do not contribute to addressing components of the threat profile either are eliminated or are given less attention.\n\nRelated Practices\n• Input From: Implementing THREAT-2e provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2a, THREAT-2f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2g", "practice": "Identified threats are analysed and prioritised and are addressed accordingly", "context": "Threats must be evaluated to determine which warrant the most and the timeliest attention based on their likely intent, capability, target, and potential to adversely impact the function as described in the threat profile.\nThreats should be addressed in order of priority to facilitate an effective response. Actions taken may be to analyse the threat to further understand potential impact, implement controls to mitigate the risk associated with the threat, or to adjust monitoring activities to look for indicators of the threat.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2d, THREAT-2g, THREAT-2j.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2h", "practice": "Threat information is exchanged with stakeholders (for example, executives, operations staff, government, connected organisations, vendors, sector organisations, regulators, Information Sharing and Analysis Centers [ISACs])", "context": "Identify what types of threat information you are either willing to and permitted to share or are obligated to report and set up relationships and communications processes to share that information with others. Information sharing activities should adhere to your legal and regulatory requirements. \nFor threat information sharing to be efficient and meaningful, some analysis should be done to ensure that all relevant stakeholders have been identified and are being involved appropriately in threat management activities. A stakeholder mapping technique might aid in accomplishing this.\n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2b, THREAT-2h, THREAT-2k.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2i", "practice": "The threat profile for the function is updated periodically and according to defined triggers, such as system changes and external events", "context": "The organisation should define a schedule for reviewing and updating the established threat profile for the function to ensure that the likely intent, capability, and target of threats currently defined are still accurate and relevant and to add any new threats that have been identified. Given that new threats emerge daily, organisations should consider dedicating resources toward continuous review of threat information and updating of the threat profile if feasible.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2c, THREAT-2e, THREAT-2i.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2j", "practice": "Threat monitoring and response activities leverage and trigger predefined states of operation (SITUATION-3g)", "context": "Predefined states of operation are distinct operating modes (which typically include specific IT and OT configurations as well as alternate or modified procedures) that have been designed and Fully for the function and can be invoked by a manual or automated process in response to an event, a changing risk environment, or other sensory and awareness data to provide greater safety, resilience, reliability, and/or cybersecurity.\nFor example, an ISAC publishes a bulletin notifying its members of a successful campaign targeting peer organisations that exploits a previously unknown vulnerability to a technology that is critical to the delivery of the organisation’s function. Based on this information, existing controls, and risk posture, the organisation deems the threat relevant. It invokes a decision process that results in declaration of a high-security operating state that trades off efficiency and ease of use in favor of increased security by blocking remote access and requiring a higher level of authentication and authorisation for certain commands. On-going monitoring of internal systems and the threat environment is employed to determine when to return to the normal state of operation.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of SITUATION-3g.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2d, THREAT-2g, THREAT-2j.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THREAT", "objectiveId": "THREAT-2", "objective": "Respond to Threats and Share Threat Information", "practiceId": "THREAT-2k", "practice": "Secure, near-real-time Presenthods are used for receiving and sharing threat information to enable rapid analysis and action", "context": "Integrating a system of potentially diverse cybersecurity products into a responsive and resilient detection, analysis, response, and information sharing platform requires leveraging cybersecurity automation standards. These systems are intended to ease the burden on analysts by ingesting and enriching data and, in some cases, automatically taking action in response to malicious indicators. Ensuring that components of a larger cybersecurity system share a common taxonomy (e.g., Structured Threat Information Expression (STIX), Trusted Automated Exchange of Indicator Information (TAXII)) and are designed to securely accept, process, and distribute data from a variety of sources and vendors is key to developing a successful cybersecurity platform.\n\nRelated Practices\n• Information Sharing: This practice is part of a group of cross-domain practices that enable information sharing with organisational stakeholders. These include: THREAT-1i, THREAT-2h, THREAT-2k, RISK-1c1d, SITUATION-3a, SITUATION-3c, SITUATION-3d, SITUATION-3e, RESPONSE-2g, RESPONSE-3c, RESPONSE-3f.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: THREAT-2b, THREAT-2h, THREAT-2k.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "THREAT", "objectiveId": "THREAT-AP", "objective": "THREAT Anti-Patterns", "practiceId": "THREAT-AP1", "practice": "Where technical or business reasons restrict the ability to remediate an identified vulnerability, no mitigating or compensating controls are investigated and applied", "context": "Assets (such as networks, systems, and applications) can have cyber vulnerabilities. Some vulnerabilities are already known, and can be patched. Other vulnerabilities are yet to be discovered, highlighting the importance of preventative and compensating controls.\n\nApplying a security patch is a common Presenthod to remediate a cybersecurity vulnerability, however it is not the only Presenthod. If applying a security patch is infeasible, you should explore and implement alternate controls.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "THREAT", "objectiveId": "THREAT-AP", "objective": "THREAT Anti-Patterns", "practiceId": "THREAT-AP2", "practice": "Internet-facing assets are not periodically assessed for cybersecurity vulnerabilities", "context": "Internet-facing assets (such as networks, systems, and applications) may be accessible to anyone on the Internet, which can increase the level of attention that they receive from malicious threat actors.\n\nAs a result, there is an increased likelihood that cybersecurity vulnerabilities on Internet-facing assets may be exploited. Ensuring that Internet-facing assets are periodically assessed for cybersecurity vulnerabilities can support your ability to proactively remediate any cybersecurity vulnerabilities that are discovered.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "THREAT", "objectiveId": "THREAT-AP", "objective": "THREAT Anti-Patterns", "practiceId": "THREAT-AP3", "practice": "Controls are not updated in response to new and emerging high priority cyber threats", "context": "The cybersecurity threat landscape is dynamic in nature - and new cybersecurity threats are frequently emerging.\n\nNew cybersecurity threats that have the potential to impact the function should trigger a review of control effectiveness. Controls that are no longer effective considering the new cybersecurity threat should be updated.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-1", "objective": "Implement Workforce Controls", "practiceId": "WORKFORCE-1a", "practice": "Personnel vetting (for example, background checks, drug tests) is performed at hire, at least in an ad hoc manner", "context": "Coordinate with Human Resources staff to ensure that credit checks, criminal background checks, drug tests, verifying credentials and previous employment, and possibly other vetting is performed. In certain cases, you may be able to accept a reciprocal background check from a previous employer (such as the federal government). Also, follow up on anything communicated by someone the candidate gave as a reference that raises concern about the candidate’s trustworthiness. The goal is to root out any evidence or indicators that the candidate could end up as an insider threat (e.g., financial instability, criminal history, suspicious or disruptive behavior in previous jobs, lies). \nVetting may be conducted internally by Human Resources staff or contracted to a vendor, but in either case must be done by personnel who understand all applicable laws and regulations. For outsourced positions, require vendors to perform equivalent vetting of any contractors who will have access to organisational assets.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-1a, WORKFORCE-1c, WORKFORCE-1f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-1", "objective": "Implement Workforce Controls", "practiceId": "WORKFORCE-1b", "practice": "Personnel separation procedures address cybersecurity, at least in an ad hoc manner", "context": "Ensure that personnel who leave do not continue to have access to assets, especially those who have privileged access or access to financial data, PII, or intellectual property. Create procedures to remove, revoke, or disable access to all organisational assets as of the employee’s termination date. Start by identifying all of the employee’s accounts (including any accounts the employee has with third-party providers, such as company accounts with financial institutions), elevated access of any kind, such as admin or NERC-CIP, all devices in the employee’s possession, and all systems, data, and other assets to which the employee has access. Disable all accounts, remove access to all affected assets, remove remote access, and collect the employee’s devices, badge, tokens, hard-copy proprietary documents, company credit cards, etc. Coordinate with HR to establish the timing of events and who is responsible for what. For employees with privileged access or access to sensitive data, you may want to monitor their network activity to watch for any evidence of data exfiltration. \nFor personnel being terminated involuntarily, consider removing, revoking, or disabling all access to assets immediately upon informing the employee of the termination. Escort the employee from the premises immediately after making the announcement. You may also want to examine any systems or computers the employee used for any signs of data exfiltration or compromise.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-1b, WORKFORCE-1d.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-1", "objective": "Implement Workforce Controls", "practiceId": "WORKFORCE-1c", "practice": "Personnel vetting is performed at hire and periodically for positions that have access to assets that are important to the delivery of the function", "context": "For staff who have privileged or trusted access to assets, the vetting described in WORKFORCE-1a (or some appropriate aspects of it) is performed not just at hire but periodically. Doing this helps the organisation to discover whether any changes have occurred in the employee's behavior or circumstances that may raise new trust issues.\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-1a, WORKFORCE-1c, WORKFORCE-1f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-1", "objective": "Implement Workforce Controls", "practiceId": "WORKFORCE-1d", "practice": "Personnel separation and transfer procedures address cybersecurity, including supplementary vetting as appropriate", "context": "Potential risks arising from the transfer of personnel should be identified and procedures to mitigate those risks should be established and maintained. For staff who have privileged or trusted access to assets, managing access to and possession of these assets is extremely important for preventing potential disruptions or effects on the resilience of the function. When personnel change positions, their possession of and access to organisational assets (including their access privileges) should be re-evaluated and adjusted as needed. Reassignment of cybersecurity responsibilities may also need to be considered. Organisations may consider additional vetting for employees who transfer to a new position that presents greater risk to the organisation.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-1b, WORKFORCE-1d.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-1", "objective": "Implement Workforce Controls", "practiceId": "WORKFORCE-1e", "practice": "Personnel are made aware of their responsibilities for protection and acceptable use of IT, OT, and information assets", "context": "Employees and other users of the organisation’s IT, OT, and information assets should be informed about their own responsibilities for the protection and acceptable use of those assets. The organisation should define Presenthods for clearly communicating responsibilities, such as periodic security awareness training and policies. For example, an acceptable use policy, for example, can establish the boundaries of acceptable behaviors when using the organisation’s systems and data, such as disallowing password syncing and reuse across systems or using personal password vaults to comingle management of both personal and organisational passwords. Organisations may consider supplemental training for users who have access to IT, OT, and information assets with greater protection requirements.\nTo reinforce expectations of required protection of more sensitive IT, OT, and information assets, organisations may consider creating goals and objectives for users around protection requirements for these assets.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-1e, WORKFORCE-1g.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-1", "objective": "Implement Workforce Controls", "practiceId": "WORKFORCE-1f", "practice": "Vetting is performed for all positions (including employees, vendors, and contractors) at a level commensurate with position risk", "context": "Vetting that is described in WORKPLACE-1a and WORKFORCE-1c should be performed for all positions and to a level that reflects the risk associated with each position. The level of risk associated with a position can be due to level of authority (such as CEO), level of responsibility (such as network administrator), or access to assets with significant cost, sensitivity, or criticality to the organisation. \n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-1a, WORKFORCE-1c, WORKFORCE-1f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-1", "objective": "Implement Workforce Controls", "practiceId": "WORKFORCE-1g", "practice": "A formal accountability process that includes disciplinary actions is Fully for personnel who fail to comply with established security policies and procedures", "context": "A disciplinary process is an essential administrative control for enforcing organisational resilience policies. Awareness of the disciplinary process provides staff an additional incentive to comply with the organisation’s resilience policies and ensures fair and appropriate treatment in the event that wrongdoing is suspected. From the organisation’s perspective, a formalised disciplinary process provides a preplanned response to suspected infractions of cybersecurity policy that is designed to address all relevant concerns while protecting the organisation to the fullest extent possible.\nThe disciplinary process should be formalised and documented. It should ensure fair treatment of staff in compliance with all applicable regulations and agreements, protect the organisation’s interests, and include a range of acceptable responses that correspond to the seriousness of the infraction.\nRevise the disciplinary process as needed.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-1e, WORKFORCE-1g.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-2", "objective": "Increase Cybersecurity Awareness", "practiceId": "WORKFORCE-2a", "practice": "Cybersecurity awareness activities occur, at least in an ad hoc manner", "context": "Conduct activities to improve personnel’s understanding of cyber risks, cybersecurity-related laws and regulations to which the organisation is subject, and cybersecurity policies, procedures, and requirements. Topics can be general, for all personnel (such as event reporting), or specifically for certain roles (such as social engineering risks that affect financial services staff). All cybersecurity employees should be aware of the cybersecurity program strategy (PROGRAM-1a), so briefings about it should be included in awareness activities. Some awareness communications may be necessary with business partners, such as how PII is handled and how compliance with standards is achieved.\nCybersecurity awareness activities might include cybersecurity-focused emails from acknowledged experts, quarterly refreshers, lunch and learn sessions, posters, and a dedicated intranet site where news about current cybersecurity events and relevant articles, memos, alerts, etc. are posted.\nThese are examples of cybersecurity awareness topics: email phishing and other social engineering tactics; recognising indicators of insider threats; event and incident identification; classification and handling of data; acceptable use policies; identity management, including cloud accounts; account authorities; remote connectivity; and mobile device security.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-2a, WORKFORCE-2b, WORKFORCE-2c, WORKFORCE-2d, WORKFORCE-2e, WORKFORCE-2f, WORKFORCE-2g.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-2", "objective": "Increase Cybersecurity Awareness", "practiceId": "WORKFORCE-2b", "practice": "Cybersecurity awareness objectives are established and maintained", "context": "Objectives for cybersecurity awareness activities are based on awareness needs that define the messages that need to be communicated regarding cybersecurity to staff and other internal and external stakeholders. For some topics, awareness needs may be consistent across the function’s entire population; for others, different stakeholders may have different awareness needs. All of these groups should be identified and their awareness needs documented. \nSources of awareness needs include: \n• cybersecurity requirements that specify how assets are to be protected and sustained; organisational policies that attempt to enforce and reinforce acceptable behaviors or implement necessary controls across the enterprise, such as keeping payroll data confidential\n• vulnerabilities under watch or that are being actively managed\n• laws and regulations to which the organisation is subject because of its industry, geographical location, or type of business\n• maintaining security while using specific types of technology that pose increased cyber risk, such as email and mobile devices\nAwareness needs are temporal and may change as a result of changes in technology, policy, strategy, and risks being managed. A routine process to maintain and update awareness needs should be put in place.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-2a, WORKFORCE-2b, WORKFORCE-2c, WORKFORCE-2d, WORKFORCE-2e, WORKFORCE-2f, WORKFORCE-2g.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-2", "objective": "Increase Cybersecurity Awareness", "practiceId": "WORKFORCE-2c", "practice": "Cybersecurity awareness objectives are aligned with the defined threat profile (THREAT-2e)", "context": "To align cybersecurity awareness objectives with the defined threat profile, analyse the threat profile to understand the targeted assets, objectives, and attack Presenthods that may be employed by threat actors. This supports identification of the types and extent of awareness efforts necessary to address threats relevant to function. For example, if the threat profile includes a threat involving spear phishing, awareness content could be created on that topic.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of THREAT-2e.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-2a, WORKFORCE-2b, WORKFORCE-2c, WORKFORCE-2d, WORKFORCE-2e, WORKFORCE-2f, WORKFORCE-2g.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-2", "objective": "Increase Cybersecurity Awareness", "practiceId": "WORKFORCE-2d", "practice": "Cybersecurity awareness activities are conducted periodically", "context": "This practice builds on the cybersecurity awareness activities described in WORKFORCE-2a to include execution of these activities according to organisationally defined periods. For example, this may include awareness activities that are required as part of new employee onboarding, as well as annual refresher activities.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-2a, WORKFORCE-2b, WORKFORCE-2c, WORKFORCE-2d, WORKFORCE-2e, WORKFORCE-2f, WORKFORCE-2g.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-2", "objective": "Increase Cybersecurity Awareness", "practiceId": "WORKFORCE-2e", "practice": "Cybersecurity awareness activities are tailored to job role", "context": "Cybersecurity awareness activities may be tailored for specific jobs roles. For example, more advanced social engineering awareness training may be considered for higher risk roles, such as organisational leadership or roles that have the authority to approve financial transactions.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-2a, WORKFORCE-2b, WORKFORCE-2c, WORKFORCE-2d, WORKFORCE-2e, WORKFORCE-2f, WORKFORCE-2g.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-2", "objective": "Increase Cybersecurity Awareness", "practiceId": "WORKFORCE-2f", "practice": "Cybersecurity awareness activities address predefined states of operation (SITUATION-3g)", "context": "Cybersecurity awareness communications requirements should include providing information about predefined states of operation. For example, awareness communications could include information about when and why a shift from the normal state of operation to a high-security operating mode may be invoked in response to a declared cybersecurity incident of sufficient severity.\n\nRelated Practices\n• Dependency: Implementing this practice depends upon prior implementation of SITUATION-3g.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-2a, WORKFORCE-2b, WORKFORCE-2c, WORKFORCE-2d, WORKFORCE-2e, WORKFORCE-2f, WORKFORCE-2g.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-2", "objective": "Increase Cybersecurity Awareness", "practiceId": "WORKFORCE-2g", "practice": "The effectiveness of cybersecurity awareness activities is evaluated periodically and according to defined triggers, such as system changes and external events, and improvements are made as appropriate", "context": "The organisation should have a documented process to evaluate the effectiveness of awareness activities. Typically, assessing effectiveness is done by having employees fill out evaluations after awareness activities. It’s more challenging to evaluate the effectiveness of other awareness mechanisms such as posters or regular communications.\nThese are examples of Presenthods that can be used to evaluate the effectiveness of awareness activities:\n• questionnaires or surveys designed to measure people’s awareness of specific topics\n• focus groups to elicit the level of awareness of a group of people after an awareness activity and to gather improvement recommendations \n• selective interviews to inquire about awareness and any changes in behavior that may have occurred as a result of awareness activities\n• behavioral measures to objectively evaluate shifts in behavior after an awareness activity—for example, evaluating the strength of passwords before and after a password-awareness activity\n• observations, evaluations, and benchmarking activities conducted by external entities\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-2a, WORKFORCE-2b, WORKFORCE-2c, WORKFORCE-2d, WORKFORCE-2e, WORKFORCE-2f, WORKFORCE-2g.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-3", "objective": "Assign Cybersecurity Responsibilities", "practiceId": "WORKFORCE-3a", "practice": "Cybersecurity responsibilities for the function are identified, at least in an ad hoc manner", "context": "Identify the roles and activities needed to meet the needs of the function’s cybersecurity program. This would include typical cybersecurity roles such as security administrator, network administrator, and chief information security officer (or a similar role) and their assigned activities. Cybersecurity responsibilities are not restricted to traditional cybersecurity or IT roles. For example, operations engineers, human resources specialists, and procurement specialists typically have cybersecurity roles, and these roles may be performed by third parties. It may be useful to consider consulting industry best practices or frameworks, such as the NICE Cybersecurity Workforce Framework (NIST Special Publication 800-181) for help in identifying and describing fundamental cybersecurity responsibilities.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-3a, WORKFORCE-3d, WORKFORCE-3e.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-3", "objective": "Assign Cybersecurity Responsibilities", "practiceId": "WORKFORCE-3b", "practice": "Cybersecurity responsibilities are assigned to specific people, at least in an ad hoc manner", "context": "Assign personnel to the cybersecurity responsibilities identified in WORKFORCE-3a. These may be full-time roles or just a small set of responsibilities given to someone whose primary role is in a different area. The main goal is to ensure that some specific person (or persons) is accountable for each of the activities needed to implement the function’s cybersecurity program.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-3b, WORKFORCE-3c, WORKFORCE-3f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-3", "objective": "Assign Cybersecurity Responsibilities", "practiceId": "WORKFORCE-3c", "practice": "Cybersecurity responsibilities are assigned to specific roles, including external service providers", "context": "Clearly assigning cybersecurity responsibilities to roles establishes expectations for the tasks that personnel in those roles will perform. These roles may be explicitly cybersecurity-focused (network administrator, help desk, CISO, etc.) or may be other roles that contribute to cybersecurity activities. These responsibilities should also be specified in formal agreements with external entities, such as Internet service providers, security as service providers, cloud service providers, and IT/OT service providers.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-3b, WORKFORCE-3c, WORKFORCE-3f.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-3", "objective": "Assign Cybersecurity Responsibilities", "practiceId": "WORKFORCE-3d", "practice": "Cybersecurity responsibilities are documented", "context": "Cybersecurity responsibilities should be clearly documented (in job descriptions or performance criteria, for example) so that staff members know their responsibilities and can plan their performance accordingly. The definition of cybersecurity responsibilities in the job description establishes the foundation for performance management and measurement of the staff member’s commitment to helping the organisation sustain operational resilience.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-3a, WORKFORCE-3d, WORKFORCE-3e.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-3", "objective": "Assign Cybersecurity Responsibilities", "practiceId": "WORKFORCE-3e", "practice": "Cybersecurity responsibilities and job requirements are reviewed and updated periodically and according to defined triggers, such as system changes and changes to organisational structure", "context": "Responsibilities and requirements for a job should be reviewed and updated on a predetermined basis, using one or more triggers such as time elapsed, personnel changes, and process changes. Those triggers ensure that the responsibilities and requirements of the role adapt to changes in organisational risk, organisational processes, or the threat landscape. Keeping job responsibilities and requirements up-to-date helps ensure that personnel have a clear understanding of the roles they play in the cybersecurity of the organisation.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-3a, WORKFORCE-3d, WORKFORCE-3e.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-3", "objective": "Assign Cybersecurity Responsibilities", "practiceId": "WORKFORCE-3f", "practice": "Assigned cybersecurity responsibilities are managed to ensure adequacy and redundancy of coverage, including succession planning", "context": "Resource planning and analysis should be conducted to determine staffing requirements for cybersecurity activities. Periodic budgeting should ensure adequate funding for those requirements. Staffing needs should include training and availability of backup personnel, at least for critical tasks. Succession planning should involve higher level managers to identify potential successors and to ensure they are mentored and trained to take roles in the future contingent on vacancies that have not yet occurred.\n\nRelated Practices\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-3b, WORKFORCE-3c, WORKFORCE-3f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-4", "objective": "Develop Cybersecurity Workforce", "practiceId": "WORKFORCE-4a", "practice": "Cybersecurity training is made available to personnel with assigned cybersecurity responsibilities, at least in an ad hoc manner", "context": "Ensure that personnel in assigned responsibilities in WORKFORCE-3b have the knowledge and skills needed to perform those responsibilities. Conduct cybersecurity training internally or include funding in the cybersecurity program budget for personnel to take training from vendors. If training is provided internally, it should be relevant to the types of activities identified in WORKFORCE-3a. Additionally, as noted in the help text for WORKFORCE-3a, cybersecurity responsibilities are not restricted to traditional cybersecurity or IT roles. For example, operations engineers, human resources specialists, and procurement specialists typically have cybersecurity roles, and these roles may be performed by third parties.\nTraining might include attendance at conferences that provide deep dive sessions, vendor-specific training on tools used, and certificate programs. Payment for external training and certificate programs might be done only on a reimbursement basis after successful completion.\n\nRelated Practices\n• Input From: Implementing WORKFORCE-3b provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-4a, WORKFORCE-4d, WORKFORCE-4f.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-4", "objective": "Develop Cybersecurity Workforce", "practiceId": "WORKFORCE-4b", "practice": "Cybersecurity knowledge, skill, and ability requirements and gaps are identified for both current and future operational needs, at least in an ad hoc manner", "context": "To identify gaps, you first might create a skills inventory to identify and document the current skill set of the organisation’s personnel. This inventory provides a snapshot of current capabilities and can be used to diagnose resource shortages and gaps against both your current and future workforce needs.\nThe skills inventory is compared to the identified cybersecurity responsibilities for the function (WORKFORCE-3a) to identify skills that the organisation does not possess. The resulting skill gap provides insight into the current and future skill needs of the organisation. These skill gaps may prevent the organisation from performing adequately in managing cyber risks and may result in additional risk.", "mil": "MIL-1", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-4", "objective": "Develop Cybersecurity Workforce", "practiceId": "WORKFORCE-4c", "practice": "Identified cybersecurity knowledge, skill, and ability gaps are addressed through training, recruiting, and retention efforts", "context": "An organisation can address knowledge, skill, and ability gaps identified in WORKFORCE-4b in a number of ways: existing staff may be trained to acquire new skills, new staff may be hired to acquire the necessary skills, or the skills may be acquired by outsourcing the work that requires them. As gaps are closed, the skills inventory should be updated to ensure that recruiting and training efforts are aligned with current needs.\n\nRelated Practices\n• Input From: Implementing WORKFORCE-4b provides input that may be useful for implementing this practice.", "mil": "MIL-2", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-4", "objective": "Develop Cybersecurity Workforce", "practiceId": "WORKFORCE-4d", "practice": "Cybersecurity training is provided as a prerequisite to granting access to assets that are important to the delivery of the function", "context": "New personnel and personnel transferred into new positions are trained in cybersecurity principles, requirements, and best practices before they are allowed access to IT, OT, and information assets. The training may include cybersecurity training specific to the responsibilities of the position or specific to the assets that will be accessed in the position (such as supply chain security or cloud security training), as well as general cybersecurity training that applies to all personnel.\n\nRelated Practices\n• Input From: Implementing ASSET-1a and ASSET-2a provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-4a, WORKFORCE-4d, WORKFORCE-4f.", "mil": "MIL-2", "securityProfile": "SP-1"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-4", "objective": "Develop Cybersecurity Workforce", "practiceId": "WORKFORCE-4e", "practice": "The effectiveness of training programs is evaluated periodically, and improvements are made as appropriate", "context": "A process should exist to determine the effectiveness of training for meeting the training needs of staff involved in the cybersecurity program. \nThese are examples of Presenthods used to assess training effectiveness:\n• testing in the training context\n• post-training surveys of training participants\n• post-training surveys of training participants' managers about their satisfaction with the impact of the training on participants’ ability to perform their cybersecurity responsibilities\n• assessment mechanisms embedded in training materials\nDocument suggested improvements to the training plan based on the evaluation of the effectiveness of training activities and implement improvements when feasible.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-4", "objective": "Develop Cybersecurity Workforce", "practiceId": "WORKFORCE-4f", "practice": "Training programs include continuing education and professional development opportunities for personnel with significant cybersecurity responsibilities", "context": "The broad range of skills necessary to adequately perform the competencies required in the cybersecurity program requires extensive and ongoing training. Due to the critical nature of these program responsibilities, it is important that opportunities for cybersecurity personnel to get training are planned for and budgeted for.\n\nRelated Practices\n• Input From: Implementing WORKFORCE-3c provides input that may be useful for implementing this practice.\n• Progression: This practice is part of a practice progression. Practice progressions are groups of related practices that represent increasingly complete or more advanced implementations of an activity. The practices in this progression include: WORKFORCE-4a, WORKFORCE-4d, WORKFORCE-4f.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-AP", "objective": "WORKFORCE Anti-Patterns", "practiceId": "WORKFORCE-AP1", "practice": "Cybersecurity capabilities are dependent on one or two key personnel and no succession plan is in place to ensure retention of critical knowledge", "context": "Over time, organisations build cybersecurity knowledge that can become critical to the ongoing operation of their cybersecurity capabilities. If this cybersecurity knowledge is not documented, and only shared with one or two key personnel, then it may be lost should those personnel resign - especially if there is no succession plan in place.\n\nCybersecurity knowledge that is critical to the ongoing operation of your cybersecurity capabilities should be documented and transitioned to the appropriate personnel as part of succession planning.", "mil": "MIL-3", "securityProfile": "SP-2"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-AP", "objective": "WORKFORCE Anti-Patterns", "practiceId": "WORKFORCE-AP2", "practice": "Personnel interacting with critical assets are not assigned additional cybersecurity responsibilities", "context": "Critical assets (such as networks, systems, and applications) often carry a higher risk of malicious targeting.\n\nExamples of interaction (interacting) in the context of this anti-pattern include:\n- A user that intermittently accesses a critical asset\n- A user that regularly accesses one or more critical assets as a requirement of their job\n- An individual (or group of individuals e.g., a cleaning company) that has physical access to a location where a critical asset resides (e.g., a server room)\n\nOther examples should be considered as relevant to the scope and operations of your organisation.\n\nAs a result, you should ensure that personnel who interact with these assets have been assigned additional cyber security responsibilities.\n\nAn example of an additional cyber security responsibility is ensuring that personnel who interact with critical assets have undergone advanced cyber security awareness training.", "mil": "MIL-3", "securityProfile": "SP-3"}, {"domain": "WORKFORCE", "objectiveId": "WORKFORCE-AP", "objective": "WORKFORCE Anti-Patterns", "practiceId": "WORKFORCE-AP3", "practice": "Personnel interacting with critical assets are not aware of their additional assigned cybersecurity responsibilities (WORKFORCE-AP2)", "context": "WORKFORCE-AP2 must be \"Not Present\" for this Anti-Pattern to be \"Not Present\".\n\nSimilarly to WORKFORCE-AP3, personnel who interact with critical assets (such as networks, systems, and applications) should be aware of their additional assigned cybersecurity responsibilities.", "mil": "MIL-3", "securityProfile": "SP-3"}];
+
+    const defaultAssessment = () => ({
+      status: "Not Assessed",
+      owner: "",
+      evidence: "",
+      notes: "",
+      gap: "",
+      targetDate: "",
+      lastReviewed: "",
+      attachments: "",
+      milCriteria: {},
+      antiPattern: "not_present"
+    });
+
+    function buildInitialState() {
+      const assessments = {};
+      for (const practice of PRACTICES) {
+        assessments[practice.practiceId] = defaultAssessment();
+      }
+      return {
+        version: APP_CONFIG.appVersion,
+        framework: "AESCSF v2",
+        exportedAt: null,
+        assessments
+      };
+    }
+
+    function hydrateState(inputState) {
+      const base = buildInitialState();
+      if (inputState && inputState.assessments) {
+        for (const [practiceId, value] of Object.entries(inputState.assessments)) {
+          if (base.assessments[practiceId]) {
+            base.assessments[practiceId] = { ...defaultAssessment(), ...value };
+          }
+        }
+      }
+      base.exportedAt = inputState?.exportedAt || null;
+      base.version = inputState?.version || base.version;
+      return base;
+    }
+
+    function buildPersistableState(sourceState = state) {
+      return hydrateState(sourceState);
+    }
+
+    function createLocalStorageAdapter() {
+      return {
+        mode: "local",
+        load() {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return buildInitialState();
+          return hydrateState(JSON.parse(raw));
+        },
+        save(nextState) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(buildPersistableState(nextState)));
+        }
+      };
+    }
+
+    function createApiStorageAdapter(config) {
+      const localAdapter = createLocalStorageAdapter();
+      return {
+        mode: "api",
+        load() {
+          return localAdapter.load();
+        },
+        save(nextState) {
+          localAdapter.save(nextState);
+          /* Fire-and-forget sync to backend — errors are non-fatal */
+          this.saveRemote(nextState).catch(err => console.warn("[AESCSF] API sync failed:", err));
+        },
+        async loadRemote() {
+          const controller = new AbortController();
+          const timeoutId  = setTimeout(() => controller.abort(), config.requestTimeoutMs);
+          try {
+            const response = await fetch(`${config.apiBaseUrl}${config.apiAssessmentPath}`, {
+              method: "GET",
+              headers: { "Accept": "application/json" },
+              signal: controller.signal,
+              credentials: "same-origin"
+            });
+            if (response.status === 404) return null; // new user — no assessment saved yet
+            if (!response.ok) throw new Error(`Load failed with status ${response.status}`);
+            return hydrateState(await response.json());
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        },
+        async saveRemote(nextState) {
+          const controller = new AbortController();
+          const timeoutId  = setTimeout(() => controller.abort(), config.requestTimeoutMs);
+          try {
+            const response = await fetch(`${config.apiBaseUrl}${config.apiAssessmentPath}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+              },
+              body: JSON.stringify(buildPersistableState(nextState)),
+              signal: controller.signal,
+              credentials: "same-origin"
+            });
+            if (!response.ok) throw new Error(`Save failed with status ${response.status}`);
+            return response;
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        }
+      };
+    }
+
+    function createStorageAdapter(config) {
+      return config.storageMode === "api" ? createApiStorageAdapter(config) : createLocalStorageAdapter();
+    }
+
+    const storageAdapter = createStorageAdapter(APP_CONFIG);
+
+    function loadState() {
+      try {
+        return storageAdapter.load();
+      } catch (error) {
+        console.warn("Failed to load state:", error);
+        return buildInitialState();
+      }
+    }
+
+    let state = loadState();
+
+    function saveState() {
+      _orgGroupDataCache = null;
+      storageAdapter.save(state);
+    }
+
+    function replaceState(nextState, options = {}) {
+      const { persist = true } = options;
+      state = hydrateState(nextState);
+      if (persist) saveState();
+      return state;
+    }
+
+    function updateAssessmentField(practiceId, field, value, options = {}) {
+      const { persist = true } = options;
+      if (!state.assessments[practiceId]) return;
+      state.assessments[practiceId][field] = value;
+      if (persist) saveState();
+    }
+
+    window.AESCSF_APP = {
+      config: APP_CONFIG,
+      storageAdapter,
+      getState: () => buildPersistableState(state),
+      replaceState,
+      updateAssessmentField,
+      buildInitialState,
+      hydrateState
+    };
+
+    const app = document.getElementById("app");
+    const timelineApp = document.getElementById("timelineApp");
+    const dashboardPage = document.getElementById("dashboardPage");
+    const assessmentPage = document.getElementById("assessmentPage");
+    const timelinePage = document.getElementById("timelinePage");
+    const comparisonPage = document.getElementById("comparisonPage");
+    const pageTabs = document.querySelectorAll("[data-page-tab]");
+    const searchInput = document.getElementById("searchInput");
+    const domainFilter = document.getElementById("domainFilter");
+    const milFilter = document.getElementById("milFilter");
+    const spFilter = document.getElementById("spFilter");
+    const statusFilter = document.getElementById("statusFilter");
+    let domainRadarChart = null;
+    let milRadarChart = null;
+    let spBreakdownChart = null;
+    let comparisonRadarChart = null;
+    let comparisonStatusChart = null;
+    let comparisonGapChart = null;
+    let trendLineChart = null;
+    let comparisonState = { previous: null, current: null, previousLabel: "Previous Assessment", currentLabel: "Current Assessment" };
+    const openObjectiveKeys = new Set();
+
+    function objectiveKeyFor(group) {
+      return `${group.domain}|${group.objectiveId}|${group.objective}`;
+    }
+
+    function captureOpenObjectives() {
+      const currentKeys = [...document.querySelectorAll(".objective.open[data-objective-key]")]
+        .map(el => el.dataset.objectiveKey)
+        .filter(Boolean);
+      if (currentKeys.length) {
+        openObjectiveKeys.clear();
+        currentKeys.forEach(key => openObjectiveKeys.add(key));
+      }
+    }
+
+    function setActivePage(page) {
+      const role = window.__AESCSF_RBAC__?.role || "user";
+      const PAGE_ACCESS = {
+        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups","summary"]),
+        assessor:  new Set(["assessment","timeline","groups","summary"]),
+        user:      new Set(["assessment","timeline"]),
+        dashboard: new Set(["summary","dashboard","comparison"]),
+      };
+      const allowed = PAGE_ACCESS[role] || PAGE_ACCESS["user"];
+      if (!allowed.has(page)) page = allowed.values().next().value;
+      localStorage.setItem("aescsf_last_page", page);
+      dashboardPage.classList.toggle("active", page === "dashboard");
+      assessmentPage.classList.toggle("active", page === "assessment");
+      timelinePage.classList.toggle("active", page === "timeline");
+      if (comparisonPage) comparisonPage.classList.toggle("active", page === "comparison");
+      const adminPage = document.getElementById("adminPage");
+      if (adminPage) adminPage.classList.toggle("active", page === "admin");
+      const auditPage = document.getElementById("auditPage");
+      if (auditPage) auditPage.classList.toggle("active", page === "audit");
+      const groupsPage = document.getElementById("groupsPage");
+      if (groupsPage) groupsPage.classList.toggle("active", page === "groups");
+      const summaryPage = document.getElementById("summaryPage");
+      if (summaryPage) summaryPage.classList.toggle("active", page === "summary");
+      pageTabs.forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.pageTab === page);
+      });
+      document.querySelectorAll(".sidebar-nav-item[data-page-tab]").forEach(item => {
+        item.classList.toggle("active", item.dataset.pageTab === page);
+      });
+      if (window.innerWidth <= 900) {
+        document.getElementById("appSidebar")?.classList.remove("open");
+        document.getElementById("sidebarOverlay")?.classList.remove("open");
+        document.body.style.overflow = "";
+      }
+      if (page === "timeline")   { renderTimeline(); populateDomainTargetEditor(); if (window.__AESCSF_ORG_GOALS__ !== undefined) renderOrgGoal(); }
+      if (page === "dashboard")  renderDashboard();
+      if (page === "comparison") renderComparison();
+      if (page === "admin")      renderAdminPanel();
+      if (page === "audit")      renderAuditLog();
+      if (page === "groups")     renderGroupsPage();
+      if (page === "summary")    renderExecSummary();
+    }
+
+    function formatDate(dateString) {
+      if (!dateString) return "";
+      const date = new Date(dateString + "T00:00:00");
+      if (Number.isNaN(date.getTime())) return dateString;
+      return date.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
+    }
+
+    function effectiveTargetDate(practice) {
+      const domainTargets = window.__AESCSF_DOMAIN_TARGETS__ || {};
+      return domainTargets[practice.objectiveId]
+          || domainTargets[practice.domain]
+          || "";
+    }
+
+    function targetDateBadgeHtml(practice) {
+      const date = effectiveTargetDate(practice);
+      if (!date) return "";
+      const days = daysUntil(date);
+      if (days === null) return "";
+      const completed = isCompletedStatus((state.assessments[practice.practiceId] || defaultAssessment()).status);
+      if (completed) return `<span class="badge tag-complete" style="font-size:.72rem;">✓ Done · ${escapeHtml(date)}</span>`;
+      if (days < 0)  return `<span class="badge tag-overdue"   style="font-size:.72rem;">${Math.abs(days)}d overdue · ${escapeHtml(date)}</span>`;
+      if (days <= 30) return `<span class="badge tag-upcoming" style="font-size:.72rem;">${days === 0 ? "Due today" : `Due in ${days}d`} · ${escapeHtml(date)}</span>`;
+      return `<span class="badge tag-future" style="font-size:.72rem;">Due ${escapeHtml(date)}</span>`;
+    }
+
+    function daysUntil(dateString) {
+      if (!dateString) return null;
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const date = new Date(dateString + "T00:00:00");
+      if (Number.isNaN(date.getTime())) return null;
+      return Math.round((date - today) / 86400000);
+    }
+
+    function getTimelineStatus(assessment) {
+      if (!assessment.targetDate) return "No Target Date";
+      const delta = daysUntil(assessment.targetDate);
+      if (isCompletedStatus(assessment.status)) return "Complete";
+      if (delta < 0) return "Overdue";
+      if (delta <= 30) return "Upcoming";
+      return "Future";
+    }
+
+    function populateDomains() {
+      const rbac = window.__AESCSF_RBAC__;
+      const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const bypassFilter = !rbac || rbac.role === "admin" || rbac.role === "assessor";
+      const domains = (!bypassFilter && rbac.domains.length)
+        ? allDomains.filter(d => rbac.domains.includes(d))
+        : allDomains;
+      domainFilter.innerHTML = `<option value="">All</option>${domains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("")}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function isAntiPractice(practice) {
+      return practice.objectiveId.includes("-AP") || practice.practiceId.includes("-AP") || /anti-patterns?/i.test(practice.objective);
+    }
+
+    function isCompletedStatus(status) {
+      return status === "Fully" || status === "Yes" || status === "Not Present";
+    }
+
+    function calculateMilStatus(practice, mc) {
+      if (!mc || !mc.performed) {
+        return practice.mil === "MIL-1" ? "No" : "Not";
+      }
+      if (practice.mil === "MIL-1") return "Yes";
+      if (practice.mil === "MIL-2") {
+        const met = [mc.mc1, mc.mc2, mc.mc3, mc.mc4].filter(Boolean).length;
+        if (met >= 4) return "Fully";
+        if (met >= 3) return "Largely";
+        return "Partially";
+      }
+      if (practice.mil === "MIL-3") {
+        /* MIL-3 requires performed + all three prerequisites (MC1+MC2+MC3) */
+        if (!mc.mc1 || !mc.mc2 || !mc.mc3) return "Partially";
+        /* Fully = all MC1-9 satisfied */
+        if (mc.mc4 && mc.mc5 && mc.mc6 && mc.mc7 && mc.mc8 && mc.mc9) return "Fully";
+        /* Largely = prerequisites + 3 or more of MC5-9 */
+        const mil3Met = [mc.mc5, mc.mc6, mc.mc7, mc.mc8, mc.mc9].filter(Boolean).length;
+        if (mil3Met >= 3) return "Largely";
+        return "Partially";
+      }
+      return "Not Assessed";
+    }
+
+    function renderMilCriteria(practice, a) {
+      if (isAntiPractice(practice)) return "";
+      const mc = a.milCriteria || {};
+      const ap = a.antiPattern || "not_present";
+
+      const checkItem = (key, label, prereq) => `
+        <label class="mil-check-item${prereq ? " prereq" : ""}">
+          <input type="checkbox" data-mil-criteria="${key}"${mc[key] ? " checked" : ""}>
+          <span>${escapeHtml(label)}</span>
+        </label>`;
+
+      const apHtml = `
+        <div class="mil-anti-pattern-row">
+          <span class="mil-anti-pattern-label">Anti-Pattern:</span>
+          <select class="mil-anti-pattern-select" data-mil-criteria="antiPattern">
+            <option value="not_present"${ap === "not_present" ? " selected" : ""}>Not Present</option>
+            <option value="present_limited"${ap === "present_limited" ? " selected" : ""}>Present — Limited Context</option>
+            <option value="present_pervasive"${ap === "present_pervasive" ? " selected" : ""}>Present — Pervasive</option>
+          </select>
+          ${ap !== "not_present" ? `<span class="mil-anti-pattern-badge">&#9888; Anti-pattern flagged</span>` : ""}
+        </div>`;
+
+      if (practice.mil === "MIL-1") {
+        return `
+          <details class="mil-criteria-section">
+            <summary class="mil-criteria-summary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              <span class="mil-criteria-title">MIL-1 Criteria</span>
+              <span class="mil-criteria-hint">Binary — practice performed (even if ad-hoc)</span>
+            </summary>
+            <div class="mil-criteria-body">
+              <div class="mil-criteria-group">
+                ${checkItem("performed", "Practice is performed (even if ad-hoc and undocumented)")}
+              </div>
+              ${apHtml}
+            </div>
+          </details>`;
+      }
+
+      if (practice.mil === "MIL-2") {
+        return `
+          <details class="mil-criteria-section">
+            <summary class="mil-criteria-summary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              <span class="mil-criteria-title">MIL-2 Criteria</span>
+              <span class="mil-criteria-hint">Performed + Management Characteristics 1–4</span>
+            </summary>
+            <div class="mil-criteria-body">
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Performance</div>
+                ${checkItem("performed", "Practice is performed")}
+              </div>
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Management Characteristics</div>
+                ${checkItem("mc1", "1. The practice is documented")}
+                ${checkItem("mc2", "2. Stakeholders are identified and involved")}
+                ${checkItem("mc3", "3. Adequate resources are allocated (people, funding, tools)")}
+                ${checkItem("mc4", "4. Standards / guidelines have been identified to guide implementation")}
+              </div>
+              ${apHtml}
+            </div>
+          </details>`;
+      }
+
+      if (practice.mil === "MIL-3") {
+        return `
+          <details class="mil-criteria-section">
+            <summary class="mil-criteria-summary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              <span class="mil-criteria-title">MIL-3 Criteria</span>
+              <span class="mil-criteria-hint">Performed + MIL-2 prerequisites + Management Characteristics 5–9</span>
+            </summary>
+            <div class="mil-criteria-body">
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Performance</div>
+                ${checkItem("performed", "Practice is performed")}
+              </div>
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">MIL-2 Prerequisites <span class="mil-prereq-note">(all three required to reach MIL-3)</span></div>
+                ${checkItem("mc1", "1. The practice is documented", true)}
+                ${checkItem("mc2", "2. Stakeholders are identified and involved", true)}
+                ${checkItem("mc3", "3. Adequate resources are allocated (people, funding, tools)", true)}
+              </div>
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Management Characteristics — MIL-2</div>
+                ${checkItem("mc4", "4. Standards / guidelines have been identified")}
+              </div>
+              <div class="mil-criteria-group">
+                <div class="mil-criteria-group-label">Management Characteristics — MIL-3</div>
+                ${checkItem("mc5", "5. Activities are guided by policies or organisational directives")}
+                ${checkItem("mc6", "6. Personnel have adequate skills and knowledge")}
+                ${checkItem("mc7", "7. Policies include compliance requirements for specified standards")}
+                ${checkItem("mc8", "8. Responsibility and authority is formally assigned to personnel")}
+                ${checkItem("mc9", "9. Activities are periodically reviewed for policy conformance")}
+              </div>
+              ${apHtml}
+            </div>
+          </details>`;
+      }
+
+      return "";
+    }
+
+    function getStatusOptions(practice) {
+      if (isAntiPractice(practice)) {
+        return ["Not Assessed", "Present", "Not Present", "N/A"];
+      }
+      if (practice.mil === "MIL-1") {
+        return ["Not Assessed", "Yes", "No", "N/A"];
+      }
+      return ["Not Assessed", "Not", "Partially", "Largely", "Fully", "N/A"];
+    }
+
+    function normaliseStatusForSummary(status) {
+      if (status === "Present") return "Not";
+      if (status === "Not Present") return "Fully";
+      if (status === "Yes") return "Fully";
+      if (status === "No") return "Not";
+      return status;
+    }
+
+    function statusClass(status) {
+      switch (status) {
+        case "Partial":
+        case "Partially":
+        case "Not":
+        case "No":
+        case "Present":
+          return "status-notstarted";
+        case "Largely":
+          return "status-Largely";
+        case "Fully":
+        case "Yes":
+        case "Not Present":
+          return "status-Fully";
+        case "N/A":
+          return "status-na";
+        default:
+          return "status-notassessed";
+      }
+    }
+
+    function getFilteredPractices() {
+      const search = searchInput.value.trim().toLowerCase();
+      return PRACTICES.filter(practice => {
+        const assessment = state.assessments[practice.practiceId] || defaultAssessment();
+        const matchesSearch = !search || [
+          practice.domain,
+          practice.objectiveId,
+          practice.objective,
+          practice.practiceId,
+          practice.practice,
+          practice.context,
+          practice.mil,
+          practice.securityProfile,
+          assessment.owner,
+          assessment.evidence,
+          assessment.notes,
+          assessment.gap,
+          assessment.attachments
+        ].join(" ").toLowerCase().includes(search);
+
+        const matchesDomain = !domainFilter.value || practice.domain === domainFilter.value;
+        const matchesMil = !milFilter.value || practice.mil === milFilter.value;
+        const matchesSp = !spFilter.value || practice.securityProfile === spFilter.value;
+        const matchesStatus = !statusFilter.value || assessment.status === statusFilter.value;
+        const rbac = window.__AESCSF_RBAC__;
+        const matchesRbac = !rbac || rbac.role === "admin" || rbac.role === "assessor"
+          || rbac.domains.includes(practice.domain)
+          || (rbac.objectives || []).includes(practice.objectiveId);
+        return matchesSearch && matchesDomain && matchesMil && matchesSp && matchesStatus && matchesRbac;
+      });
+    }
+
+    function groupByObjective(practices) {
+      const map = new Map();
+      for (const practice of practices) {
+        const key = objectiveKeyFor(practice);
+        if (!map.has(key)) {
+          map.set(key, {
+            domain: practice.domain,
+            objectiveId: practice.objectiveId,
+            objective: practice.objective,
+            practices: []
+          });
+        }
+        map.get(key).practices.push(practice);
+      }
+      return [...map.values()];
+    }
+
+
+    function parseAttachmentLinks(value) {
+      if (!value) return [];
+      return value
+        .split(/\n|,/)
+        .map(item => item.trim())
+        .filter(Boolean)
+        .map(item => {
+          const normalised = item.startsWith("www.") ? "https://" + item : item;
+          const isUrl = /^(https?:\/\/|mailto:)/i.test(normalised);
+          return { raw: item, href: isUrl ? normalised : "" };
+        });
+    }
+
+    function renderAttachmentPreview(value) {
+      const links = parseAttachmentLinks(value);
+      if (!links.length) {
+        return `<div class="footer-note">No evidence links recorded.</div>`;
+      }
+      return `<div class="link-list">${
+        links.map((link, index) => link.href
+          ? `<a class="link-chip" href="${escapeHtml(link.href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link.raw)}">Attachment ${index + 1}</a>`
+          : `<span class="link-chip" title="${escapeHtml(link.raw)}">${escapeHtml(link.raw)}</span>`
+        ).join("")
+      }</div>`;
+    }
+
+    function scoreForStatus(status) {
+      if (status === "Partial" || status === "Partially") return 1;
+      if (status === "Largely") return 2;
+      if (status === "Fully" || status === "Yes" || status === "Not Present") return 3;
+      if (status === "No" || status === "Not" || status === "Present") return 0;
+      return 0;
+    }
+
+    function getAllRows() {
+      const rbac = window.__AESCSF_RBAC__;
+      return PRACTICES
+        .filter(p => !rbac || rbac.role === "admin" || rbac.role === "assessor" || !rbac.domains.length || rbac.domains.includes(p.domain))
+        .map(practice => ({
+          practice,
+          assessment: state.assessments[practice.practiceId] || defaultAssessment()
+        }));
+    }
+
+    function getGapRows() {
+      return getAllRows()
+        .map(row => ({
+          ...row,
+          overdue: row.assessment.targetDate && !isCompletedStatus(row.assessment.status) && (daysUntil(row.assessment.targetDate) ?? 0) < 0
+        }))
+        .filter(row => !isCompletedStatus(row.assessment.status) || row.assessment.gap.trim() || row.overdue);
+    }
+
+
+    function updateSummary() {
+      const practices = getFilteredPractices();
+      let Fully = 0, Largely = 0, notStarted = 0, notAssessed = 0;
+      for (const p of practices) {
+        const rawStatus = (state.assessments[p.practiceId] || defaultAssessment()).status;
+        const status = normaliseStatusForSummary(rawStatus);
+        if (status === "Fully") Fully++;
+        else if (status === "Largely") Largely++;
+        else if (status === "Partial" || status === "Partially" || status === "Not" || status === "No" || status === "Present") notStarted++;
+        else if (status === "Not Assessed") notAssessed++;
+      }
+      const completion = practices.length ? Math.round((Fully / practices.length) * 100) : 0;
+      document.getElementById("statTotal").textContent = practices.length;
+      document.getElementById("statFully").textContent = Fully;
+      document.getElementById("statLargely").textContent = Largely;
+      document.getElementById("statNotStarted").textContent = notStarted;
+      document.getElementById("statNotAssessed").textContent = notAssessed;
+      document.getElementById("statCompletion").textContent = completion + "%";
+      document.getElementById("completionBar").style.width = completion + "%";
+    }
+
+    function render() {
+      captureOpenObjectives();
+      const grouped = groupByObjective(getFilteredPractices());
+
+      if (!grouped.length) {
+        const rbacE = window.__AESCSF_RBAC__;
+        const hasAssignment = rbacE && rbacE.role !== "admin" && (rbacE.domains.length || (rbacE.objectives || []).length);
+        const isNoAssign = rbacE && rbacE.role !== "admin" && !hasAssignment;
+        app.innerHTML = emptyStateHtml({
+          icon: isNoAssign ? "clipboard" : "search",
+          title: isNoAssign ? "No practices assigned" : "No practices found",
+          body: isNoAssign
+            ? "No practices have been assigned to you yet. Contact your administrator to get started."
+            : "No practices match the current filters. Try adjusting your search or clearing the filters.",
+          actionLabel: isNoAssign ? null : "Clear filters",
+          actionId: isNoAssign ? null : "emptyStateClearFilters"
+        });
+        if (!isNoAssign) {
+          document.getElementById("emptyStateClearFilters")?.addEventListener("click", () => {
+            document.getElementById("searchInput").value = "";
+            document.getElementById("domainFilter").value = "";
+            document.getElementById("milFilter").value = "";
+            document.getElementById("spFilter").value = "";
+            document.getElementById("statusFilter").value = "";
+            render();
+          });
+        }
+        updateSummary();
+        return;
+      }
+
+      app.innerHTML = grouped.map(group => {
+        const groupFully = group.practices.filter(p => isCompletedStatus((state.assessments[p.practiceId] || defaultAssessment()).status)).length;
+        const objectiveKey = objectiveKeyFor(group);
+        const isOpen = openObjectiveKeys.has(objectiveKey);
+        return `
+          <section class="objective ${isOpen ? "open" : ""}" data-objective-key="${escapeHtml(objectiveKey)}">
+            <div class="objective-header" data-toggle-objective>
+              <div class="objective-title">
+                <h2>${escapeHtml(group.objectiveId)} — ${escapeHtml(group.objective)}</h2>
+                <div class="objective-Presenta">${escapeHtml(group.domain)} · ${group.practices.length} practice${group.practices.length === 1 ? "" : "s"}</div>
+              </div>
+              <div class="mini-progress">
+                <div class="counts">${groupFully} / ${group.practices.length} Fully</div>
+                <div class="progress-shell"><div class="progress-bar" style="width:${group.practices.length ? Math.round((groupFully / group.practices.length) * 100) : 0}%"></div></div>
+              </div>
+            </div>
+            <div class="objective-body">
+              ${group.practices.map(renderPracticeCard).join("")}
+            </div>
+          </section>
+        `;
+      }).join("");
+
+      updateSummary();
+      renderTimeline();
+      setTimeout(attachCharCounters, 0);
+    }
+
+    /* ── Confidence rating helpers ──────────────────────────────────────────── */
+    function confidenceLabel(r) {
+      return ["", "Very Low", "Low", "Medium", "High", "Very High"][r] || "";
+    }
+    function confidenceRatingClass(r) {
+      return r > 0 ? `conf-rating-${r}` : "";
+    }
+    function renderContributors(practiceId) {
+      if (!state._mergedView) return "";
+      const contributors = (state._contributors || {})[practiceId];
+      if (!contributors || contributors.length === 0) return "";
+      const rows = contributors.map(c => {
+        const sc = statusClass(c.assessment?.status || "");
+        const ev = c.assessment?.evidence ? escapeHtml(c.assessment.evidence.slice(0,80)) + (c.assessment.evidence.length > 80 ? "…" : "") : "—";
+        return `<div class="contributor-row">
+          <div class="contributor-name"><strong>${escapeHtml(c.display_name)}</strong><br><span style="color:var(--muted);font-size:.75rem;">${escapeHtml(c.username)}</span></div>
+          <span class="status-badge ${sc}">${escapeHtml(c.assessment?.status || "Not Assessed")}</span>
+          <div class="contributor-evidence">${ev}</div>
+          <button class="secondary" id="accept-${escapeHtml(c.user_oid)}-${escapeHtml(practiceId)}"
+            onclick="acceptContribution('${escapeHtml(c.user_oid)}','${escapeHtml(practiceId)}')" 
+            style="padding:3px 10px;font-size:.79rem;white-space:nowrap;">Accept</button>
+        </div>`;
+      }).join("");
+      return `<details class="contributor-section">
+        <summary class="contributor-summary">
+          👥 Respondents (${contributors.length}) — click to review and accept
+        </summary>
+        <div class="contributor-list">${rows}</div>
+      </details>`;
+    }
+
+    async function acceptContribution(userOid, practiceId) {
+      const btnId = `accept-${userOid}-${practiceId}`;
+      const btn = document.getElementById(btnId);
+      if (btn) { btn.disabled = true; btn.textContent = "Accepting…"; }
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(userOid)}/approve-contributions`, {
+          method: "POST", body: JSON.stringify({ practiceIds: [practiceId] })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          if (btn) { btn.disabled = false; btn.textContent = "Accept"; }
+          alert(`Failed: ${err.error || resp.status}`);
+          return;
+        }
+        // Update local merged state with the accepted answer
+        const c = (state._contributors?.[practiceId] || []).find(c => c.user_oid === userOid);
+        if (c) {
+          if (!state.assessments[practiceId]) state.assessments[practiceId] = defaultAssessment();
+          Object.assign(state.assessments[practiceId], c.assessment);
+        }
+        render();
+        // Scroll accepted card back into view and mark button
+        requestAnimationFrame(() => {
+          const newBtn = document.getElementById(btnId);
+          if (newBtn) { newBtn.textContent = "✓ Accepted"; newBtn.style.cssText += ";background:rgba(22,163,74,.12);color:#166534;border-color:rgba(22,163,74,.4);"; }
+        });
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = "Accept"; }
+        alert(err.message);
+      }
+    }
+
+    function renderConfidenceWidget(practiceId) {
+      const conf = (window.__AESCSF_CONFIDENCE__ || {})[practiceId] || { rating: 0, notes: "" };
+      const r = conf.rating || 0;
+      const pid = escapeHtml(practiceId);
+      const stars = [1,2,3,4,5].map(n =>
+        `<button type="button" class="conf-star${r >= n ? " filled" : ""}" data-confidence-star="${n}" data-pid="${pid}">${r >= n ? "★" : "☆"}</button>`
+      ).join("");
+      return `
+        <div class="confidence-widget">
+          <div class="confidence-widget-header">
+            <span class="confidence-admin-badge">Admin Only</span>
+            <span class="confidence-widget-title">Compliance Confidence</span>
+            <div class="conf-stars-row ${confidenceRatingClass(r)}" data-pid="${pid}">${stars}</div>
+            ${r > 0 ? `<span class="confidence-level-badge ${confidenceRatingClass(r)}">${confidenceLabel(r)}</span>` : ""}
+            ${r > 0 ? `<button type="button" class="conf-clear-btn" data-pid="${pid}" title="Clear rating">✕</button>` : ""}
+          </div>
+          <textarea class="conf-notes-input" data-pid="${pid}" placeholder="Confidence rationale (admin only, optional)…" maxlength="2000">${escapeHtml(conf.notes || "")}</textarea>
+        </div>`;
+    }
+    function updateConfidenceWidget(widget, rating, notes) {
+      const pid = widget.querySelector("[data-pid]")?.dataset.pid;
+      if (!window.__AESCSF_CONFIDENCE__) window.__AESCSF_CONFIDENCE__ = {};
+      if (pid) window.__AESCSF_CONFIDENCE__[pid] = { rating, notes };
+      const starsRow = widget.querySelector(".conf-stars-row");
+      if (starsRow) {
+        starsRow.className = `conf-stars-row ${confidenceRatingClass(rating)}`.trim();
+        starsRow.querySelectorAll("[data-confidence-star]").forEach(btn => {
+          const n = parseInt(btn.dataset.confidenceStar);
+          btn.className = `conf-star${rating >= n ? " filled" : ""}`;
+          btn.textContent = rating >= n ? "★" : "☆";
+        });
+      }
+      const header = widget.querySelector(".confidence-widget-header");
+      let badge    = widget.querySelector(".confidence-level-badge");
+      let clearBtn = widget.querySelector(".conf-clear-btn");
+      if (rating > 0) {
+        if (!badge) { badge = document.createElement("span"); header.appendChild(badge); }
+        badge.className   = `confidence-level-badge ${confidenceRatingClass(rating)}`;
+        badge.textContent = confidenceLabel(rating);
+        if (!clearBtn) {
+          clearBtn = document.createElement("button");
+          clearBtn.type = "button";
+          clearBtn.className = "conf-clear-btn";
+          if (pid) clearBtn.dataset.pid = pid;
+          clearBtn.title = "Clear rating";
+          clearBtn.textContent = "✕";
+          header.appendChild(clearBtn);
+        }
+      } else {
+        badge?.remove();
+        clearBtn?.remove();
+      }
+      const notesEl = widget.querySelector(".conf-notes-input");
+      if (notesEl && document.activeElement !== notesEl && notesEl.value !== (notes || "")) {
+        notesEl.value = notes || "";
+      }
+    }
+    async function saveConfidence(practiceId, rating, notes) {
+      if (!window.__AESCSF_CONFIDENCE__) window.__AESCSF_CONFIDENCE__ = {};
+      window.__AESCSF_CONFIDENCE__[practiceId] = { rating, notes };
+      try {
+        await adminFetch(`/admin/confidence/${encodeURIComponent(practiceId)}`, {
+          method: "PUT",
+          body: JSON.stringify({ rating, notes })
+        });
+      } catch (err) {
+        console.error("[AESCSF] Confidence save error:", err);
+      }
+    }
+    async function loadConfidenceRatings() {
+      if (window.__AESCSF_RBAC__?.role !== "admin" || APP_CONFIG.storageMode !== "api") return;
+      try {
+        const resp = await adminFetch("/admin/confidence");
+        if (!resp.ok) return;
+        window.__AESCSF_CONFIDENCE__ = await resp.json();
+        document.querySelectorAll(".confidence-widget").forEach(widget => {
+          const pid = widget.querySelector("[data-pid]")?.dataset.pid;
+          if (!pid) return;
+          const conf = (window.__AESCSF_CONFIDENCE__ || {})[pid] || { rating: 0, notes: "" };
+          updateConfidenceWidget(widget, conf.rating, conf.notes);
+        });
+      } catch (err) {
+        console.warn("[AESCSF] Could not load confidence ratings:", err);
+      }
+    }
+
+    function renderPracticeCard(practice) {
+      const userOwn      = state.assessments[practice.practiceId];
+      const endorsed     = window.__AESCSF_ENDORSEMENTS__?.[practice.practiceId];
+      const isPrefilled  = !userOwn && !!endorsed;
+      const a            = userOwn || (endorsed ? { ...defaultAssessment(), ...endorsed.data } : defaultAssessment());
+      const isAdmin      = window.__AESCSF_RBAC__?.role === "admin";
+      const changedSince = isAdmin && endorsed?.changed_since;
+      return `
+        <article class="practice-card ${statusClass(a.status)}" data-practice-id="${escapeHtml(practice.practiceId)}">
+          <div class="practice-top">
+            <div>
+              <h3 class="practice-title">${escapeHtml(practice.practiceId)} — ${escapeHtml(practice.practice)}${changedSince ? `<span class="endorsement-changed-badge">↑ Updated since endorsement</span>` : ""}</h3>
+              <div class="badges">
+                <span class="badge">${escapeHtml(practice.domain)}</span>
+                <span class="badge">${escapeHtml(practice.objectiveId)}</span>
+                <span class="badge">${escapeHtml(practice.mil)}</span>
+                <span class="badge">${escapeHtml(practice.securityProfile)}</span>
+                ${targetDateBadgeHtml(practice)}
+              </div>
+            </div>
+            <div class="field" style="min-width: 220px;">
+              <label class="required">Assessment Status</label>
+              <select data-field="status" class="status-select ${statusClass(a.status)}">
+                ${getStatusOptions(practice).map(option => `<option ${a.status === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+
+          <div class="context">${escapeHtml(practice.context)}</div>
+
+          ${renderMilCriteria(practice, a)}
+
+          ${isPrefilled ? `<div class="prefill-notice"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Pre-filled from endorsed version (${escapeHtml(endorsed.endorsed_by || "admin")}, ${new Date(endorsed.endorsed_at * 1000).toLocaleDateString("en-AU")}). Edit and save to record your own assessment.</div>` : ""}
+
+          <div class="grid-2">
+            <div class="field">
+              <label>Owner</label>
+              <input data-field="owner" type="text" value="${escapeHtml(a.owner)}" placeholder="Responsible person or team" />
+            </div>
+            <div class="field">
+              <label>Last Reviewed</label>
+              <div class="input-wrapper"><input data-field="lastReviewed" type="date" value="${escapeHtml(a.lastReviewed)}" /><svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <label>Evidence</label>
+              <textarea data-field="evidence" maxlength="4000" placeholder="Record the evidence demonstrating implementation, such as policy names, screenshots, ticket references, system settings, reports, or interview notes.">${escapeHtml(a.evidence)}</textarea>
+            </div>
+            <div class="field">
+              <label>Gap / Remediation</label>
+              <textarea data-field="gap" maxlength="4000" placeholder="Describe any implementation gap, control weakness, or remediation action.">${escapeHtml(a.gap)}</textarea>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <label>Notes</label>
+              <textarea data-field="notes" maxlength="4000" placeholder="Add assessment notes, assumptions, caveats, or references.">${escapeHtml(a.notes)}</textarea>
+            </div>
+            <div class="field">
+              <label>Evidence Attachment Links</label>
+              <textarea data-field="attachments" maxlength="4000" placeholder="Enter one URL, file path, SharePoint link, ticket reference, or document reference per line.">${escapeHtml(a.attachments)}</textarea>
+              <div class="attachment-preview">${renderAttachmentPreview(a.attachments)}</div>
+            </div>
+          </div>
+
+          ${APP_CONFIG.storageMode === "api" ? `
+          <div class="grid-2" style="margin-top:4px;">
+            <div class="file-upload-section">
+              <div class="file-upload-label">Uploaded Evidence Files</div>
+              <div class="file-drop-zone" data-practice-id="${escapeHtml(practice.practiceId)}"
+                   onclick="document.getElementById('fileInput-${escapeHtml(practice.practiceId)}').click()"
+                   ondragover="event.preventDefault();this.classList.add('drag-over')"
+                   ondragleave="this.classList.remove('drag-over')"
+                   ondrop="handleFileDrop(event,'${escapeHtml(practice.practiceId)}')">
+                <input type="file" id="fileInput-${escapeHtml(practice.practiceId)}" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.docx,.xlsx,.pptx,.doc,.xls"
+                       onchange="handleFileInputChange(event,'${escapeHtml(practice.practiceId)}')">
+                Click to upload or drag &amp; drop — PDF, images, Word, Excel, CSV (max 20 MB)
+              </div>
+              <div class="uploaded-files-list" id="files-${escapeHtml(practice.practiceId)}">
+                <div style="color:var(--muted);font-size:.78rem;padding:4px 0;">Loading files…</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:4px;">
+              <button class="practice-save-btn">Save changes</button>
+              <button class="file-history-btn" onclick="openHistoryModal('${escapeHtml(practice.practiceId)}')">&#128337; Change History</button>
+            </div>
+          </div>` : `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+            <button class="practice-save-btn">Save changes</button>
+            <button class="file-history-btn" onclick="openHistoryModal('${escapeHtml(practice.practiceId)}')">&#128337; Change History</button>
+          </div>`}
+          ${window.__AESCSF_RBAC__?.role === "admin" && APP_CONFIG.storageMode === "api" ? renderConfidenceWidget(practice.practiceId) : ""}
+          ${window.__AESCSF_RBAC__?.role === "admin" ? renderContributors(practice.practiceId) : ""}
+        </article>
+      `;
+    }
+
+
+    function renderTimeline() {
+      const scheduled = [];
+      let noDate = 0;
+      const domainTargets = window.__AESCSF_DOMAIN_TARGETS__     || {};
+      const groupTargets  = window.__AESCSF_ACTIVE_GROUP_TARGETS__ || null;
+      const groupMeta     = window.__AESCSF_ACTIVE_GROUP_META__    || null;
+
+      for (const practice of PRACTICES) {
+        // When a group is selected, skip practices outside its scope
+        if (groupMeta) {
+          const inScope = (groupMeta.domains    || []).includes(practice.domain)
+                       || (groupMeta.objectives || []).includes(practice.objectiveId);
+          if (!inScope) { noDate++; continue; }
+        }
+        const assessment   = state.assessments[practice.practiceId] || defaultAssessment();
+        const practiceDate = assessment.targetDate;
+        // Group target: objective-level overrides domain-level
+        const groupDate    = groupTargets
+          ? (groupTargets[practice.objectiveId] || groupTargets[practice.domain] || "")
+          : "";
+        const domainDate    = domainTargets[practice.domain] || "";
+        const effectiveDate = practiceDate || groupDate || domainDate || "";
+        if (!effectiveDate) {
+          noDate++;
+          continue;
+        }
+        const effectiveAssessment = practiceDate ? assessment : { ...assessment, targetDate: effectiveDate };
+        scheduled.push({
+          practice,
+          assessment:    effectiveAssessment,
+          isDomainDate:  !practiceDate && !!domainDate,
+          timelineStatus: getTimelineStatus(effectiveAssessment),
+          dayOffset:      daysUntil(effectiveDate)
+        });
+      }
+
+      scheduled.sort((a, b) => {
+        if (a.assessment.targetDate !== b.assessment.targetDate) {
+          return a.assessment.targetDate.localeCompare(b.assessment.targetDate);
+        }
+        return a.practice.practiceId.localeCompare(b.practice.practiceId);
+      });
+
+      const groups = [
+        { key: "Overdue", title: "Overdue", description: "Target dates that have passed and are not yet complete." },
+        { key: "Upcoming", title: "Due in the Next 30 Days", description: "Target dates that fall within the next 30 days." },
+        { key: "Future", title: "Future Schedule", description: "Target dates more than 30 days away." },
+        { key: "Complete", title: "Completed Items with Target Dates", description: "Practices marked complete where a target date has been recorded." }
+      ];
+
+      const counts = {
+        scheduled: scheduled.length,
+        overdue: scheduled.filter(item => item.timelineStatus === "Overdue").length,
+        upcoming: scheduled.filter(item => item.timelineStatus === "Upcoming").length,
+        noDate
+      };
+
+      document.getElementById("timelineScheduled").textContent = counts.scheduled;
+      document.getElementById("timelineOverdue").textContent = counts.overdue;
+      document.getElementById("timelineUpcoming").textContent = counts.upcoming;
+      document.getElementById("timelineNoDate").textContent = counts.noDate;
+
+      if (!scheduled.length) {
+        timelineApp.innerHTML = emptyStateHtml({
+          icon: "timeline",
+          title: "No target dates set",
+          body: "Set domain or group target dates using the editor above to build the schedule timeline.",
+          actionLabel: "Set domain dates",
+          actionId: "emptyTimelineGoAssess"
+        });
+        document.getElementById("emptyTimelineGoAssess")?.addEventListener("click", () => document.getElementById("domainTargetEditor")?.scrollIntoView({ behavior: "smooth" }));
+        return;
+      }
+
+      timelineApp.innerHTML = `<div class="timeline-list">${
+        groups.map(group => {
+          const items = scheduled.filter(item => item.timelineStatus === group.key);
+          return `
+            <section class="timeline-group">
+              <div class="timeline-group-header">
+                <div>
+                  <h3 style="margin:0 0 4px 0;">${escapeHtml(group.title)}</h3>
+                  <div class="objective-Presenta">${escapeHtml(group.description)}</div>
+                </div>
+                <span class="badge">${items.length} item${items.length === 1 ? "" : "s"}</span>
+              </div>
+              <div class="timeline-items">
+                ${items.length ? items.map(renderTimelineItem).join("") : `<div class="empty">No practices in this section.</div>`}
+              </div>
+            </section>
+          `;
+        }).join("")
+      }</div>`;
+    }
+
+    function renderTimelineItem(item) {
+      const { practice, assessment, timelineStatus, dayOffset, isDomainDate } = item;
+      const dateLabel = formatDate(assessment.targetDate);
+      let timingText = "";
+      let timingClass = "tag-future";
+
+      if (timelineStatus === "Complete") {
+        timingText = "Completed";
+        timingClass = "tag-complete";
+      } else if (timelineStatus === "Overdue") {
+        timingText = `${Math.abs(dayOffset)} day${Math.abs(dayOffset) === 1 ? "" : "s"} overdue`;
+        timingClass = "tag-overdue";
+      } else if (timelineStatus === "Upcoming") {
+        timingText = dayOffset === 0 ? "Due today" : `Due in ${dayOffset} day${dayOffset === 1 ? "" : "s"}`;
+        timingClass = "tag-upcoming";
+      } else {
+        timingText = `Due in ${dayOffset} day${dayOffset === 1 ? "" : "s"}`;
+        timingClass = "tag-future";
+      }
+
+      return `
+        <article class="timeline-item ${timingClass}">
+          <div class="timeline-item-top">
+            <div>
+              <h3>${escapeHtml(practice.practiceId)} — ${escapeHtml(practice.practice)}</h3>
+              <div class="timeline-Presenta">
+                <span class="badge">${escapeHtml(practice.domain)}</span>
+                <span class="badge">${escapeHtml(practice.objectiveId)}</span>
+                <span class="badge">${escapeHtml(practice.mil)}</span>
+                <span class="badge">${escapeHtml(assessment.status)}</span>
+                <span class="badge ${timingClass}">${escapeHtml(timingText)}</span>
+                ${isDomainDate ? `<span class="badge badge-domain-date" title="Date inherited from domain target">Domain date</span>` : ""}
+              </div>
+            </div>
+            <div class="timeline-date">${escapeHtml(dateLabel)}</div>
+          </div>
+          <div class="timeline-detail"><strong>Owner:</strong> ${escapeHtml(assessment.owner || "Not assigned")}\n<strong>Gap / Remediation:</strong> ${escapeHtml(assessment.gap || "Not recorded")}\n<strong>Evidence:</strong> ${escapeHtml(assessment.evidence || "Not recorded")}\n<strong>Last Reviewed:</strong> ${escapeHtml(formatDate(assessment.lastReviewed) || "Not recorded")}<br><br><strong>Attachments:</strong>${renderAttachmentPreview(assessment.attachments)}</div>
+        </article>
+      `;
+    }
+
+
+    function populateDomainTargetEditor() {
+      const grid = document.getElementById("domainTargetGrid");
+      if (!grid) return;
+      const targets = window.__AESCSF_DOMAIN_TARGETS__ || {};
+      grid.innerHTML = ALL_DOMAINS.map(domain => `
+        <div class="domain-target-row">
+          <label>${escapeHtml(domain)}</label>
+          <input type="date" data-domain="${escapeHtml(domain)}" value="${escapeHtml(targets[domain] || "")}">
+        </div>
+      `).join("");
+      // Wire "apply to all domains" button
+      document.getElementById("domainTargetApplyAll")?.addEventListener("click", () => {
+        const val = document.getElementById("domainTargetSetAll")?.value;
+        if (!val) return;
+        grid.querySelectorAll("input[data-domain]").forEach(inp => { inp.value = val; });
+      });
+    }
+
+    async function saveDomainTargets() {
+      const grid = document.getElementById("domainTargetGrid");
+      const statusEl = document.getElementById("domainTargetStatus");
+      if (!grid) return;
+      const targets = {};
+      grid.querySelectorAll("input[data-domain]").forEach(input => {
+        targets[input.dataset.domain] = input.value;
+      });
+      try {
+        const r = await adminFetch("/domain-targets", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(targets)
+        });
+        if (!r.ok) throw new Error(await r.text());
+        window.__AESCSF_DOMAIN_TARGETS__ = {};
+        for (const [domain, date] of Object.entries(targets)) {
+          if (date) window.__AESCSF_DOMAIN_TARGETS__[domain] = date;
+        }
+        if (statusEl) {
+          statusEl.textContent = "Saved";
+          setTimeout(() => { statusEl.textContent = ""; }, 2500);
+        }
+        renderTimeline();
+      } catch (e) {
+        if (statusEl) statusEl.textContent = "Save failed: " + e.message;
+      }
+    }
+
+    async function loadGroupTargetsForFilter(groupId) {
+      if (!window.__AESCSF_GROUP_TARGETS_CACHE__) window.__AESCSF_GROUP_TARGETS_CACHE__ = {};
+      if (window.__AESCSF_GROUP_TARGETS_CACHE__[groupId]) return window.__AESCSF_GROUP_TARGETS_CACHE__[groupId];
+      try {
+        const r = await adminFetch(`/groups/${groupId}/targets`);
+        const data = r.ok ? await r.json() : { targets: {} };
+        window.__AESCSF_GROUP_TARGETS_CACHE__[groupId] = data.targets || {};
+        return window.__AESCSF_GROUP_TARGETS_CACHE__[groupId];
+      } catch { return {}; }
+    }
+
+    function setupTimelineGroupFilter(groups) {
+      const wrapper = document.getElementById("timelineGroupFilterWrapper");
+      const sel     = document.getElementById("timelineGroupFilter");
+      if (!wrapper || !sel || !groups?.length) return;
+      wrapper.style.display = "";
+      while (sel.options.length > 1) sel.remove(1);
+      for (const g of groups) {
+        const opt = document.createElement("option");
+        opt.value       = g.id;
+        opt.textContent = g.name;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener("change", async () => {
+        const groupId = sel.value ? parseInt(sel.value) : null;
+        if (!groupId) {
+          window.__AESCSF_ACTIVE_GROUP_TARGETS__ = null;
+          window.__AESCSF_ACTIVE_GROUP_META__    = null;
+        } else {
+          // Fetch full group detail to get domains + objectives
+          const [targets, detail] = await Promise.all([
+            loadGroupTargetsForFilter(groupId),
+            adminFetch(`/groups/${groupId}`).then(r => r.ok ? r.json() : null).catch(() => null)
+          ]);
+          window.__AESCSF_ACTIVE_GROUP_TARGETS__ = targets;
+          window.__AESCSF_ACTIVE_GROUP_META__    = detail || groups.find(g => g.id === groupId) || null;
+        }
+        renderTimeline();
+      });
+    }
+
+    /* ── Organisation Goal ─────────────────────────────────────────────────── */
+
+    async function loadOrgGoal() {
+      try {
+        const r = await adminFetch("/admin/org-goals");
+        window.__AESCSF_ORG_GOALS__ = r.ok ? await r.json() : [];
+      } catch { window.__AESCSF_ORG_GOALS__ = []; }
+      renderOrgGoal();
+    }
+
+    function renderOrgGoal() {
+      const body = document.getElementById("orgGoalBody");
+      if (!body) return;
+      const goals = (window.__AESCSF_ORG_GOALS__ || []);
+
+      /* Build progress for each goal */
+      function goalProgress(g) {
+        if (!g.targetSp) return null;
+        const sp = g.targetSp;
+        const rank = { "SP-1": 1, "SP-2": 2, "SP-3": 3 };
+        const spPractices = PRACTICES.filter(p => {
+          const r = rank[p.securityProfile];
+          return r && r <= (rank[sp] || 0);
+        });
+        const total = spPractices.length;
+        if (!total) return null;
+        let fully = 0;
+        for (const p of spPractices) {
+          const a = state.assessments[p.practiceId];
+          if (a && isCompletedStatus(a.status)) fully++;
+        }
+        return { total, fully, pct: Math.round(fully / total * 100) };
+      }
+
+      function goalCardHtml(g, idx) {
+        const prog = goalProgress(g);
+        const daysLeft = g.targetDate ? daysUntil(g.targetDate) : null;
+        const dueSt = daysLeft === null ? ""
+          : daysLeft < 0 ? `<span style="color:var(--danger);">${Math.abs(daysLeft)}d overdue</span>`
+          : `<span style="color:var(--muted);">Due in ${daysLeft}d (${g.targetDate})</span>`;
+        return `<div class="org-goal-card" data-goal-idx="${idx}">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:2px;">${escapeHtml(g.goalName || "Untitled goal")}</div>
+            <div style="font-size:.82rem;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              ${g.targetSp ? `<span class="role-badge assessor">${escapeHtml(g.targetSp)}</span>` : "<span style='color:var(--muted)'>All practices</span>"}
+              ${dueSt}
+              ${prog ? `<span>${prog.fully} / ${prog.total} practices (${prog.pct}%)</span>` : ""}
+            </div>
+            ${prog ? `<div style="height:6px;border-radius:999px;background:var(--border);overflow:hidden;max-width:420px;">
+              <div style="height:100%;border-radius:999px;background:linear-gradient(90deg,var(--primary),#818cf8);width:${prog.pct}%;transition:width .4s;"></div>
+            </div>` : ""}
+          </div>
+        </div>`;
+      }
+
+      const isAdmin = window.__AESCSF_RBAC__?.role === "admin" || window.__AESCSF_RBAC__?.role === "assessor";
+
+      body.innerHTML = `
+        <div id="orgGoalDisplay">
+          ${goals.length ? goals.map((g, i) => goalCardHtml(g, i)).join("") : `<div style="color:var(--muted);font-size:.875rem;padding:8px 0;">No organisation goals set.</div>`}
+          ${isAdmin ? `<button class="secondary" id="orgGoalEditBtn" style="margin-top:12px;font-size:.8rem;padding:5px 12px;">${goals.length ? "Edit goals" : "Set goals"}</button>` : ""}
+        </div>
+        <div id="orgGoalForm" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+          <div id="orgGoalRows"></div>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="secondary" id="orgGoalAddRowBtn" style="font-size:.8rem;padding:5px 12px;">+ Add another goal</button>
+            <button class="primary" id="orgGoalSaveBtn" style="font-size:.85rem;">Save goals</button>
+            <button class="secondary" id="orgGoalCancelBtn" style="font-size:.85rem;">Cancel</button>
+            <span class="domain-target-status" id="orgGoalStatus"></span>
+          </div>
+        </div>`;
+
+      function buildEditRows(data) {
+        const container = document.getElementById("orgGoalRows");
+        if (!container) return;
+        container.innerHTML = data.map((g, i) => `
+          <div class="org-goal-edit-row" data-row="${i}" style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;margin-bottom:8px;">
+            <input type="text" class="og-name" value="${escapeHtml(g.goalName)}" placeholder="e.g. Achieve SP-2 compliance" maxlength="120"
+              style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+            <select class="og-sp" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+              <option value="" ${!g.targetSp?"selected":""}>All</option>
+              <option value="SP-1" ${g.targetSp==="SP-1"?"selected":""}>SP-1</option>
+              <option value="SP-2" ${g.targetSp==="SP-2"?"selected":""}>SP-2</option>
+              <option value="SP-3" ${g.targetSp==="SP-3"?"selected":""}>SP-3</option>
+            </select>
+            <input type="date" class="og-date" value="${escapeHtml(g.targetDate)}"
+              style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.875rem;">
+            <button class="ghost og-remove" data-row="${i}" style="padding:4px 8px;color:var(--danger);font-size:1rem;" title="Remove goal">×</button>
+          </div>`).join("");
+        container.querySelectorAll(".og-remove").forEach(btn => {
+          btn.addEventListener("click", () => {
+            data.splice(Number(btn.dataset.row), 1);
+            buildEditRows(data);
+          });
+        });
+      }
+
+      let editData = goals.map(g => ({ ...g }));
+
+      document.getElementById("orgGoalEditBtn")?.addEventListener("click", () => {
+        editData = goals.length ? goals.map(g => ({ ...g })) : [{ goalName: "", targetSp: "", targetDate: "" }];
+        buildEditRows(editData);
+        document.getElementById("orgGoalForm").style.display = "";
+        document.getElementById("orgGoalDisplay").style.display = "none";
+      });
+
+      document.getElementById("orgGoalAddRowBtn")?.addEventListener("click", () => {
+        editData.push({ goalName: "", targetSp: "", targetDate: "" });
+        buildEditRows(editData);
+      });
+
+      document.getElementById("orgGoalCancelBtn")?.addEventListener("click", () => {
+        document.getElementById("orgGoalForm").style.display = "none";
+        document.getElementById("orgGoalDisplay").style.display = "";
+      });
+
+      document.getElementById("orgGoalSaveBtn")?.addEventListener("click", async () => {
+        const statusEl = document.getElementById("orgGoalStatus");
+        /* Collect current values from the DOM */
+        const payload = [...document.querySelectorAll("#orgGoalRows .org-goal-edit-row")].map(row => ({
+          goalName:   row.querySelector(".og-name")?.value  || "",
+          targetSp:   row.querySelector(".og-sp")?.value    || "",
+          targetDate: row.querySelector(".og-date")?.value  || "",
+        }));
+        try {
+          const r = await adminFetch("/admin/org-goals", { method: "PUT", body: JSON.stringify(payload) });
+          if (!r.ok) throw new Error(await r.text());
+          window.__AESCSF_ORG_GOALS__ = await r.json();
+          if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 2000); }
+          renderOrgGoal();
+        } catch (e) {
+          if (statusEl) statusEl.textContent = "Save failed: " + e.message;
+        }
+      });
+    }
+
+    function buildDashboardPresentrics() {
+      const rows = getAllRows();
+      const total = rows.length;
+      const fully = rows.filter(row => isCompletedStatus(row.assessment.status)).length;
+      const largely = rows.filter(row => row.assessment.status === "Largely").length;
+      const partial = rows.filter(row => ["Partial","Partially","Not","No","Present"].includes(row.assessment.status)).length;
+      const overdue = rows.filter(row => row.assessment.targetDate && !isCompletedStatus(row.assessment.status) && (daysUntil(row.assessment.targetDate) ?? 0) < 0).length;
+      const gaps = getGapRows().length;
+      const evidenceCount = rows.filter(row => row.assessment.evidence.trim() || row.assessment.attachments.trim()).length;
+      const completion = total ? Math.round((fully / total) * 100) : 0;
+      const evidenceCoverage = total ? Math.round((evidenceCount / total) * 100) : 0;
+      return { rows, total, fully, largely, partial, overdue, gaps, evidenceCoverage, completion };
+    }
+
+    function averageScoreForGroup(rows) {
+      if (!rows.length) return 0;
+      const totalScore = rows.reduce((sum, row) => sum + scoreForStatus(row.assessment.status), 0);
+      return Number((totalScore / rows.length).toFixed(2));
+    }
+
+    /* ── Chart theme helpers ─────────────────────────────────────────── */
+    function getChartColors() {
+      const theme = document.documentElement.dataset.theme || "light";
+      if (theme === "cyber") return {
+        grid:         "rgba(0,229,160,0.14)",
+        angleLines:   "rgba(0,229,160,0.14)",
+        tickColor:    "#007a50",
+        pointLabel:   "#00b87a",
+        backdrop:     "transparent",
+        legend:       "#00b87a",
+        barGrid:      "rgba(0,229,160,0.10)",
+        domain: { bg:"rgba(0,229,160,0.18)",  border:"rgba(0,229,160,0.95)",  point:"rgba(0,229,160,1)"  },
+        mil:    { bg:"rgba(251,191,36,0.18)", border:"rgba(251,191,36,0.9)",  point:"rgba(251,191,36,1)" },
+        sp: {
+          "SP-1":{ bg:"rgba(0,229,160,0.15)",  border:"rgba(0,229,160,0.95)", point:"rgba(0,229,160,1)"  },
+          "SP-2":{ bg:"rgba(251,191,36,0.15)", border:"rgba(251,191,36,0.9)", point:"rgba(251,191,36,1)" },
+          "SP-3":{ bg:"rgba(255,43,110,0.14)", border:"rgba(255,43,110,0.85)",point:"rgba(255,43,110,1)" },
+        },
+        comp: ["rgba(0,229,160,0.25)","rgba(251,191,36,0.20)"],
+        compBorder: ["rgba(0,229,160,0.9)","rgba(251,191,36,0.85)"],
+      };
+      if (theme === "dark") return {
+        grid:         "rgba(148,163,184,0.14)",
+        angleLines:   "rgba(148,163,184,0.14)",
+        tickColor:    "#64748b",
+        pointLabel:   "#94a3b8",
+        backdrop:     "transparent",
+        legend:       "#94a3b8",
+        barGrid:      "rgba(148,163,184,0.10)",
+        domain: { bg:"rgba(59,130,246,0.22)",  border:"rgba(59,130,246,0.9)",  point:"rgba(59,130,246,1)"  },
+        mil:    { bg:"rgba(34,197,94,0.20)",   border:"rgba(34,197,94,0.85)",  point:"rgba(34,197,94,1)"   },
+        sp: {
+          "SP-1":{ bg:"rgba(59,130,246,0.18)",  border:"rgba(59,130,246,0.9)",  point:"rgba(59,130,246,1)"  },
+          "SP-2":{ bg:"rgba(34,197,94,0.16)",   border:"rgba(34,197,94,0.85)",  point:"rgba(34,197,94,1)"   },
+          "SP-3":{ bg:"rgba(139,92,246,0.16)",  border:"rgba(139,92,246,0.85)", point:"rgba(139,92,246,1)"  },
+        },
+        comp: ["rgba(59,130,246,0.22)","rgba(34,197,94,0.18)"],
+        compBorder: ["rgba(59,130,246,0.9)","rgba(34,197,94,0.85)"],
+      };
+      return {
+        grid:         "rgba(148,163,184,0.22)",
+        angleLines:   "rgba(148,163,184,0.22)",
+        tickColor:    "#64748b",
+        pointLabel:   "#475569",
+        backdrop:     "rgba(255,255,255,0.82)",
+        legend:       "#64748b",
+        barGrid:      "rgba(148,163,184,0.18)",
+        domain: { bg:"rgba(21,94,239,0.18)",   border:"rgba(21,94,239,0.95)",  point:"rgba(21,94,239,1)"   },
+        mil:    { bg:"rgba(6,118,71,0.16)",    border:"rgba(6,118,71,0.9)",    point:"rgba(6,118,71,1)"    },
+        sp: {
+          "SP-1":{ bg:"rgba(21,94,239,0.15)",  border:"rgba(21,94,239,0.95)",  point:"rgba(21,94,239,1)"   },
+          "SP-2":{ bg:"rgba(6,118,71,0.13)",   border:"rgba(6,118,71,0.9)",    point:"rgba(6,118,71,1)"    },
+          "SP-3":{ bg:"rgba(109,40,217,0.13)", border:"rgba(109,40,217,0.85)", point:"rgba(109,40,217,1)"  },
+        },
+        comp: ["rgba(21,94,239,0.15)","rgba(6,118,71,0.13)"],
+        compBorder: ["rgba(21,94,239,0.9)","rgba(6,118,71,0.85)"],
+      };
+    }
+
+    function radarScaleOpts(maxVal = 3) {
+      const c = getChartColors();
+      return { r: { min: 0, max: maxVal, ticks: { stepSize: 1, color: c.tickColor, backdropColor: c.backdrop }, grid: { color: c.grid }, angleLines: { color: c.angleLines }, pointLabels: { color: c.pointLabel, font: { size: 11 } } } };
+    }
+
+    function barScaleOpts() {
+      const c = getChartColors();
+      return { x: { ticks: { color: c.tickColor }, grid: { color: c.barGrid } }, y: { beginAtZero: true, ticks: { color: c.tickColor, precision: 0 }, grid: { color: c.barGrid } } };
+    }
+
+    function legendOpts(position = "bottom") {
+      const c = getChartColors();
+      return { position, labels: { color: c.legend } };
+    }
+
+    function renderSpBreakdown(Presentrics) {
+      const section = document.getElementById("spBreakdownSection");
+      if (!section || window.__AESCSF_RBAC__?.role !== "admin") return;
+
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const SPS = ["SP-1", "SP-2", "SP-3"];
+      const SP_COLORS = getChartColors().sp;
+
+      if (window.Chart) {
+        if (spBreakdownChart) spBreakdownChart.destroy();
+        const c = getChartColors();
+        spBreakdownChart = new Chart(document.getElementById("spBreakdownRadarChart"), {
+          type: "bar",
+          data: {
+            labels: domains,
+            datasets: SPS.map(sp => ({
+              label: sp,
+              data: domains.map(domain => {
+                const rows = Presentrics.rows.filter(r => r.practice.domain === domain && r.practice.securityProfile === sp);
+                return rows.length ? averageScoreForGroup(rows) : 0;
+              }),
+              backgroundColor: SP_COLORS[sp].bg,
+              borderColor:     SP_COLORS[sp].border,
+              borderWidth: 1.5,
+              borderRadius: 3,
+            }))
+          },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: true, ...legendOpts("bottom") },
+              tooltip: {
+                callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.x.toFixed(2)} / 3` }
+              }
+            },
+            scales: {
+              x: {
+                beginAtZero: true, max: 3,
+                ticks: { stepSize: 1, color: c.tickColor },
+                grid: { color: c.barGrid },
+                title: { display: true, text: "Average Maturity Score (0 – 3)", color: c.legend, font: { size: 11 } }
+              },
+              y: {
+                ticks: { color: c.tickColor, font: { size: 11 } },
+                grid: { display: false }
+              }
+            }
+          }
+        });
+      }
+
+      document.getElementById("spBreakdownTable").innerHTML = `
+        <table class="sp-breakdown-table">
+          <thead>
+            <tr>
+              <th>Domain</th>
+              <th>SP-1 &mdash; Foundational</th>
+              <th>SP-2 &mdash; Intermediate</th>
+              <th>SP-3 &mdash; Advanced</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${domains.map(domain => {
+              const cells = SPS.map(sp => {
+                const rows = Presentrics.rows.filter(r => r.practice.domain === domain && r.practice.securityProfile === sp);
+                if (!rows.length) return `<td><span style="color:var(--muted)">\u2014</span></td>`;
+                const fully = rows.filter(r => isCompletedStatus(r.assessment.status)).length;
+                const pct   = Math.round((fully / rows.length) * 100);
+                const score = averageScoreForGroup(rows);
+                const color = pct >= 80 ? "#16a34a" : pct >= 50 ? "#ca8a04" : "#dc2626";
+                return `<td>
+                  <div class="sp-score-pct" style="color:${color};">${pct}%</div>
+                  <div class="sp-score-detail">${fully} / ${rows.length} complete &middot; avg ${score} / 3</div>
+                  <div class="mini-bar" style="margin-top:4px;"><span style="width:${pct}%;background:${color};opacity:.8;"></span></div>
+                </td>`;
+              }).join("");
+              return `<tr><td><strong>${escapeHtml(domain)}</strong></td>${cells}</tr>`;
+            }).join("")}
+          </tbody>
+        </table>`;
+    }
+
+    /* ── Group-aggregate org dashboard helpers ───────────────────────── */
+    let _orgGroupDataCache = null;
+    let _orgGroupDataCacheTs = 0;
+    async function _getOrgGroupData() {
+      if (_orgGroupDataCache && Date.now() - _orgGroupDataCacheTs < 60000) return _orgGroupDataCache;
+      _orgGroupDataCache = await _loadGroupResponseData();
+      _orgGroupDataCacheTs = Date.now();
+      return _orgGroupDataCache;
+    }
+
+    function _buildOrgStatsFromGroups(data) {
+      const GOM_SCORE = { "Yes": 3, "Partial": 1.5, "In Progress": 1.5, "No": 0, "Not Assessed": 0 };
+      const rows = PRACTICES.map(practice => {
+        const entry = data[practice.practiceId];
+        let orgStatus = "Not Assessed";
+        const responsibleGroups = [];
+        if (entry && entry.groups && entry.groups.length) {
+          entry.groups.forEach(g => {
+            const s = g.aggregate_status || "Not Assessed";
+            orgStatus = orgStatus === "Not Assessed" ? s : gomWorstCase(orgStatus, s);
+            if (s !== "Not Assessed") responsibleGroups.push(g.group_name);
+          });
+        }
+        return { practice, orgStatus, responsibleGroups };
+      });
+
+      const total = rows.length;
+      const fully = rows.filter(r => r.orgStatus === "Yes").length;
+      const largely = rows.filter(r => r.orgStatus === "In Progress").length;
+      const gaps = rows.filter(r => r.orgStatus === "No" || r.orgStatus === "Partial").length;
+      const notAssessed = rows.filter(r => r.orgStatus === "Not Assessed").length;
+      const assessedCount = total - notAssessed;
+      const completion = total ? Math.round((assessedCount / total) * 100) : 0;
+
+      const GAP_ORDER = { "No": 0, "Partial": 1, "In Progress": 2 };
+      const gapRows = rows
+        .filter(r => r.orgStatus === "No" || r.orgStatus === "Partial" || r.orgStatus === "In Progress")
+        .sort((a, b) => (GAP_ORDER[a.orgStatus] ?? 99) - (GAP_ORDER[b.orgStatus] ?? 99))
+        .slice(0, 25);
+
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const domainRows = domains.map(domain => {
+        const dRows = rows.filter(r => r.practice.domain === domain);
+        const dFully = dRows.filter(r => r.orgStatus === "Yes").length;
+        const dLargely = dRows.filter(r => r.orgStatus === "In Progress").length;
+        const dGaps = dRows.filter(r => r.orgStatus === "No" || r.orgStatus === "Partial").length;
+        const dNotAssessed = dRows.filter(r => r.orgStatus === "Not Assessed").length;
+        const dAssessed = dRows.length - dNotAssessed;
+        const scoreTotal = dRows.reduce((sum, r) => sum + (GOM_SCORE[r.orgStatus] ?? 0), 0);
+        const score = dRows.length ? Number((scoreTotal / dRows.length).toFixed(2)) : 0;
+        return {
+          label: domain,
+          score,
+          total: dRows.length,
+          fully: dFully,
+          largely: dLargely,
+          gaps: dGaps,
+          notAssessed: dNotAssessed,
+          completion: dRows.length ? Math.round((dAssessed / dRows.length) * 100) : 0
+        };
+      });
+
+      const mils = ["MIL-1", "MIL-2", "MIL-3"].map(level => {
+        const mRows = rows.filter(r => r.practice.mil === level);
+        const scoreTotal = mRows.reduce((sum, r) => sum + (GOM_SCORE[r.orgStatus] ?? 0), 0);
+        return { label: level, score: mRows.length ? Number((scoreTotal / mRows.length).toFixed(2)) : 0 };
+      });
+
+      return { rows, gapRows, domainRows, mils, total, fully, largely, gaps, notAssessed, completion };
+    }
+
+    function _setStatTile(valueId, value, label) {
+      const el = document.getElementById(valueId);
+      if (!el) return;
+      el.textContent = value;
+      if (label !== undefined) {
+        const lEl = el.previousElementSibling;
+        if (lEl) lEl.textContent = label;
+      }
+    }
+    function _showStatTile(valueId, show) {
+      const el = document.getElementById(valueId);
+      const tile = el?.closest?.(".stat");
+      if (tile) tile.style.display = show ? "" : "none";
+    }
+
+    function _renderRadarCharts(domainItems, milItems) {
+      if (!window.Chart) return;
+      if (domainRadarChart) domainRadarChart.destroy();
+      if (milRadarChart) milRadarChart.destroy();
+      const cc = getChartColors();
+      domainRadarChart = new Chart(document.getElementById("domainRadarChart"), {
+        type: "radar",
+        data: {
+          labels: domainItems.map(d => d.label),
+          datasets: [{ label: "Domain maturity", data: domainItems.map(d => d.score), fill: true, backgroundColor: cc.domain.bg, borderColor: cc.domain.border, pointBackgroundColor: cc.domain.point, borderWidth: 2 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: radarScaleOpts(3), plugins: { legend: { display: false } } }
+      });
+      milRadarChart = new Chart(document.getElementById("milRadarChart"), {
+        type: "radar",
+        data: {
+          labels: milItems.map(m => m.label),
+          datasets: [{ label: "MIL coverage", data: milItems.map(m => m.score), fill: true, backgroundColor: cc.mil.bg, borderColor: cc.mil.border, pointBackgroundColor: cc.mil.point, borderWidth: 2 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: radarScaleOpts(3), plugins: { legend: { display: false } } }
+      });
+    }
+
+    async function renderDashboard() {
+      const dashboardPage = document.getElementById("dashboardPage");
+      if (dashboardPage && dashboardPage.dataset.loading === "1") return;
+      if (dashboardPage) dashboardPage.dataset.loading = "1";
+      try {
+        await _renderDashboardInner();
+      } finally {
+        if (dashboardPage) delete dashboardPage.dataset.loading;
+      }
+    }
+
+    async function _renderDashboardInner() {
+      const role = window.__AESCSF_RBAC__?.role;
+      const useGroupData = (role === "admin" || role === "assessor") && APP_CONFIG.storageMode === "api";
+
+      if (useGroupData) {
+        // Show brief loading state
+        const subtitleEl = document.getElementById("orgOverviewSubtitle");
+        if (subtitleEl) subtitleEl.textContent = "Loading group member responses…";
+
+        let groupStats = null;
+        try {
+          const data = await _getOrgGroupData();
+          groupStats = _buildOrgStatsFromGroups(data);
+        } catch (e) {
+          console.warn("renderDashboard: failed to load group data, falling back to state-based render", e);
+          if (subtitleEl) subtitleEl.textContent = "Assessment progress, open gaps, overdue activities, and domain maturity across all AESCSF v2 practices.";
+          _renderDashboardFromState();
+          return;
+        }
+
+        // Update subtitle
+        if (subtitleEl) subtitleEl.textContent = "Organisation compliance posture aggregated from group member responses across all assigned practices.";
+
+        // Update stat tiles (group mode)
+        _setStatTile("dashTotal",    groupStats.total,            "Practices");
+        _setStatTile("dashFully",    groupStats.fully,            "Compliant (Yes)");
+        _setStatTile("dashLargely",  groupStats.largely,          "In Progress");
+        _setStatTile("dashPartial",  groupStats.gaps,             "Non-Compliant");
+        _setStatTile("dashGaps",     groupStats.notAssessed,      "Not Assessed");
+        _setStatTile("dashCompletion", groupStats.completion + "%", "Completion");
+        _showStatTile("dashOverdue", false);
+        _showStatTile("dashEvidenceCoverage", false);
+
+        // Domain summary grid
+        const domainContainer = document.getElementById("domainSummaryGrid");
+        domainContainer.innerHTML = groupStats.domainRows.map(item => `
+          <article class="domain-card">
+            <div class="domain-card-head">
+              <h4>${escapeHtml(item.label)}</h4>
+              <small>Avg score ${item.score} / 3</small>
+            </div>
+            <div class="Presentric-row"><span>Yes</span><strong>${item.fully}</strong></div>
+            <div class="Presentric-row"><span>In Progress</span><strong>${item.largely}</strong></div>
+            <div class="Presentric-row"><span>Non-Compliant</span><strong>${item.gaps}</strong></div>
+            <div class="Presentric-row"><span>Not Assessed</span><strong>${item.notAssessed}</strong></div>
+            <div class="mini-bar"><span style="width:${item.completion}%"></span></div>
+          </article>
+        `).join("");
+
+        // Gap register (group mode)
+        document.getElementById("dashboardGapTable").innerHTML = groupStats.gapRows.length ? `
+          <table class="gap-table">
+            <thead>
+              <tr><th>Practice</th><th>Domain</th><th>Status</th><th>Responsible Groups</th></tr>
+            </thead>
+            <tbody>
+              ${groupStats.gapRows.map(r => `
+                <tr>
+                  <td><strong>${escapeHtml(r.practice.practiceId)}</strong><br>${escapeHtml(r.practice.practice)}</td>
+                  <td>${escapeHtml(r.practice.domain)}</td>
+                  <td><span class="status-select ${statusClass(r.orgStatus)}" style="padding:3px 8px;border-radius:6px;font-size:.8rem;">${escapeHtml(r.orgStatus)}</span></td>
+                  <td>${r.responsibleGroups.map(g => escapeHtml(g)).join(", ") || "—"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        ` : `<div class="empty">No non-compliant practices detected across group member responses.</div>`;
+
+        // Radar charts (group mode)
+        _renderRadarCharts(groupStats.domainRows, groupStats.mils);
+
+        // SP breakdown still uses state-based Presentrics (admin only)
+        renderSpBreakdown(buildDashboardPresentrics());
+        _applyDashView();
+        if (_dashView === "org") renderTrendChart();
+        return;
+      }
+
+      // State-based render (non-API or non-admin/assessor roles)
+      _renderDashboardFromState();
+    }
+
+    function _renderDashboardFromState() {
+      const Presentrics = buildDashboardPresentrics();
+
+      // Restore subtitle and tile labels for state-based view
+      const subtitleEl = document.getElementById("orgOverviewSubtitle");
+      if (subtitleEl) subtitleEl.textContent = "Assessment progress, open gaps, overdue activities, and domain maturity across all AESCSF v2 practices.";
+      _setStatTile("dashFully",   Presentrics.fully,   "Fully");
+      _setStatTile("dashLargely", Presentrics.largely, "Largely");
+      _setStatTile("dashPartial", Presentrics.partial, "Open / Partial");
+      _setStatTile("dashGaps",    Presentrics.gaps,    "Open Gaps");
+      _showStatTile("dashOverdue", true);
+      _showStatTile("dashEvidenceCoverage", true);
+
+      _setStatTile("dashTotal", Presentrics.total);
+      _setStatTile("dashOverdue", Presentrics.overdue, "Overdue");
+      _setStatTile("dashEvidenceCoverage", Presentrics.evidenceCoverage + "%", "Evidence Coverage");
+      document.getElementById("evidenceCoverageBar").style.width = Presentrics.evidenceCoverage + "%";
+      _setStatTile("dashCompletion", Presentrics.completion + "%", "Completion");
+      document.getElementById("dashCompletionBar").style.width = Presentrics.completion + "%";
+
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const domainRows = domains.map(domain => {
+        const rows = Presentrics.rows.filter(row => row.practice.domain === domain);
+        const fully = rows.filter(row => isCompletedStatus(row.assessment.status)).length;
+        const largely = rows.filter(row => row.assessment.status === "Largely").length;
+        const partial = rows.filter(row => ["Partial","Partially","Not","No","Present"].includes(row.assessment.status)).length;
+        const gaps = rows.filter(row => !isCompletedStatus(row.assessment.status) || row.assessment.gap.trim()).length;
+        return {
+          label: domain,
+          score: averageScoreForGroup(rows),
+          total: rows.length,
+          fully,
+          largely,
+          partial,
+          gaps,
+          completion: rows.length ? Math.round((fully / rows.length) * 100) : 0
+        };
+      });
+
+      const mils = ["MIL-1", "MIL-2", "MIL-3"].map(level => ({
+        label: level,
+        score: averageScoreForGroup(Presentrics.rows.filter(row => row.practice.mil === level))
+      }));
+
+      const domainContainer = document.getElementById("domainSummaryGrid");
+      domainContainer.innerHTML = domainRows.map(item => `
+        <article class="domain-card">
+          <div class="domain-card-head">
+            <h4>${escapeHtml(item.label)}</h4>
+            <small>Avg score ${item.score} / 3</small>
+          </div>
+          <div class="Presentric-row"><span>Fully</span><strong>${item.fully}</strong></div>
+          <div class="Presentric-row"><span>Largely</span><strong>${item.largely}</strong></div>
+          <div class="Presentric-row"><span>Partial</span><strong>${item.partial}</strong></div>
+          <div class="Presentric-row"><span>Open Gaps</span><strong>${item.gaps}</strong></div>
+          <div class="mini-bar"><span style="width:${item.completion}%"></span></div>
+        </article>
+      `).join("");
+
+      const gapRows = getGapRows()
+        .sort((a, b) => {
+          const ad = a.assessment.targetDate || "9999-12-31";
+          const bd = b.assessment.targetDate || "9999-12-31";
+          if (ad !== bd) return ad.localeCompare(bd);
+          return a.practice.practiceId.localeCompare(b.practice.practiceId);
+        })
+        .slice(0, 25);
+
+      document.getElementById("dashboardGapTable").innerHTML = gapRows.length ? `
+        <table class="gap-table">
+          <thead>
+            <tr>
+              <th>Practice</th>
+              <th>Status</th>
+              <th>Owner</th>
+              <th>Target Date</th>
+              <th>Gap / Remediation</th>
+              <th>Attachments</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${gapRows.map(row => `
+              <tr>
+                <td><strong>${escapeHtml(row.practice.practiceId)}</strong><br>${escapeHtml(row.practice.practice)}</td>
+                <td>${escapeHtml(row.assessment.status)}</td>
+                <td>${escapeHtml(row.assessment.owner || "Not assigned")}</td>
+                <td>${escapeHtml(formatDate(row.assessment.targetDate) || "Not set")}</td>
+                <td>${escapeHtml(row.assessment.gap || "Incomplete status - remediation detail not recorded.")}</td>
+                <td>${renderAttachmentPreview(row.assessment.attachments)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `<div class="empty">No open gaps detected. All practices are either complete or have no recorded remediation actions.</div>`;
+
+      _renderRadarCharts(domainRows, mils);
+      renderSpBreakdown(Presentrics);
+      _applyDashView();
+      if (_dashView === "org") renderTrendChart();
+    }
+
+    async function renderTrendChart() {
+      const wrap = document.getElementById("trendChartWrap");
+      if (!wrap || wrap.dataset.loading === "1") return;
+      wrap.dataset.loading = "1";
+      try {
+        const data = await fetch(`${APP_CONFIG.apiBaseUrl}/snapshots/trend`, { credentials: "same-origin" })
+          .then(r => r.ok ? r.json() : []).catch(() => []);
+        if (data.length < 2) {
+          wrap.innerHTML = `<div class="empty-state" style="padding:28px 0;"><p class="empty-state-body">Save at least two golden snapshots to see the completion trend.</p></div>`;
+          if (trendLineChart) { trendLineChart.destroy(); trendLineChart = null; }
+          return;
+        }
+        wrap.innerHTML = `<canvas id="trendChart"></canvas>`;
+        if (trendLineChart) trendLineChart.destroy();
+        if (!window.Chart) return;
+        const cc = getChartColors();
+        trendLineChart = new Chart(document.getElementById("trendChart"), {
+          type: "line",
+          data: {
+            labels: data.map(d => d.label || d.date),
+            datasets: [
+              { label: "Completion %", data: data.map(d => d.completion),
+                fill: true, tension: 0.35,
+                backgroundColor: cc.domain.bg, borderColor: cc.domain.border,
+                pointBackgroundColor: cc.domain.point, borderWidth: 2 },
+              { label: "Fully", data: data.map(d => d.fully),
+                fill: false, tension: 0.35, borderDash: [4,4],
+                backgroundColor: "transparent", borderColor: cc.mil.border,
+                pointBackgroundColor: cc.mil.point, borderWidth: 1.5 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              y: { min: 0, ticks: { color: cc.tickColor }, grid: { color: cc.grid } },
+              x: { ticks: { color: cc.tickColor }, grid: { color: cc.grid } }
+            },
+            plugins: {
+              legend: { labels: { color: cc.legend, boxWidth: 12, padding: 16 } },
+              tooltip: { callbacks: { label: ctx => ctx.dataset.label === "Completion %" ? `${ctx.parsed.y}%` : `${ctx.parsed.y} practices` } }
+            }
+          }
+        });
+      } catch (e) {
+        wrap.innerHTML = `<div class="empty-state" style="padding:28px 0;"><p class="empty-state-body">Could not load trend data.</p></div>`;
+      } finally {
+        delete wrap.dataset.loading;
+      }
+    }
+
+    async function renderExecSummary() {
+      const content = document.getElementById("execSummaryContent");
+      if (!content || content.dataset.loading === "1") return;
+      content.dataset.loading = "1";
+      content.innerHTML = `<div class="groups-loading">Loading…</div>`;
+      try {
+        const [groupData, trendData, orgGoals] = await Promise.all([
+          _getOrgGroupData().catch(() => null),
+          fetch(`${APP_CONFIG.apiBaseUrl}/snapshots/trend`, { credentials: "same-origin" }).then(r => r.ok ? r.json() : []).catch(() => []),
+          adminFetch("/admin/org-goals").then(r => r.ok ? r.json() : []).catch(() => []),
+        ]);
+
+        /* Build goal banners for all goals */
+        let goalHtml = "";
+        if (Array.isArray(orgGoals) && orgGoals.length) {
+          const rank = { "SP-1": 1, "SP-2": 2, "SP-3": 3 };
+          goalHtml = orgGoals.map(orgGoal => {
+            if (!orgGoal.goalName && !orgGoal.targetSp) return "";
+            const spPractices = orgGoal.targetSp
+              ? PRACTICES.filter(p => (rank[p.securityProfile] || 0) <= (rank[orgGoal.targetSp] || 0))
+              : PRACTICES;
+            const spTotal = spPractices.length;
+            let spDone = 0;
+            if (groupData) {
+              for (const p of spPractices) {
+                const pd = groupData[p.practiceId];
+                if (pd?.groups?.length) {
+                  const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+                  if (orgStatus === "Yes") spDone++;
+                }
+              }
+            }
+            const pct = spTotal ? Math.round(spDone / spTotal * 100) : 0;
+            const daysLeft = orgGoal.targetDate ? daysUntil(orgGoal.targetDate) : null;
+            const daysStr = daysLeft === null ? ""
+              : daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue`
+              : `${daysLeft}d remaining`;
+            return `<div class="exec-summary-goal" style="margin-bottom:10px;">
+              <div>
+                <div class="exec-goal-label">Organisation Goal</div>
+                <div class="exec-goal-name">${escapeHtml(orgGoal.goalName || orgGoal.targetSp || "Goal")}</div>
+                <div class="exec-goal-meta">${escapeHtml(orgGoal.targetSp || "")}${orgGoal.targetDate ? " · Target: " + escapeHtml(orgGoal.targetDate) : ""}${daysStr ? " · " + escapeHtml(daysStr) : ""}</div>
+              </div>
+              <div class="exec-goal-bar-wrap">
+                <div style="font-size:0.78rem;color:var(--muted);margin-bottom:6px;">${spDone} / ${spTotal} practices (${pct}%)</div>
+                <div class="exec-goal-bar-shell"><div class="exec-goal-bar-fill" style="width:${pct}%"></div></div>
+              </div>
+            </div>`;
+          }).join("");
+        }
+
+        /* Aggregate stats from group data */
+        let fully = 0, largely = 0, gaps = 0, notAssessed = 0, total = PRACTICES.length;
+        if (groupData) {
+          for (const p of PRACTICES) {
+            const pd = groupData[p.practiceId];
+            if (!pd?.groups?.length) { notAssessed++; continue; }
+            const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+            if (orgStatus === "Yes") fully++;
+            else if (orgStatus === "Partial" || orgStatus === "In Progress") largely++;
+            else if (orgStatus === "No") gaps++;
+            else notAssessed++;
+          }
+        }
+        const completion = total ? Math.round(fully / total * 100) : 0;
+
+        const statsHtml = `<div class="exec-stat-row">
+          <div class="exec-stat"><div class="label">Compliant</div><div class="value compliant">${fully}</div></div>
+          <div class="exec-stat"><div class="label">In Progress</div><div class="value inprogress">${largely}</div></div>
+          <div class="exec-stat"><div class="label">Non-Compliant</div><div class="value noncompliant">${gaps}</div></div>
+          <div class="exec-stat"><div class="label">Not Assessed</div><div class="value">${notAssessed}</div></div>
+          <div class="exec-stat"><div class="label">Overall Completion</div><div class="value">${completion}%</div></div>
+        </div>`;
+
+        /* Group heatmap */
+        let heatmapHtml = "";
+        if (groupData) {
+          const groupMap = _buildGroupDomainMap(groupData);
+          const groups = Object.values(groupMap).sort((a, b) => a.name.localeCompare(b.name));
+          const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+          const visibleDomains = allDomains.filter(d => groups.some(g => g.coveredDomains.includes(d)));
+          if (groups.length) {
+            const hmClass = s => ({ "Yes": "hm-yes", "Partial": "hm-partial", "In Progress": "hm-partial", "No": "hm-no" }[s] || "hm-na");
+            const hmLabel = s => ({ "Yes": "✓", "Partial": "~", "In Progress": "~", "No": "✗", "Not Assessed": "—" }[s] || "—");
+            heatmapHtml = `<section class="dashboard-panel dashboard-panel-span" style="margin-bottom:22px;">
+              <div class="panel-header"><div><h3>Group Compliance Heatmap</h3></div></div>
+              <div class="exec-heatmap">
+                <table>
+                  <thead><tr>
+                    <th>Domain</th>
+                    ${groups.map(g => `<th title="${escapeHtml(g.name)}">${escapeHtml(g.name.length > 14 ? g.name.slice(0,13)+"…" : g.name)}</th>`).join("")}
+                  </tr></thead>
+                  <tbody>
+                    ${visibleDomains.map(d => `<tr>
+                      <td style="font-weight:600;">${escapeHtml(d)}</td>
+                      ${groups.map(g => {
+                        if (!g.coveredDomains.includes(d)) return `<td class="hm-na">—</td>`;
+                        const s = g.domains[d] || "Not Assessed";
+                        return `<td class="${hmClass(s)}" title="${escapeHtml(s)}">${hmLabel(s)}</td>`;
+                      }).join("")}
+                    </tr>`).join("")}
+                  </tbody>
+                </table>
+              </div>
+            </section>`;
+          }
+        }
+
+        /* Top gaps */
+        let gapsHtml = "";
+        if (groupData) {
+          const gapRows = PRACTICES
+            .map(p => {
+              const pd = groupData[p.practiceId];
+              if (!pd?.groups?.length) return null;
+              const orgStatus = pd.groups.reduce((w, g) => gomWorstCase(w, g.aggregate_status), "Not Assessed");
+              if (orgStatus === "Yes" || orgStatus === "Not Assessed") return null;
+              return { practice: p, orgStatus, groups: pd.groups.map(g => g.group_name) };
+            })
+            .filter(Boolean)
+            .sort((a, b) => (GOM_PRIORITY[a.orgStatus] ?? 3) - (GOM_PRIORITY[b.orgStatus] ?? 3))
+            .slice(0, 8);
+          if (gapRows.length) {
+            const sc = s => ({ "No": "tag-no", "Partial": "tag-partial", "In Progress": "tag-partial" }[s] || "");
+            gapsHtml = `<section class="dashboard-panel dashboard-panel-span">
+              <div class="panel-header"><div><h3>Priority Gaps</h3><div class="footer-note">Practices with non-compliant org status, worst-first.</div></div></div>
+              <table class="exec-top-gaps">
+                <thead><tr><th>Practice</th><th>Domain</th><th>Status</th><th>Responsible Groups</th></tr></thead>
+                <tbody>
+                  ${gapRows.map(r => `<tr>
+                    <td><strong>${escapeHtml(r.practice.practiceId)}</strong> ${escapeHtml(r.practice.practice)}</td>
+                    <td>${escapeHtml(r.practice.domain)}</td>
+                    <td><span class="badge ${sc(r.orgStatus)}">${escapeHtml(r.orgStatus)}</span></td>
+                    <td style="color:var(--muted);font-size:.8rem;">${r.groups.map(escapeHtml).join(", ") || "—"}</td>
+                  </tr>`).join("")}
+                </tbody>
+              </table>
+            </section>`;
+          }
+        }
+
+        /* Trend chart placeholder */
+        const trendHtml = `<section class="dashboard-panel dashboard-panel-span" style="margin-bottom:22px;">
+          <div class="panel-header"><div><h3>Completion Trend</h3><div class="footer-note">Overall completion % per golden snapshot.</div></div></div>
+          <div id="execTrendWrap" class="chart-wrap" style="height:200px;"></div>
+        </section>`;
+
+        content.innerHTML = goalHtml + statsHtml + trendHtml + heatmapHtml + gapsHtml;
+
+        /* Render trend mini chart */
+        if (trendData.length >= 2 && window.Chart) {
+          const cc = getChartColors();
+          new Chart(document.getElementById("execTrendWrap").appendChild(document.createElement("canvas")), {
+            type: "line",
+            data: {
+              labels: trendData.map(d => d.label || d.date),
+              datasets: [{ label: "Completion %", data: trendData.map(d => d.completion),
+                fill: true, tension: 0.35, backgroundColor: cc.domain.bg, borderColor: cc.domain.border,
+                pointBackgroundColor: cc.domain.point, borderWidth: 2 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false,
+              scales: { y: { min:0, max:100, ticks:{ color: cc.tickColor, callback: v=>v+"%" }, grid:{color:cc.grid} },
+                        x: { ticks:{color:cc.tickColor}, grid:{color:cc.grid} } },
+              plugins: { legend: { display: false } } }
+          });
+        } else {
+          document.getElementById("execTrendWrap").innerHTML = `<div class="empty-state" style="padding:20px 0;"><p class="empty-state-body">Save at least two golden snapshots to see the trend.</p></div>`;
+        }
+      } catch (e) {
+        content.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load: ${escapeHtml(e.message)}</div>`;
+      } finally {
+        delete content.dataset.loading;
+      }
+    }
+
+    function exportGapRegister() {
+      const headers = ["Domain","Objective ID","Objective","Practice ID","Practice","MIL","Security Profile","Status","Owner","Target Date","Last Reviewed","Evidence","Gap / Remediation","Attachment Links"];
+      const rows = getGapRows().map(row => [
+        row.practice.domain,
+        row.practice.objectiveId,
+        row.practice.objective,
+        row.practice.practiceId,
+        row.practice.practice,
+        row.practice.mil,
+        row.practice.securityProfile,
+        row.assessment.status,
+        row.assessment.owner,
+        row.assessment.targetDate,
+        row.assessment.lastReviewed,
+        row.assessment.evidence,
+        row.assessment.gap,
+        row.assessment.attachments
+      ]);
+      const csv = [headers, ...rows].map(cols => cols.map(value => {
+        const text = String(value ?? "");
+        return /[",\n]/.test(text) ? '"' + text.replaceAll('"','""') + '"' : text;
+      }).join(",")).join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+      a.href = url;
+      a.download = `aescsf-v2-gap-register-${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    
+    function getCanvasImageData(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || !canvas.toDataURL) return null;
+      try {
+        return canvas.toDataURL("image/png", 1.0);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function addPdfPageFrame(doc, title, subtitle = "") {
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      doc.setFillColor(18, 52, 86);
+      doc.rect(0, 0, pageWidth, 56, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.text(title, 40, 34);
+      if (subtitle) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.text(subtitle, 40, 48);
+      }
+      doc.setDrawColor(220, 226, 232);
+      doc.line(40, pageHeight - 32, pageWidth - 40, pageHeight - 32);
+      doc.setTextColor(100, 110, 120);
+      doc.setFontSize(9);
+      doc.text("AESCSF v2 Evidence Tracker", 40, pageHeight - 14);
+      doc.text(`Page ${doc.getNumberOfPages()}`, pageWidth - 70, pageHeight - 14);
+      doc.setTextColor(33, 37, 41);
+    }
+
+    function drawSummaryCard(doc, x, y, w, h, label, value, accent) {
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(221, 226, 232);
+      doc.roundedRect(x, y, w, h, 8, 8, "FD");
+      doc.setFillColor(accent[0], accent[1], accent[2]);
+      doc.roundedRect(x, y, 8, h, 8, 8, "F");
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(92, 102, 112);
+      doc.text(label, x + 18, y + 20);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.setTextColor(33, 37, 41);
+      doc.text(String(value), x + 18, y + 46);
+    }
+
+    
+function buildPdfDomainRows(rows) {
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      return domains.map(domain => {
+        const scopedRows = rows.filter(row => row.practice.domain === domain);
+        const completed = scopedRows.filter(row => isCompletedStatus(row.assessment.status)).length;
+        const largely = scopedRows.filter(row => row.assessment.status === "Largely").length;
+        const partial = scopedRows.filter(row => {
+          const status = normaliseStatusForSummary(row.assessment.status);
+          return status === "Partial" || status === "Partially" || status === "Not" || status === "No";
+        }).length;
+        const gaps = scopedRows.filter(row => !isCompletedStatus(row.assessment.status) || row.assessment.gap.trim()).length;
+        return {
+          label: domain,
+          total: scopedRows.length,
+          completed,
+          largely,
+          partial,
+          gaps,
+          score: averageScoreForGroup(scopedRows)
+        };
+      });
+    }
+
+    function openPrintablePdfFallback(metrics, domainRows, gapRows, generatedAt) {
+      const domainRadarImage = getCanvasImageData("domainRadarChart");
+      const milRadarImage = getCanvasImageData("milRadarChart");
+      const gapRowsHtml = (gapRows.length ? gapRows : [{ practice: { practiceId: "-", domain: "-" }, assessment: { status: "No open gaps", owner: "", targetDate: "", gap: "", attachments: "" } }])
+        .map(row => `
+          <tr>
+            <td>${escapeHtml(row.practice.practiceId)}</td>
+            <td>${escapeHtml(row.practice.domain)}</td>
+            <td>${escapeHtml(row.assessment.status || "Not Assessed")}</td>
+            <td>${escapeHtml(row.assessment.owner || "Not assigned")}</td>
+            <td>${escapeHtml(formatDate(row.assessment.targetDate) || "Not set")}</td>
+            <td>${escapeHtml(row.assessment.gap || "No remediation detail recorded.")}</td>
+          </tr>`).join("");
+      const domainRowsHtml = domainRows.map(item => `
+          <tr>
+            <td>${escapeHtml(item.label)}</td>
+            <td>${item.total}</td>
+            <td>${item.completed}</td>
+            <td>${item.largely}</td>
+            <td>${item.partial}</td>
+            <td>${item.gaps}</td>
+            <td>${Number(item.score || 0).toFixed(2)}</td>
+          </tr>`).join("");
+
+      const reportHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AESCSF v2 Assessment Report</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:32px;color:#1f2937;background:#fff}
+  h1,h2{margin:0 0 12px 0}
+  .muted{color:#6b7280;font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}
+  .card{border:1px solid #dbe2ea;border-radius:12px;padding:14px;background:#f8fafc}
+  .label{font-size:12px;color:#64748b;margin-bottom:6px}
+  .value{font-size:24px;font-weight:700;color:#0f172a}
+  .section{margin-top:28px}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border:1px solid #dbe2ea;padding:8px;font-size:12px;vertical-align:top;text-align:left}
+  th{background:#123456;color:#fff}
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+  .chart-box{border:1px solid #dbe2ea;border-radius:12px;padding:12px}
+  .chart-box img{max-width:100%;height:auto;display:block;margin:auto}
+
+    .comparison-change { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+    .comparison-change.improved { background:rgba(34,197,94,0.14); color:#166534; }
+    .comparison-change.regressed { background:rgba(239,68,68,0.14); color:#991b1b; }
+    .comparison-change.unchanged { background:rgba(59,130,246,0.12); color:#1d4ed8; }
+
+</style>
+</head>
+<body>
+  <h1>AESCSF v2 Assessment Report</h1>
+  <div class="muted">Generated ${escapeHtml(generatedAt)}</div>
+  <div class="grid">
+    <div class="card"><div class="label">Practices</div><div class="value">${metrics.total}</div></div>
+    <div class="card"><div class="label">Completion</div><div class="value">${metrics.completion}%</div></div>
+    <div class="card"><div class="label">Open Gaps</div><div class="value">${metrics.gaps}</div></div>
+    <div class="card"><div class="label">Overdue</div><div class="value">${metrics.overdue}</div></div>
+    <div class="card"><div class="label">Evidence Coverage</div><div class="value">${metrics.evidenceCoverage}%</div></div>
+    <div class="card"><div class="label">Completed</div><div class="value">${metrics.fully}</div></div>
+    <div class="card"><div class="label">Largely</div><div class="value">${metrics.largely}</div></div>
+    <div class="card"><div class="label">Partial / Open</div><div class="value">${metrics.partial}</div></div>
+  </div>
+  <div class="section">
+    <h2>Dashboard visuals</h2>
+    <div class="charts">
+      <div class="chart-box"><h3>Domain maturity radar</h3>${domainRadarImage ? `<img src="${domainRadarImage}" alt="Domain radar" />` : '<p class="muted">Chart unavailable</p>'}</div>
+      <div class="chart-box"><h3>MIL coverage radar</h3>${milRadarImage ? `<img src="${milRadarImage}" alt="MIL radar" />` : '<p class="muted">Chart unavailable</p>'}</div>
+    </div>
+  </div>
+  <div class="section">
+    <h2>Domain summary</h2>
+    <table>
+      <thead><tr><th>Domain</th><th>Practices</th><th>Completed</th><th>Largely</th><th>Partial / Open</th><th>Gaps</th><th>Average score / 3</th></tr></thead>
+      <tbody>${domainRowsHtml}</tbody>
+    </table>
+  </div>
+  <div class="section">
+    <h2>Gap register</h2>
+    <table>
+      <thead><tr><th>Practice ID</th><th>Domain</th><th>Status</th><th>Owner</th><th>Target Date</th><th>Gap / Remediation</th></tr></thead>
+      <tbody>${gapRowsHtml}</tbody>
+    </table>
+  </div>
+</body>
+</html>`;
+      const printWindow = window.open("", "_blank", "width=1200,height=900");
+      if (!printWindow) {
+        alert("The PDF report could not open because the browser blocked the report window. Please allow pop-ups for this page and try again.");
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(reportHtml);
+      printWindow.document.close();
+      printWindow.focus();
+      window.setTimeout(() => printWindow.print(), 500);
+    }
+
+    function generatePdfReport() {
+      try {
+        renderDashboard();
+        renderTimeline();
+
+        const metrics = buildDashboardPresentrics();
+        const gapRows = getGapRows();
+        const rows = metrics.rows;
+        const generatedAt = new Date().toLocaleString("en-AU");
+        const domainRows = buildPdfDomainRows(rows);
+
+        if (!(window.jspdf && window.jspdf.jsPDF)) {
+          openPrintablePdfFallback(metrics, domainRows, gapRows, generatedAt);
+          return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        addPdfPageFrame(doc, "AESCSF v2 Assessment Report", `Generated ${generatedAt}`);
+        doc.setTextColor(92, 102, 112);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        doc.text("Executive summary", 40, 84);
+        doc.setTextColor(33, 37, 41);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(28);
+        doc.text("Assessment overview", 40, 114);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        doc.setTextColor(92, 102, 112);
+        const overview = "This report summarises assessment coverage, dashboard maturity indicators, domain performance, and the current remediation position captured in the AESCSF v2 Evidence Tracker.";
+        doc.text(doc.splitTextToSize(overview, 420), 40, 138);
+
+        drawSummaryCard(doc, 40, 178, 160, 72, "Practices", metrics.total, [21, 94, 239]);
+        drawSummaryCard(doc, 215, 178, 160, 72, "Completion", metrics.completion + "%", [22, 163, 74]);
+        drawSummaryCard(doc, 390, 178, 160, 72, "Open gaps", metrics.gaps, [217, 119, 6]);
+        drawSummaryCard(doc, 565, 178, 160, 72, "Overdue", metrics.overdue, [220, 38, 38]);
+        drawSummaryCard(doc, 40, 266, 160, 72, "Evidence coverage", metrics.evidenceCoverage + "%", [14, 165, 233]);
+        drawSummaryCard(doc, 215, 266, 160, 72, "Completed", metrics.fully, [34, 197, 94]);
+        drawSummaryCard(doc, 390, 266, 160, 72, "Largely", metrics.largely, [124, 58, 237]);
+        drawSummaryCard(doc, 565, 266, 160, 72, "Partial / open", metrics.partial, [245, 158, 11]);
+
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(221, 226, 232);
+        doc.roundedRect(40, 364, pageWidth - 80, 150, 10, 10, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(13);
+        doc.setTextColor(33, 37, 41);
+        doc.text("Assessment notes", 56, 390);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(92, 102, 112);
+        const notes = [
+          `Total domains assessed: ${domainRows.length}`,
+          `Gap register items captured: ${gapRows.length}`,
+          `Completion is based on statuses recognised as complete within the tracker logic.`,
+          `Evidence coverage reflects practices where evidence text or attachment references have been recorded.`
+        ];
+        let yy = 414;
+        notes.forEach(line => {
+          doc.circle(62, yy - 3, 2, "F");
+          doc.text(line, 72, yy);
+          yy += 22;
+        });
+
+        doc.addPage("a4", "landscape");
+        addPdfPageFrame(doc, "Dashboard visuals", "Domain and maturity charts captured from the dashboard view");
+        const domainRadarImage = getCanvasImageData("domainRadarChart");
+        const milRadarImage = getCanvasImageData("milRadarChart");
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(221, 226, 232);
+        doc.roundedRect(40, 84, 360, 210, 10, 10, "FD");
+        doc.roundedRect(420, 84, 360, 210, 10, 10, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(33, 37, 41);
+        doc.text("Domain maturity radar", 56, 108);
+        doc.text("MIL coverage radar", 436, 108);
+        if (domainRadarImage) doc.addImage(domainRadarImage, "PNG", 58, 118, 324, 160, undefined, "FAST");
+        else doc.text("Chart unavailable", 56, 142);
+        if (milRadarImage) doc.addImage(milRadarImage, "PNG", 438, 118, 324, 160, undefined, "FAST");
+        else doc.text("Chart unavailable", 436, 142);
+
+        if (typeof doc.autoTable === "function") {
+          doc.autoTable({
+            startY: 324,
+            head: [["Domain", "Practices", "Completed", "Largely", "Partial / Open", "Gaps", "Average score / 3"]],
+            body: domainRows.map(item => [
+              item.label,
+              String(item.total),
+              String(item.completed),
+              String(item.largely),
+              String(item.partial),
+              String(item.gaps),
+              Number(item.score || 0).toFixed(2)
+            ]),
+            theme: "grid",
+            headStyles: { fillColor: [18, 52, 86] },
+            styles: { fontSize: 9, cellPadding: 5 }
+          });
+        }
+
+        doc.addPage("a4", "landscape");
+        addPdfPageFrame(doc, "Gap register", "Open remediation items and target dates from the live assessment");
+        if (typeof doc.autoTable === "function") {
+          doc.autoTable({
+            startY: 84,
+            head: [["Practice ID", "Domain", "Status", "Owner", "Target Date", "Gap / Remediation", "Evidence / Links"]],
+            body: (gapRows.length ? gapRows : [{ practice: { practiceId: "-", domain: "-" }, assessment: { status: "No open gaps", owner: "", targetDate: "", gap: "", attachments: "" } }]).map(row => [
+              row.practice.practiceId,
+              row.practice.domain,
+              row.assessment.status || "Not Assessed",
+              row.assessment.owner || "Not assigned",
+              formatDate(row.assessment.targetDate) || "Not set",
+              row.assessment.gap || "No remediation detail recorded.",
+              row.assessment.attachments || row.assessment.evidence || ""
+            ]),
+            theme: "grid",
+            headStyles: { fillColor: [18, 52, 86] },
+            styles: { fontSize: 8, cellPadding: 4, overflow: "linebreak", valign: "top" },
+            columnStyles: { 5: { cellWidth: 240 }, 6: { cellWidth: 200 } },
+            didDrawPage: () => addPdfPageFrame(doc, "Gap register", "Open remediation items and target dates from the live assessment")
+          });
+        }
+
+        const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+        doc.save(`aescsf-v2-assessment-report-${stamp}.pdf`);
+      } catch (error) {
+        console.error("PDF generation failed", error);
+        const metrics = buildDashboardPresentrics();
+        const gapRows = getGapRows();
+        const domainRows = buildPdfDomainRows(metrics.rows);
+        openPrintablePdfFallback(metrics, domainRows, gapRows, new Date().toLocaleString("en-AU"));
+      }
+    }
+
+
+
+    function setupDelegatedListeners() {
+      const app = document.getElementById("app");
+      if (!app) return;
+
+      const isTextLike = el =>
+        el.tagName === "TEXTAREA" ||
+        (el.tagName === "INPUT" && (el.type === "text" || el.type === ""));
+
+      app.addEventListener("click", e => {
+        /* Objective section toggle */
+        const header = e.target.closest("[data-toggle-objective]");
+        if (header) {
+          const objective = header.parentElement;
+          const key = objective.dataset.objectiveKey;
+          objective.classList.toggle("open");
+          const isOpen = objective.classList.contains("open");
+          if (key) {
+            if (isOpen) openObjectiveKeys.add(key);
+            else openObjectiveKeys.delete(key);
+          }
+          /* Lazy-load file lists only when a section is first expanded */
+          if (isOpen && APP_CONFIG.storageMode === "api") {
+            objective.querySelectorAll(".uploaded-files-list[id^='files-']").forEach(el => {
+              if (!el.dataset.loaded) {
+                el.dataset.loaded = "1";
+                loadFilesForPractice(el.id.replace("files-", ""));
+              }
+            });
+          }
+          return;
+        }
+
+        /* Save button — commits all buffered text-field changes at once */
+        const saveBtn = e.target.closest(".practice-save-btn");
+        if (saveBtn) {
+          saveState();
+          renderDashboard();
+          renderTimeline();
+          saveBtn.textContent = "Saved \u2713";
+          saveBtn.className = "practice-save-btn saved";
+          setTimeout(() => { saveBtn.style.display = "none"; saveBtn.textContent = "Save changes"; saveBtn.className = "practice-save-btn"; }, 1600);
+        }
+
+        /* Confidence star */
+        const confStar = e.target.closest("[data-confidence-star]");
+        if (confStar) {
+          const rating = parseInt(confStar.dataset.confidenceStar);
+          const pid    = confStar.dataset.pid;
+          const widget = confStar.closest(".confidence-widget");
+          const notes  = widget?.querySelector(".conf-notes-input")?.value || "";
+          const current = (window.__AESCSF_CONFIDENCE__ || {})[pid];
+          const newRating = current?.rating === rating ? 0 : rating;
+          updateConfidenceWidget(widget, newRating, notes);
+          saveConfidence(pid, newRating, notes);
+          return;
+        }
+
+        /* Confidence clear */
+        const confClear = e.target.closest(".conf-clear-btn");
+        if (confClear) {
+          const pid    = confClear.dataset.pid;
+          const widget = confClear.closest(".confidence-widget");
+          const notes  = widget?.querySelector(".conf-notes-input")?.value || "";
+          updateConfidenceWidget(widget, 0, notes);
+          saveConfidence(pid, 0, notes);
+          return;
+        }
+      });
+
+      app.addEventListener("input", e => {
+        const input = e.target.closest("[data-field]");
+        if (!input) return;
+        const card = input.closest(".practice-card");
+        if (!card) return;
+        const practiceId = card.dataset.practiceId;
+        const saveBtn = card.querySelector(".practice-save-btn");
+        const field = input.dataset.field;
+        if (!state.assessments[practiceId]) return;
+        state.assessments[practiceId][field] = input.value;
+
+        function markDirty() {
+          if (saveBtn) { saveBtn.style.display = "inline-flex"; saveBtn.textContent = "Save changes"; saveBtn.className = "practice-save-btn"; }
+        }
+
+        if (field === "status") {
+          /* Status is a deliberate click — save immediately */
+          input.className = `status-select ${statusClass(input.value)}`;
+          card.className = `practice-card ${statusClass(input.value)}`;
+          updateSummary();
+          saveState();
+          renderDashboard();
+        } else if (field === "attachments") {
+          /* Update attachment preview live, but wait for Save */
+          const preview = input.parentElement.querySelector(".attachment-preview");
+          if (preview) preview.innerHTML = renderAttachmentPreview(input.value);
+          markDirty();
+        } else if (isTextLike(input)) {
+          /* All other text / textarea fields: mark dirty, defer save */
+          markDirty();
+        } else {
+          /* Date pickers and other non-text inputs: save immediately */
+          saveState();
+          renderDashboard();
+        }
+      });
+
+      app.addEventListener("change", e => {
+        const input = e.target.closest("[data-field]");
+        if (!input) return;
+        const card = input.closest(".practice-card");
+        if (!card) return;
+        const practiceId = card.dataset.practiceId;
+        const field = input.dataset.field;
+        if (!state.assessments[practiceId]) return;
+        state.assessments[practiceId][field] = input.value;
+
+        if (field === "status") {
+          input.className = `status-select ${statusClass(input.value)}`;
+          card.className = `practice-card ${statusClass(input.value)}`;
+        } else if (!isTextLike(input)) {
+          /* Date or other non-text fields: save on change */
+          saveState();
+          renderDashboard();
+          renderTimeline();
+        }
+        /* Text fields: handled by input event above */
+      });
+
+      /* MIL criteria checkboxes and anti-pattern select */
+      app.addEventListener("change", e => {
+        const criteriaEl = e.target.closest("[data-mil-criteria]");
+        if (!criteriaEl) return;
+        const card = criteriaEl.closest(".practice-card");
+        if (!card) return;
+        const practiceId = card.dataset.practiceId;
+        const practice   = PRACTICES.find(p => p.practiceId === practiceId);
+        if (!practice) return;
+        if (!state.assessments[practiceId]) state.assessments[practiceId] = defaultAssessment();
+        if (!state.assessments[practiceId].milCriteria) state.assessments[practiceId].milCriteria = {};
+
+        const key = criteriaEl.dataset.milCriteria;
+        if (key === "antiPattern") {
+          state.assessments[practiceId].antiPattern = criteriaEl.value;
+          /* Toggle badge live without re-rendering the whole card */
+          const row = criteriaEl.closest(".mil-anti-pattern-row");
+          const existingBadge = row?.querySelector(".mil-anti-pattern-badge");
+          if (criteriaEl.value !== "not_present") {
+            if (!existingBadge && row) row.insertAdjacentHTML("beforeend", `<span class="mil-anti-pattern-badge">&#9888; Anti-pattern flagged</span>`);
+          } else {
+            existingBadge?.remove();
+          }
+        } else {
+          state.assessments[practiceId].milCriteria[key] = criteriaEl.checked;
+          const newStatus = calculateMilStatus(practice, state.assessments[practiceId].milCriteria);
+          state.assessments[practiceId].status = newStatus;
+          const statusSel = card.querySelector("[data-field='status']");
+          if (statusSel) {
+            statusSel.value = newStatus;
+            statusSel.className = `status-select ${statusClass(newStatus)}`;
+          }
+          card.className = `practice-card ${statusClass(newStatus)}`;
+          updateSummary();
+          renderDashboard();
+        }
+        saveState();
+      });
+
+      app.addEventListener("focusout", e => {
+        const notesEl = e.target.closest(".conf-notes-input");
+        if (!notesEl) return;
+        const pid  = notesEl.dataset.pid;
+        const conf = (window.__AESCSF_CONFIDENCE__ || {})[pid] || {};
+        if (notesEl.value !== (conf.notes || "")) {
+          saveConfidence(pid, conf.rating || 0, notesEl.value);
+        }
+      });
+    }
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function csvEscape(value) {
+      const stringValue = value == null ? "" : String(value);
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+
+    function mapStatusForAemoCsv(status) {
+      if (status === "Yes") return "Fully";
+      if (status === "No") return "Not";
+      if (status === "Present") return "Not";
+      if (status === "Not Present") return "Fully";
+      return status || "";
+    }
+
+    function buildTemplateCsvRows() {
+      return CSV_TEMPLATE_IDS.map(practiceId => {
+        const assessment = state.assessments[practiceId] || defaultAssessment();
+        return [practiceId, mapStatusForAemoCsv(assessment.status), ""];
+      });
+    }
+
+    function exportTemplateCsv() {
+      const header = ["Practice ID", "Current State", "Self-Evaluation Notes"];
+      const rows = buildTemplateCsvRows();
+      const csvContent = [header, ...rows].map(row => row.map(csvEscape).join(",")).join("\r\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      downloadBlob(blob, `AESCSF_Full_Template_${dateStamp}.csv`);
+    }
+
+
+
+    function comparisonStatusScore(status) {
+      switch (status) {
+        case "Fully":
+        case "Yes":
+        case "Not Present":
+          return 3;
+        case "Largely":
+          return 2;
+        case "Partial":
+        case "Partially":
+          return 1;
+        case "Not":
+        case "No":
+        case "Present":
+          return 0;
+        default:
+          return 0;
+      }
+    }
+
+    function isOpenComparisonStatus(status) {
+      return status === "Partial" || status === "Partially" || status === "Not" || status === "No" || status === "Present";
+    }
+
+    function destroyChartInstance(instance) {
+      if (instance && typeof instance.destroy === "function") instance.destroy();
+    }
+
+    function buildSnapshotFromAssessments(assessments, fileName, label) {
+      const snapshot = { assessments: {}, fileName: fileName || "", label: label || "" };
+      const source = assessments && typeof assessments === "object" ? assessments : {};
+      for (const practice of PRACTICES) {
+        snapshot.assessments[practice.practiceId] = { ...defaultAssessment(), ...(source[practice.practiceId] || {}) };
+      }
+      return snapshot;
+    }
+
+    function getLiveComparisonSnapshot() {
+      return buildSnapshotFromAssessments(state.assessments, "Live assessment", "Live Assessment");
+    }
+
+    function statusDistributionFromSnapshot(snapshot) {
+      const counts = { "Open / Partial": 0, Largely: 0, "Fully / Yes / Not Present": 0, "Not Assessed": 0, "N/A": 0 };
+      if (!snapshot) return counts;
+      for (const practice of PRACTICES) {
+        const status = snapshot.assessments?.[practice.practiceId]?.status || "Not Assessed";
+        if (status === "Fully" || status === "Yes" || status === "Not Present") counts["Fully / Yes / Not Present"]++;
+        else if (status === "Largely") counts.Largely++;
+        else if (status === "Partial" || status === "Partially" || status === "Not" || status === "No" || status === "Present") counts["Open / Partial"]++;
+        else if (status === "N/A") counts["N/A"]++;
+        else counts["Not Assessed"]++;
+      }
+      return counts;
+    }
+
+    function buildDomainScoresFromSnapshot(snapshot) {
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      return domains.map(domain => {
+        const practices = PRACTICES.filter(p => p.domain === domain);
+        let total = 0;
+        let count = 0;
+        practices.forEach(practice => {
+          const status = snapshot?.assessments?.[practice.practiceId]?.status || "Not Assessed";
+          if (status !== "Not Assessed" && status !== "N/A") {
+            total += comparisonStatusScore(status);
+            count += 1;
+          }
+        });
+        return count ? Number((total / count).toFixed(2)) : 0;
+      });
+    }
+
+    function buildComparisonMetrics(previousSnapshot, currentSnapshot) {
+      const rows = [];
+      let improved = 0;
+      let regressed = 0;
+      let unchanged = 0;
+      let previousGaps = 0;
+      let currentGaps = 0;
+
+      PRACTICES.forEach(practice => {
+        const previous = { ...defaultAssessment(), ...(previousSnapshot?.assessments?.[practice.practiceId] || {}) };
+        const current = { ...defaultAssessment(), ...(currentSnapshot?.assessments?.[practice.practiceId] || {}) };
+        if (isOpenComparisonStatus(previous.status)) previousGaps++;
+        if (isOpenComparisonStatus(current.status)) currentGaps++;
+        const previousScore = comparisonStatusScore(previous.status);
+        const currentScore = comparisonStatusScore(current.status);
+        let change = "Unchanged";
+        if (currentScore > previousScore) { change = "Improved"; improved++; }
+        else if (currentScore < previousScore) { change = "Regressed"; regressed++; }
+        else { unchanged++; }
+        rows.push({ practice, previous, current, change });
+      });
+
+      return { improved, regressed, unchanged, previousGaps, currentGaps, gapDelta: currentGaps - previousGaps, rows };
+    }
+
+    function updateComparisonMeta() {
+      const previousName = document.getElementById("comparisonPreviousName");
+      const currentName  = document.getElementById("comparisonCurrentName");
+      const previousMeta = document.getElementById("comparisonPreviousMeta");
+      const currentMeta  = document.getElementById("comparisonCurrentMeta");
+      if (previousName) previousName.value = comparisonState.previous ? comparisonState.previousLabel : "Nothing loaded";
+      if (currentName)  currentName.value  = comparisonState.current  ? comparisonState.currentLabel  : "Nothing loaded";
+      if (previousMeta) previousMeta.textContent = comparisonState.previous
+        ? `Loaded: ${comparisonState.previousLabel}`
+        : "Nothing loaded — select a snapshot or import a JSON file.";
+      if (currentMeta)  currentMeta.textContent  = comparisonState.current
+        ? `Loaded: ${comparisonState.currentLabel}`
+        : "Nothing loaded — select a snapshot, use the live assessment, or import a JSON file.";
+    }
+
+    function renderComparisonCharts(previousSnapshot, currentSnapshot) {
+      const comparisonRadarCanvas = document.getElementById("comparisonRadarChart");
+      const comparisonStatusCanvas = document.getElementById("comparisonStatusChart");
+      const comparisonGapCanvas = document.getElementById("comparisonGapChart");
+      destroyChartInstance(comparisonRadarChart);
+      destroyChartInstance(comparisonStatusChart);
+      destroyChartInstance(comparisonGapChart);
+      if (!comparisonRadarCanvas || !comparisonStatusCanvas || !comparisonGapCanvas || typeof Chart === "undefined") return;
+
+      const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const previousDomainScores = buildDomainScoresFromSnapshot(previousSnapshot);
+      const currentDomainScores = buildDomainScoresFromSnapshot(currentSnapshot);
+      const previousDistribution = statusDistributionFromSnapshot(previousSnapshot);
+      const currentDistribution = statusDistributionFromSnapshot(currentSnapshot);
+      const metrics = buildComparisonMetrics(previousSnapshot, currentSnapshot);
+
+      const cc2 = getChartColors();
+      comparisonRadarChart = new Chart(comparisonRadarCanvas, {
+        type: "radar",
+        data: {
+          labels: domains,
+          datasets: [
+            { label: comparisonState.previousLabel, data: previousDomainScores, fill: true, borderWidth: 2, backgroundColor: cc2.comp[0], borderColor: cc2.compBorder[0], pointBackgroundColor: cc2.compBorder[0] },
+            { label: comparisonState.currentLabel,  data: currentDomainScores,  fill: true, borderWidth: 2, backgroundColor: cc2.comp[1], borderColor: cc2.compBorder[1], pointBackgroundColor: cc2.compBorder[1] }
+          ]
+        },
+        options: { maintainAspectRatio: false, scales: radarScaleOpts(3), plugins: { legend: { display: true, ...legendOpts("bottom") } } }
+      });
+
+      comparisonStatusChart = new Chart(comparisonStatusCanvas, {
+        type: "bar",
+        data: {
+          labels: ["Open / Partial", "Largely", "Fully / Yes / Not Present", "Not Assessed", "N/A"],
+          datasets: [
+            { label: comparisonState.previousLabel, data: [previousDistribution["Open / Partial"], previousDistribution.Largely, previousDistribution["Fully / Yes / Not Present"], previousDistribution["Not Assessed"], previousDistribution["N/A"]], borderWidth: 1, backgroundColor: cc2.comp[0], borderColor: cc2.compBorder[0] },
+            { label: comparisonState.currentLabel,  data: [currentDistribution["Open / Partial"],  currentDistribution.Largely,  currentDistribution["Fully / Yes / Not Present"],  currentDistribution["Not Assessed"],  currentDistribution["N/A"]],  borderWidth: 1, backgroundColor: cc2.comp[1], borderColor: cc2.compBorder[1] }
+          ]
+        },
+        options: { maintainAspectRatio: false, responsive: true, plugins: { legend: { display: true, ...legendOpts("bottom") } }, scales: barScaleOpts() }
+      });
+
+      comparisonGapChart = new Chart(comparisonGapCanvas, {
+        type: "bar",
+        data: { labels: [comparisonState.previousLabel, comparisonState.currentLabel], datasets: [{ label: "Open Gaps", data: [metrics.previousGaps, metrics.currentGaps], borderWidth: 1, backgroundColor: [cc2.comp[0], cc2.comp[1]], borderColor: [cc2.compBorder[0], cc2.compBorder[1]] }] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: barScaleOpts() }
+      });
+    }
+
+    function renderComparisonTable(rows) {
+      const tbody = document.getElementById("comparisonTableBody");
+      const notice = document.getElementById("comparisonNotice");
+      if (!tbody) return;
+      if (!rows.length) {
+        tbody.innerHTML = "";
+        if (notice) notice.style.display = "block";
+        return;
+      }
+      if (notice) notice.style.display = "none";
+      const order = { Regressed: 0, Improved: 1, Unchanged: 2 };
+      tbody.innerHTML = rows.sort((a,b) => (order[a.change] - order[b.change]) || a.practice.practiceId.localeCompare(b.practice.practiceId)).map(row => `
+        <tr>
+          <td>${escapeHtml(row.practice.domain)}</td>
+          <td><strong>${escapeHtml(row.practice.practiceId)}</strong><br>${escapeHtml(row.practice.practice)}</td>
+          <td>${escapeHtml(row.previous.status || "Not Assessed")}</td>
+          <td>${escapeHtml(row.current.status || "Not Assessed")}</td>
+          <td><span class="comparison-change ${row.change.toLowerCase()}">${escapeHtml(row.change)}</span></td>
+          <td>${escapeHtml(row.current.gap || row.previous.gap || "")}</td>
+        </tr>`).join("");
+    }
+
+    function resetComparisonSummary() {
+      ["compImproved","compRegressed","compUnchanged","compPrevGaps","compCurrGaps","compGapDelta"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = "0";
+      });
+      renderComparisonTable([]);
+      destroyChartInstance(comparisonRadarChart);
+      destroyChartInstance(comparisonStatusChart);
+      destroyChartInstance(comparisonGapChart);
+      comparisonRadarChart = null; comparisonStatusChart = null; comparisonGapChart = null;
+    }
+
+    function renderComparison() {
+      loadSnapshotList(); /* refresh snapshot dropdowns (no-op if not in API mode) */
+      updateComparisonMeta();
+      if (comparisonState.current?.isLive) {
+        comparisonState.current = { ...getLiveComparisonSnapshot(), isLive: true };
+        comparisonState.currentLabel = "Live Assessment";
+        updateComparisonMeta();
+      }
+      if (!comparisonState.previous || !comparisonState.current) {
+        resetComparisonSummary();
+        return;
+      }
+      const metrics = buildComparisonMetrics(comparisonState.previous, comparisonState.current);
+      const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+      setText("compImproved", metrics.improved);
+      setText("compRegressed", metrics.regressed);
+      setText("compUnchanged", metrics.unchanged);
+      setText("compPrevGaps", metrics.previousGaps);
+      setText("compCurrGaps", metrics.currentGaps);
+      setText("compGapDelta", metrics.gapDelta > 0 ? `+${metrics.gapDelta}` : metrics.gapDelta);
+      renderComparisonCharts(comparisonState.previous, comparisonState.current);
+      renderComparisonTable(metrics.rows);
+    }
+
+    function clearComparisonState() {
+      comparisonState = { previous: null, current: null, previousLabel: "Previous Assessment", currentLabel: "Current Assessment" };
+      updateComparisonMeta();
+      resetComparisonSummary();
+    }
+
+    pageTabs.forEach(tab => {
+      tab.addEventListener("click", () => setActivePage(tab.dataset.pageTab));
+    });
+
+    document.getElementById("exportTemplateCsvBtn").addEventListener("click", exportTemplateCsv);
+    document.getElementById("exportGapBtn").addEventListener("click", exportGapRegister);
+    document.getElementById("pdfBtn").addEventListener("click", generatePdfReport);
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      if (confirm("This will clear all saved assessment data in this browser. Continue?")) {
+        state = buildInitialState();
+        saveState();
+        render();
+      }
+    });
+
+    document.getElementById("expandAllBtn").addEventListener("click", () => {
+      document.querySelectorAll(".objective").forEach(el => {
+        el.classList.add("open");
+        if (el.dataset.objectiveKey) openObjectiveKeys.add(el.dataset.objectiveKey);
+      });
+    });
+    document.getElementById("collapseAllBtn").addEventListener("click", () => {
+      document.querySelectorAll(".objective").forEach(el => el.classList.remove("open"));
+      openObjectiveKeys.clear();
+    });
+    document.getElementById("clearFiltersBtn").addEventListener("click", () => {
+      searchInput.value = "";
+      domainFilter.value = "";
+      milFilter.value = "";
+      spFilter.value = "";
+      statusFilter.value = "";
+      render();
+    });
+
+    [searchInput, domainFilter, milFilter, spFilter, statusFilter].forEach(el => {
+      el.addEventListener("input", render);
+      el.addEventListener("change", render);
+    });
+
+    const useLiveBtn = document.getElementById("comparisonUseLiveBtn");
+    if (useLiveBtn) useLiveBtn.addEventListener("click", () => {
+      comparisonState.current = { ...getLiveComparisonSnapshot(), isLive: true };
+      comparisonState.currentLabel = "Live Assessment";
+      renderComparison();
+    });
+    document.getElementById("clearComparisonBtn")?.addEventListener("click", clearComparisonState);
+    document.getElementById("comparisonPreviousLoadBtn")?.addEventListener("click",   () => loadSnapshotIntoComparison("previous"));
+    document.getElementById("comparisonCurrentLoadBtn")?.addEventListener("click",    () => loadSnapshotIntoComparison("current"));
+    document.getElementById("comparisonPreviousDeleteBtn")?.addEventListener("click", () => deleteSnapshotFromSelect("previous"));
+    document.getElementById("comparisonCurrentDeleteBtn")?.addEventListener("click",  () => deleteSnapshotFromSelect("current"));
+    document.getElementById("saveSnapshotBtn")?.addEventListener("click", saveCurrentSnapshot);
+
+    /* ── Snapshot helpers ───────────────────────────────────────────────────
+       Snapshots are named, timestamped copies of an assessment stored in the
+       database. They replace the need to manually export and re-import JSON
+       for year-on-year comparison.
+    ──────────────────────────────────────────────────────────────────────── */
+    let _snapshotCache = [];        /* personal snapshots (admin only) */
+    let _goldenSnapshotCache = [];  /* golden snapshots (all users) */
+
+    function formatSnapshotDate(unixSecs) {
+      return new Date(unixSecs * 1000).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
+    }
+
+    /* Returns the snapshot object from whichever cache contains id */
+    function findSnapshot(id) {
+      return _goldenSnapshotCache.find(s => s.id == id) || _snapshotCache.find(s => s.id == id) || null;
+    }
+
+    /* True if the given id belongs to a golden snapshot */
+    function isGoldenId(id) { return !!_goldenSnapshotCache.find(s => s.id == id); }
+
+    async function loadSnapshotList() {
+      if (APP_CONFIG.storageMode !== "api") return;
+      try {
+        /* Golden snapshots are visible to everyone */
+        const gResp = await adminFetch("/snapshots/golden");
+        _goldenSnapshotCache = gResp.ok ? await gResp.json() : [];
+
+        /* Personal snapshots are only relevant for admins */
+        const isAdmin = (window.__AESCSF_RBAC__?.role === "admin");
+        if (isAdmin) {
+          const pResp = await adminFetch("/snapshots");
+          _snapshotCache = pResp.ok ? await pResp.json() : [];
+        } else {
+          _snapshotCache = [];
+        }
+
+        const placeholder = '<option value="">— Select a snapshot —</option>';
+        const goldenOpts  = _goldenSnapshotCache.map(s =>
+          `<option value="${s.id}">${escapeHtml(s.label)} — ${formatSnapshotDate(s.created_at)}</option>`
+        );
+        const personalOpts = _snapshotCache.map(s => {
+          const byLabel = s.created_by ? ` (${escapeHtml(s.created_by)})` : "";
+          return `<option value="${s.id}">${escapeHtml(s.label)} — ${formatSnapshotDate(s.created_at)}${byLabel}</option>`;
+        });
+
+        let options;
+        if (!goldenOpts.length && !personalOpts.length) {
+          options = '<option value="">No snapshots saved yet</option>';
+        } else {
+          options = placeholder;
+          if (goldenOpts.length) {
+            options += `<optgroup label="Shared (Golden)">${goldenOpts.join("")}</optgroup>`;
+          }
+          if (personalOpts.length) {
+            options += `<optgroup label="Admin Snapshots">${personalOpts.join("")}</optgroup>`;
+          }
+        }
+
+        ["comparisonPreviousSelect", "comparisonCurrentSelect"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.innerHTML = options;
+        });
+      } catch (err) {
+        console.warn("[AESCSF] Could not load snapshot list:", err);
+      }
+    }
+
+    async function loadSnapshotIntoComparison(side) {
+      const selectId = side === "previous" ? "comparisonPreviousSelect" : "comparisonCurrentSelect";
+      const select   = document.getElementById(selectId);
+      const id       = select?.value;
+      if (!id) return;
+      try {
+        const endpoint = isGoldenId(id)
+          ? `/snapshots/golden/${encodeURIComponent(id)}`
+          : `/snapshots/${encodeURIComponent(id)}`;
+        const resp = await adminFetch(endpoint);
+        if (!resp.ok) { alert(`Failed to load snapshot (${resp.status})`); return; }
+        const data  = await resp.json();
+        const label = data.label || findSnapshot(id)?.label || "Snapshot";
+        comparisonState[side]            = buildSnapshotFromAssessments(data.assessments, label, label);
+        comparisonState[side + "Label"]  = label;
+        renderComparison();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function saveCurrentSnapshot() {
+      if (APP_CONFIG.storageMode !== "api") {
+        alert("Snapshots are stored on the server and require API storage mode.\n\nSwitch storageMode to \"api\" in your deployment config to use this feature.");
+        return;
+      }
+      const label = prompt("Enter a name for this snapshot\n(e.g. FY2024, Q1 2025, Pre-Audit 2025):");
+      if (!label || !label.trim()) return;
+
+      /* Admins choose: golden (shared with all users) or personal */
+      const isAdmin = (window.__AESCSF_RBAC__?.role === "admin");
+      let golden = false;
+      if (isAdmin) {
+        golden = confirm(
+          `Save "${label.trim()}" as a Golden Snapshot?\n\n` +
+          "★ Golden — shared with all users (visible in their Comparison view)\n" +
+          "   Personal — visible only to you\n\n" +
+          "Click OK for Golden, Cancel for Personal."
+        );
+      }
+
+      const endpoint = golden ? "/snapshots/golden" : "/snapshots";
+      try {
+        const resp = await adminFetch(endpoint, {
+          method: "POST",
+          body: JSON.stringify({ label: label.trim(), data: buildPersistableState(state) })
+        });
+        if (!resp.ok) { alert(`Failed to save snapshot (${resp.status})`); return; }
+        const saved = await resp.json();
+        await loadSnapshotList();
+        /* Pre-select the new snapshot in the current slot */
+        const currSelect = document.getElementById("comparisonCurrentSelect");
+        if (currSelect) currSelect.value = saved.id;
+      } catch (err) { alert(err.message); }
+    }
+
+    async function deleteSnapshotFromSelect(side) {
+      const selectId = side === "previous" ? "comparisonPreviousSelect" : "comparisonCurrentSelect";
+      const select   = document.getElementById(selectId);
+      const id       = select?.value;
+      if (!id) return;
+      const golden = isGoldenId(id);
+      const snap   = findSnapshot(id);
+      if (!snap) return;
+      if (golden && window.__AESCSF_RBAC__?.role !== "admin") {
+        alert("Only admins can delete shared (golden) snapshots.");
+        return;
+      }
+      if (!confirm(`Delete ${golden ? "shared (golden) " : ""}snapshot "${snap.label}"?\n\nThis cannot be undone.`)) return;
+      try {
+        const endpoint = golden
+          ? `/snapshots/golden/${encodeURIComponent(id)}`
+          : `/snapshots/${encodeURIComponent(id)}`;
+        const resp = await adminFetch(endpoint, { method: "DELETE" });
+        if (!resp.ok) { alert(`Failed to delete snapshot (${resp.status})`); return; }
+        /* Clear the comparison side if it was showing the deleted snapshot */
+        if (comparisonState[side + "Label"] === snap.label) {
+          comparisonState[side] = null;
+          comparisonState[side + "Label"] = side === "previous" ? "Previous Assessment" : "Current Assessment";
+          updateComparisonMeta();
+          resetComparisonSummary();
+        }
+        await loadSnapshotList();
+      } catch (err) { alert(err.message); }
+    }
+
+    /* ── Sign-out ────────────────────────────────────────────────────────── */
+
+    /* ── Sidebar toggle ───────────────────────────────────────────────── */
+    document.getElementById("saveDomainTargetsBtn")?.addEventListener("click", saveDomainTargets);
+
+    (function initSidebar() {
+      const sidebar  = document.getElementById("appSidebar");
+      const overlay  = document.getElementById("sidebarOverlay");
+      const toggle   = document.getElementById("sidebarToggleBtn");
+      if (!sidebar || !toggle) return;
+      const openSb  = () => { sidebar.classList.add("open"); overlay.classList.add("open"); document.body.style.overflow = "hidden"; };
+      const closeSb = () => { sidebar.classList.remove("open"); overlay.classList.remove("open"); document.body.style.overflow = ""; };
+      toggle.addEventListener("click", () => sidebar.classList.contains("open") ? closeSb() : openSb());
+      overlay.addEventListener("click", closeSb);
+    })();
+
+    /* ── Actions dropdown ─────────────────────────────────────────────── */
+    (function initActionsMenu() {
+      const btn     = document.getElementById("actionsMenuBtn");
+      const menu    = document.getElementById("actionsMenu");
+      const wrapper = document.getElementById("actionsMenuWrapper");
+      if (!btn || !menu) return;
+      const openMenu  = () => { menu.setAttribute("data-open",""); btn.setAttribute("aria-expanded","true"); };
+      const closeMenu = () => { menu.removeAttribute("data-open"); btn.setAttribute("aria-expanded","false"); };
+      btn.addEventListener("click", e => { e.stopPropagation(); menu.hasAttribute("data-open") ? closeMenu() : openMenu(); });
+      document.addEventListener("click", e => { if (menu.hasAttribute("data-open") && !wrapper.contains(e.target)) closeMenu(); });
+      document.addEventListener("keydown", e => { if (e.key === "Escape" && menu.hasAttribute("data-open")) closeMenu(); });
+
+      const wire = (id, fn) => document.getElementById(id)?.addEventListener("click", () => { closeMenu(); fn(); });
+      wire("actionsAemoExport",   exportTemplateCsv);
+      wire("actionsGapRegister",  exportGapRegister);
+      wire("actionsFullReport",   generatePdfReport);
+      wire("actionsSaveSnapshot", saveCurrentSnapshot);
+      document.getElementById("actionsReset")?.addEventListener("click", () => {
+        closeMenu();
+        if (confirm("This will clear all saved assessment data in this browser. Continue?")) {
+          state = buildInitialState(); saveState(); render();
+        }
+      });
+    })();
+
+    /* ── Command Palette (Cmd+K) ──────────────────────────────────────── */
+    (function initCommandPalette() {
+      const overlay = document.getElementById("cmdPaletteOverlay");
+      const input   = document.getElementById("cmdPaletteInput");
+      const results = document.getElementById("cmdPaletteResults");
+      const trigger = document.getElementById("cmdKTrigger");
+      if (!overlay || !input || !results) return;
+
+      let focusedIndex = -1;
+
+      const PAGE_COMMANDS = [
+        { type:"page", label:"Dashboard",  page:"dashboard",  icon:"grid",   adminOnly:true },
+        { type:"page", label:"Assessment", page:"assessment", icon:"check",  adminOnly:false },
+        { type:"page", label:"Timeline",   page:"timeline",   icon:"clock",  adminOnly:false },
+        { type:"page", label:"Comparison", page:"comparison", icon:"chart",  adminOnly:true },
+        { type:"page", label:"Admin",      page:"admin",      icon:"users",  adminOnly:true },
+        { type:"page", label:"Audit Log",  page:"audit",      icon:"file",   adminOnly:true },
+      ];
+      const ACTION_COMMANDS = [
+        { type:"action", label:"AEMO Export (CSV)",   fn: exportTemplateCsv,    adminOnly: true },
+        { type:"action", label:"Gap Register PDF",    fn: exportGapRegister,    adminOnly: true },
+        { type:"action", label:"Full Report PDF",     fn: generatePdfReport,    adminOnly: true },
+        { type:"action", label:"Save Snapshot",       fn: saveCurrentSnapshot,  adminOnly: true },
+      ];
+
+      const ICONS = {
+        grid:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
+        check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`,
+        clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+        chart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>`,
+        users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>`,
+        file:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+        action:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 2 13 9 20 9"/><path d="M20 14.66V20a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2h10"/></svg>`,
+        pract: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l7 4v4c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6l7-4z"/></svg>`,
+      };
+
+      function fuzzyScore(str, q) {
+        if (!q) return 1;
+        str = str.toLowerCase(); q = q.toLowerCase();
+        if (str.includes(q)) return 1;
+        let si = 0, qi = 0, sc = 0;
+        while (si < str.length && qi < q.length) { if (str[si] === q[qi]) { sc++; qi++; } si++; }
+        return qi === q.length ? sc / q.length * 0.5 : 0;
+      }
+
+      function hlMatch(text, q) {
+        if (!q) return escapeHtml(text);
+        const idx = text.toLowerCase().indexOf(q.toLowerCase());
+        if (idx === -1) return escapeHtml(text);
+        return escapeHtml(text.slice(0,idx)) + `<mark class="cmd-result-match">${escapeHtml(text.slice(idx,idx+q.length))}</mark>` + escapeHtml(text.slice(idx+q.length));
+      }
+
+      function buildResults(q) {
+        const isAdmin = window.__AESCSF_RBAC__?.role === "admin";
+        const pageMatches = PAGE_COMMANDS.filter(c => (!c.adminOnly || isAdmin) && fuzzyScore(c.label, q) > 0)
+          .map(c => ({...c, score: fuzzyScore(c.label, q), icon: c.icon}))
+          .sort((a,b) => b.score - a.score).slice(0,4);
+        const actionMatches = ACTION_COMMANDS.filter(c => (!c.adminOnly || isAdmin) && fuzzyScore(c.label, q) > 0)
+          .map(c => ({...c, score: fuzzyScore(c.label, q), icon:"action"}))
+          .sort((a,b) => b.score - a.score).slice(0,4);
+        const practMatches = !q.trim() ? [] : (typeof PRACTICES !== "undefined" ? PRACTICES : [])
+          .filter(p => fuzzyScore(p.practiceId, q) > 0 || fuzzyScore(p.practice.slice(0,80), q) > 0)
+          .map(p => ({type:"practice", label:p.practiceId, meta:`${p.domain} · ${p.mil}`, subtitle:p.practice.slice(0,55)+"…", practiceId:p.practiceId, icon:"pract", score:Math.max(fuzzyScore(p.practiceId,q), fuzzyScore(p.practice.slice(0,80),q))}))
+          .sort((a,b) => b.score - a.score).slice(0,6);
+        const groups = [];
+        if (pageMatches.length)   groups.push({ label:"Pages",    items:pageMatches });
+        if (actionMatches.length) groups.push({ label:"Actions",  items:actionMatches });
+        if (practMatches.length)  groups.push({ label:"Practices", items:practMatches });
+        return groups;
+      }
+
+      function renderResults(q) {
+        focusedIndex = -1;
+        const groups = buildResults(q);
+        if (!groups.length) {
+          results.innerHTML = `<div class="cmd-palette-empty">No results${q ? ` for "${escapeHtml(q)}"` : ""}</div>`;
+          results._flat = [];
+          return;
+        }
+        const flat = [];
+        let html = "";
+        groups.forEach(g => {
+          html += `<div class="cmd-result-group-label">${escapeHtml(g.label)}</div>`;
+          g.items.forEach(item => {
+            const i = flat.length; flat.push(item);
+            html += `<div class="cmd-result" role="option" data-ci="${i}"><span class="cmd-result-icon">${ICONS[item.icon]||ICONS.file}</span><span class="cmd-result-title">${hlMatch(item.label, q)}</span>${item.meta ? `<span class="cmd-result-meta">${escapeHtml(item.meta)}</span>` : ""}</div>`;
+          });
+        });
+        results.innerHTML = html;
+        results._flat = flat;
+      }
+
+      function execute(item) {
+        closePalette();
+        if (item.type === "page")     { setActivePage(item.page); return; }
+        if (item.type === "action")   { item.fn(); return; }
+        if (item.type === "practice") {
+          setActivePage("assessment");
+          setTimeout(() => {
+            const card = document.querySelector(`[data-practice-id="${CSS.escape(item.practiceId)}"]`);
+            if (card) { const obj = card.closest(".objective"); if (obj) obj.classList.add("open"); card.scrollIntoView({ behavior:"smooth", block:"center" }); }
+          }, 100);
+        }
+      }
+
+      const openPalette = () => { overlay.classList.add("open"); input.value = ""; renderResults(""); requestAnimationFrame(() => input.focus()); };
+      const closePalette = () => { overlay.classList.remove("open"); };
+
+      overlay.addEventListener("click", e => { if (e.target === overlay) closePalette(); });
+      trigger?.addEventListener("click", openPalette);
+      input.addEventListener("input", () => renderResults(input.value));
+      results.addEventListener("click", e => { const row = e.target.closest(".cmd-result[data-ci]"); if (row && results._flat) execute(results._flat[+row.dataset.ci]); });
+      input.addEventListener("keydown", e => {
+        const rows = results.querySelectorAll(".cmd-result");
+        if (e.key === "ArrowDown") { e.preventDefault(); focusedIndex = Math.min(focusedIndex+1, rows.length-1); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); focusedIndex = Math.max(focusedIndex-1, 0); }
+        else if (e.key === "Enter") { if (focusedIndex >= 0 && results._flat) execute(results._flat[focusedIndex]); return; }
+        else if (e.key === "Escape") { closePalette(); return; }
+        rows.forEach((r,i) => r.classList.toggle("focused", i === focusedIndex));
+        if (focusedIndex >= 0) rows[focusedIndex]?.scrollIntoView({ block:"nearest" });
+      });
+      document.addEventListener("keydown", e => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); overlay.classList.contains("open") ? closePalette() : openPalette(); }
+      });
+      window.openCommandPalette = openPalette;
+    })();
+
+    /* ── Character counters on textareas ──────────────────────────────── */
+    function attachCharCounters() {
+      document.querySelectorAll(".field textarea[maxlength]").forEach(ta => {
+        if (ta.dataset.counterAttached) return;
+        ta.dataset.counterAttached = "1";
+        const max = parseInt(ta.getAttribute("maxlength") || "4000");
+        const counter = document.createElement("div");
+        counter.className = "char-counter";
+        counter.textContent = `${ta.value.length} / ${max}`;
+        ta.parentElement.appendChild(counter);
+        ta.addEventListener("input", () => {
+          const len = ta.value.length;
+          counter.textContent = `${len} / ${max}`;
+          counter.className = "char-counter" + (len >= max ? " at-limit" : len >= max*0.85 ? " near-limit" : "");
+        });
+      });
+    }
+
+    function setTheme(t) {
+      document.documentElement.dataset.theme = t;
+      try { localStorage.setItem('aescsf_theme', t); } catch {}
+      document.querySelectorAll('.theme-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.theme === t);
+      });
+    }
+
+    function signOut() {
+      /* Clear the oauth2-proxy session cookie and land on the login page.
+       * rd=/login is a relative path so oauth2-proxy accepts it without any
+       * whitelist configuration.  This is the standard SaaS pattern: the user
+       * is signed out of this app but their Azure SSO session stays active —
+       * clicking "Sign in" again will re-authenticate them via SSO (silently
+       * if the Azure session is still valid, or with a prompt if it has
+       * expired). */
+      window.location.href = "/oauth2/sign_out?rd=/login";
+    }
+
+    /* ── API initialisation (called by MSAL bootstrap after auth) ──────── */
+    function showAuthErrorBar(status) {
+      const bar  = document.getElementById("user-info-bar");
+      const name = document.getElementById("user-display-name");
+      const btn  = bar ? bar.querySelector("button") : null;
+      if (bar) {
+        bar.style.background   = "rgba(239,68,68,.06)";
+        bar.style.borderColor  = "rgba(239,68,68,.2)";
+        bar.style.display      = "flex";
+      }
+      if (name) name.innerHTML =
+        (status === 401 || status === 403)
+          ? 'Session error \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">reload to sign in again</a>'
+          : 'Could not reach the server \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">retry</a>';
+      if (btn) btn.style.display = "none";
+      /* Replace connecting indicator with error state */
+      const connectingEl = document.getElementById("sidebarConnecting");
+      if (connectingEl) {
+        const dot = connectingEl.querySelector(".sidebar-connecting-dot");
+        if (dot) { dot.style.background = "rgba(239,68,68,0.7)"; dot.style.animation = "none"; }
+        const labelNode = connectingEl.lastChild;
+        if (labelNode && labelNode.nodeType === Node.TEXT_NODE) labelNode.textContent = " Connection error";
+      }
+    }
+
+    async function initializeFromApi() {
+      /* In local/offline mode show a minimal bar so the user knows storage mode */
+      if (APP_CONFIG.storageMode !== "api") {
+        const bar  = document.getElementById("user-info-bar");
+        const name = document.getElementById("user-display-name");
+        const btn  = bar ? bar.querySelector("button") : null;
+        if (name) name.textContent = "Offline mode — data stored in this browser only";
+        if (btn)  btn.style.display = "none";
+        if (bar) {
+          bar.style.background  = "rgba(100,116,139,.06)";
+          bar.style.borderColor = "rgba(100,116,139,.2)";
+          bar.style.display     = "flex";
+        }
+        return;
+      }
+
+      /* Step 1: load user profile + RBAC — retry while API is cold-starting */
+      const MAX_RETRIES = 20;
+      const RETRY_DELAYS = [2000,3000,4000,5000,6000,8000,10000,12000,15000,20000]; // ms
+      let meResp = null;
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+          meResp   = await fetch(`${APP_CONFIG.apiBaseUrl}/me`, {
+            headers: { "Accept": "application/json" },
+            credentials: "same-origin"
+          });
+          if (meResp.ok || meResp.status === 401 || meResp.status === 403) {
+            break; // success or hard auth error — stop retrying
+          }
+          // 502/503/etc (API still starting) — fall through to retry
+          console.info(`[AESCSF] /me returned ${meResp?.status}, retrying (${attempt + 1}/${MAX_RETRIES})…`);
+        } catch (err) {
+          console.info(`[AESCSF] /me network error, retrying (${attempt + 1}/${MAX_RETRIES})…`, err);
+        }
+        if (attempt < MAX_RETRIES - 1) {
+          /* Update the connecting dot with attempt count */
+          const cEl = document.getElementById("sidebarConnecting");
+          if (cEl) {
+            const dotEl = cEl.querySelector(".sidebar-connecting-dot");
+            if (dotEl) dotEl.title = `Retry ${attempt + 1}`;
+            const labelNode = cEl.lastChild;
+            if (labelNode && labelNode.nodeType === Node.TEXT_NODE) {
+              labelNode.textContent = attempt < 4
+                ? "Connecting…"
+                : `Connecting… (${attempt + 1})`;
+            }
+          }
+          await new Promise(r => setTimeout(r, RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)]));
+        }
+      }
+      if (meResp?.ok) {
+        try {
+          const me = await meResp.json();
+          window.__AESCSF_RBAC__ = { role: me.role, domains: me.domains || [], objectives: me.objectives || [], _oid: me.oid || "", displayName: me.displayName || me.username || "" };
+          applyRbacUI(me);
+          populateDomains();
+          render();
+          if (me.objectives && me.objectives.length) checkAssignmentCompletion(me.objectives);
+        } catch (err) {
+          console.warn("[AESCSF] Could not parse /me response:", err);
+          showAuthErrorBar(0);
+        }
+      } else {
+        showAuthErrorBar(meResp?.status ?? 0);
+      }
+
+      /* Step 2: load assessment data, endorsements, domain targets, and confidence ratings in parallel */
+      try {
+        const [remoteState] = await Promise.all([
+          storageAdapter.loadRemote(),
+          loadConfidenceRatings(),
+          adminFetch("/endorsements").then(r => r.ok ? r.json() : {}).then(data => {
+            window.__AESCSF_ENDORSEMENTS__ = data;
+          }).catch(() => {}),
+          fetch(`${APP_CONFIG.apiBaseUrl}/domain-targets`, { credentials: "same-origin" })
+            .then(r => r.ok ? r.json() : {}).then(data => {
+              window.__AESCSF_DOMAIN_TARGETS__ = data || {};
+            }).catch(() => {}),
+          adminFetch("/groups").then(r => r.ok ? r.json() : []).then(groups => {
+            setupTimelineGroupFilter(groups);
+          }).catch(() => {})
+        ]);
+        if (remoteState) {
+          state = remoteState;
+          prefillOwnerForAssignedPractices();
+          populateDomains(); /* re-run now that RBAC is known */
+          render();
+          renderDashboard();
+          /* Re-apply confidence data now that cards are rendered */
+          if (window.__AESCSF_RBAC__?.role === "admin") await loadConfidenceRatings();
+
+          /* Clean up any stale merged-mode session state from older versions */
+          sessionStorage.removeItem("aescsf_merged_mode");
+          sessionStorage.removeItem("aescsf_own_state");
+        }
+      } catch (err) {
+        console.warn("[AESCSF] Could not load from API, using cached local state:", err);
+      }
+    }
+    window.initializeFromApi = initializeFromApi;
+
+    function applyRbacUI(me) {
+      const role       = me.role || "user";
+      const isAdmin    = role === "admin";
+      const isDashOnly = role === "dashboard";
+      const canEdit    = role === "admin" || role === "assessor" || role === "user";
+
+      /* Sidebar items visibility per role */
+      const sidebarShow = {
+        sidebarAssessmentTab:  canEdit,
+        sidebarTimelineTab:    canEdit,
+        sidebarDashboardTab:   isAdmin || isDashOnly,
+        sidebarSummaryTab:     isAdmin || isDashOnly || role === "assessor",
+        sidebarComparisonTab:  isAdmin || isDashOnly,
+        sidebarGroupsTab:      isAdmin || role === "assessor",
+        sidebarAdminTab:       isAdmin,
+        sidebarAuditTab:       isAdmin,
+      };
+      Object.entries(sidebarShow).forEach(([id, vis]) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = vis ? "" : "none";
+      });
+      const sidebarAdminLabel = document.getElementById("sidebarAdminLabel");
+      if (sidebarAdminLabel) sidebarAdminLabel.style.display = isAdmin ? "" : "none";
+
+      /* Old top tab buttons (backward compat — may be in DOM) */
+      ["dashboardPageTab", "comparisonPageTab"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (isAdmin || isDashOnly) ? "" : "none";
+      });
+      ["adminPageTab", "auditPageTab"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isAdmin ? "" : "none";
+      });
+
+      /* Restore last-visited page (or a role-appropriate default) now that
+         we know the user's role. setActivePage at startup uses role "user" so
+         pages like "summary" are blocked there; we re-apply the correct page here. */
+      const PAGE_ACCESS = {
+        admin:     new Set(["assessment","timeline","dashboard","comparison","admin","audit","groups","summary"]),
+        assessor:  new Set(["assessment","timeline","groups","summary"]),
+        user:      new Set(["assessment","timeline"]),
+        dashboard: new Set(["summary","dashboard","comparison"]),
+      };
+      const allowed = PAGE_ACCESS[role] || PAGE_ACCESS["user"];
+      const savedPage = localStorage.getItem("aescsf_last_page");
+      const targetPage = (savedPage && allowed.has(savedPage)) ? savedPage
+        : isDashOnly ? "summary"
+        : null;
+      if (targetPage) setActivePage(targetPage);
+
+      /* Show action toolbar (export/import/reset) — replaced by Actions menu */
+      const topActions = document.getElementById("topActionsBar");
+      if (topActions) topActions.style.display = "none";
+
+      /* Actions menu: visible for edit roles; admin-only items hidden for non-admins */
+      const actionsMenuWrapper = document.getElementById("actionsMenuWrapper");
+      if (actionsMenuWrapper) actionsMenuWrapper.style.display = canEdit ? "" : "none";
+      ["actionsReset"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isAdmin ? "" : "none";
+      });
+
+      /* Update topbar user display */
+      const topbarUserBtn  = document.getElementById("topbarUserBtn");
+      const topbarUserName = document.getElementById("topbarUserName");
+      const topbarUserInit = document.getElementById("topbarUserInitials");
+      const topbarSignOut  = document.getElementById("topbarSignOutBtn");
+      const displayName    = me.displayName || me.username || "";
+      if (topbarUserName) topbarUserName.textContent = displayName;
+      if (topbarUserInit) topbarUserInit.textContent = (displayName[0] || "?").toUpperCase();
+      if (topbarUserBtn)  topbarUserBtn.style.display = "flex";
+      if (topbarSignOut)  topbarSignOut.style.display = "";
+
+      /* Update sidebar storage mode footer; hide connecting indicator */
+      const connectingEl = document.getElementById("sidebarConnecting");
+      if (connectingEl) connectingEl.style.display = "none";
+      const smEl = document.getElementById("sidebarStorageMode");
+      if (smEl) { smEl.textContent = APP_CONFIG.storageMode === "api" ? "API mode" : "Offline mode"; smEl.style.display = ""; }
+
+      /* Show audit purge button for admins in API mode */
+      const purgeBtn = document.getElementById("auditPurgeBtn");
+      if (purgeBtn) purgeBtn.style.display = (me.role === "admin" && APP_CONFIG.storageMode === "api") ? "" : "none";
+
+      /* Show admin-only SP breakdown section */
+      const spSection = document.getElementById("spBreakdownSection");
+      if (spSection) spSection.style.display = me.role === "admin" ? "" : "none";
+
+      /* Show domain target editor + org goal for admin + assessor */
+      const canManageTimeline = isAdmin || role === "assessor";
+      const dtEditor = document.getElementById("domainTargetEditor");
+      if (dtEditor) dtEditor.style.display = canManageTimeline ? "" : "none";
+      const orgGoalSec = document.getElementById("orgGoalSection");
+      if (orgGoalSec) orgGoalSec.style.display = canManageTimeline ? "" : "none";
+      if (canManageTimeline) loadOrgGoal();
+
+      /* Show snapshot UI only in API mode */
+      const snapshotEls = [
+        document.getElementById("saveSnapshotBtn"),
+        document.getElementById("comparisonPreviousSnapshotRow"),
+        document.getElementById("comparisonCurrentSnapshotRow")
+      ];
+      snapshotEls.forEach(el => { if (el) el.style.display = APP_CONFIG.storageMode === "api" ? "" : "none"; });
+
+      /* Show the user bar with name and role badge */
+      const userBar  = document.getElementById("user-info-bar");
+      const nameSpan = document.getElementById("user-display-name");
+      const roleBadge = document.getElementById("user-role-badge");
+      if (nameSpan) nameSpan.textContent = me.displayName || me.username || "";
+      if (roleBadge) {
+        const roleLabels = { admin: "Admin", assessor: "Assessor", dashboard: "Dashboard", user: "User" };
+        roleBadge.textContent = roleLabels[me.role] || me.role;
+        roleBadge.style.background = "rgba(255,255,255,.2)";
+        roleBadge.style.color      = "#fff";
+        roleBadge.style.display    = "inline-block";
+      }
+      if (userBar) userBar.style.display = "flex";
+    }
+
+    populateDomains();
+    setupDelegatedListeners();
+    render();
+    setActivePage("assessment"); /* temporary; applyRbacUI restores the saved page once role is known */
+    initializeFromApi();
+    setTheme(localStorage.getItem('aescsf_theme')||'light'); /* load user profile + remote state (oauth2-proxy session already established) */
+
+    /* ── Admin panel ──────────────────────────────────────────────────────
+       All admin functions are gated behind requireAdmin on the server.
+       The admin tab is hidden from non-admin users by applyRbacUI().
+    ──────────────────────────────────────────────────────────────────── */
+    const ALL_DOMAINS = [...new Set(PRACTICES.map(p => p.domain))].sort();
+    let _adminUsers = [];
+
+    /* ── Assignment completion banner ────────────────────────────────────────── */
+    function prefillOwnerForAssignedPractices() {
+      const rbac = window.__AESCSF_RBAC__;
+      if (!rbac || rbac.role === "admin" || rbac.role === "assessor") return;
+      const name = rbac.displayName || "";
+      if (!name) return;
+      const domains    = new Set(rbac.domains    || []);
+      const objectives = new Set(rbac.objectives || []);
+      if (!domains.size && !objectives.size) return;
+      let changed = false;
+      for (const p of PRACTICES) {
+        if (!domains.has(p.domain) && !objectives.has(p.objectiveId)) continue;
+        if (!state.assessments[p.practiceId]) state.assessments[p.practiceId] = defaultAssessment();
+        if (!state.assessments[p.practiceId].owner) {
+          state.assessments[p.practiceId].owner = name;
+          changed = true;
+        }
+      }
+      if (changed) saveState();
+    }
+
+    function checkAssignmentCompletion(objectives) {
+      if (!objectives.length || APP_CONFIG.storageMode !== "api") return;
+      const assigned = PRACTICES.filter(p => objectives.includes(p.objectiveId));
+      const incomplete = assigned.filter(p => {
+        const a = state.assessments[p.practiceId];
+        return !a || !a.status || a.status === "Not Assessed";
+      });
+      if (!incomplete.length) return;
+      const banner = document.getElementById("assignmentIncompleteBanner");
+      const msg    = document.getElementById("assignmentIncompleteBannerMsg");
+      if (banner) banner.style.display = "flex";
+      if (msg) msg.textContent =
+        `You have ${incomplete.length} assigned practice${incomplete.length === 1 ? "" : "s"} not yet assessed. Switch to Assessment to complete them.`;
+    }
+
+    /* ── Objective assignment admin functions ────────────────────────────────── */
+    function adminToggleObjectiveChip(oid, objectiveId, checkbox) {
+      const chip = document.getElementById(`objchip-${oid}-${objectiveId}`);
+      if (chip) chip.classList.toggle("checked", checkbox.checked);
+    }
+
+    async function adminSaveObjectiveAssignments(oid) {
+      const objectives = [];
+      document.querySelectorAll(`[id^="objchip-${oid}-"]`).forEach(label => {
+        const cb = label.querySelector("input");
+        if (cb?.checked) objectives.push(label.id.replace(`objchip-${oid}-`, ""));
+      });
+      const statusEl = document.getElementById(`obj-save-status-${oid}`);
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/objective-assignments`, {
+          method: "PUT", body: JSON.stringify({ objectives })
+        });
+        if (!resp.ok) { if (statusEl) statusEl.textContent = `Error ${resp.status}`; return; }
+        if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 3000); }
+        /* Update local _adminUsers cache */
+        const u = _adminUsers.find(u => u.oid === oid);
+        if (u) u.objectives = objectives;
+      } catch (err) {
+        if (statusEl) statusEl.textContent = err.message;
+      }
+    }
+
+    /* ── Multi-respondent responses view ─────────────────────────────────────── */
+    async function approveContributions(userOid, practiceIds) {
+      const btnId = practiceIds ? `approve-${userOid}-${practiceIds[0]}` : `approve-all-${userOid}`;
+      const btn = document.getElementById(btnId);
+      if (btn) { btn.disabled = true; btn.textContent = "Endorsing…"; }
+      try {
+        const body = practiceIds ? { practiceIds } : {};
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(userOid)}/endorse-contributions`, {
+          method: "POST", body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Endorse" : "Endorse all"; }
+          alert(`Endorsement failed: ${data.error || resp.status}`);
+          return;
+        }
+        /* Optimistically mark endorsed practices as up-to-date in the local cache
+           so the pending-review filter hides them immediately on re-render, even
+           before the server round-trip confirms the new changed_since value. */
+        if (Array.isArray(data.practiceIds)) {
+          window.__AESCSF_ENDORSEMENTS__ = window.__AESCSF_ENDORSEMENTS__ || {};
+          for (const pid of data.practiceIds) {
+            window.__AESCSF_ENDORSEMENTS__[pid] = {
+              ...(window.__AESCSF_ENDORSEMENTS__[pid] || {}),
+              changed_since: false
+            };
+          }
+        }
+        /* Reload the responses panel (also re-fetches endorsements for confirmation) */
+        await loadAndRenderResponses();
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Endorse" : "Endorse all"; }
+        alert(err.message);
+      }
+    }
+
+    function initResponseFilters() {
+      const domainSel = document.getElementById("responseDomainFilter");
+      const objSel    = document.getElementById("responseObjectiveFilter");
+      if (!domainSel || !objSel) return;
+
+      const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      domainSel.innerHTML = `<option value="">All domains</option>` +
+        allDomains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+
+      function repopulateObjectives() {
+        const selectedDomain = domainSel.value;
+        const objectives = [...new Map(
+          PRACTICES
+            .filter(p => !selectedDomain || p.domain === selectedDomain)
+            .map(p => [p.objectiveId, p.objective])
+        ).entries()].sort(([a],[b]) => a.localeCompare(b));
+        objSel.innerHTML = `<option value="">All objectives</option>` +
+          objectives.map(([id, label]) =>
+            `<option value="${escapeHtml(id)}">${escapeHtml(id)} — ${escapeHtml(label.slice(0,50))}</option>`
+          ).join("");
+      }
+      repopulateObjectives();
+      if (!domainSel.dataset.listenerAttached) {
+        domainSel.dataset.listenerAttached = "1";
+        domainSel.addEventListener("change", repopulateObjectives);
+      }
+    }
+
+    async function loadAndRenderResponses() {
+      const container = document.getElementById("responsesContainer");
+      if (!container) return;
+      container.innerHTML = `<div class="audit-empty">Loading…</div>`;
+      try {
+        const [grpResp, grpEndResp] = await Promise.all([
+          adminFetch("/admin/group-responses"),
+          adminFetch("/admin/group-endorsements")
+        ]);
+        if (grpEndResp.ok) window.__AESCSF_GROUP_ENDORSEMENTS__ = await grpEndResp.json();
+        if (!grpResp.ok) { container.innerHTML = `<div class="audit-empty">Failed to load responses (${grpResp.status})</div>`; return; }
+        const data = await grpResp.json();
+        renderGroupResponses(data);
+      } catch (err) {
+        container.innerHTML = `<div class="audit-empty">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderGroupResponses(data) {
+      const domainF     = document.getElementById("responseDomainFilter")?.value    || "";
+      const objectiveF  = document.getElementById("responseObjectiveFilter")?.value || "";
+      const pendingOnly = document.getElementById("responsePendingOnly")?.checked ?? true;
+      const container   = document.getElementById("responsesContainer");
+      if (!container) return;
+
+      const practiceMap = Object.fromEntries(PRACTICES.map(p => [p.practiceId, p]));
+      const endorsements = window.__AESCSF_GROUP_ENDORSEMENTS__ || {};
+
+      const entries = Object.entries(data)
+        .filter(([pid, pData]) => {
+          const p = practiceMap[pid];
+          if (!p) return false;
+          if (domainF    && p.domain      !== domainF)    return false;
+          if (objectiveF && p.objectiveId !== objectiveF) return false;
+          if (pendingOnly) {
+            // Show if any group has no endorsement or has changed since endorsement
+            const hasPending = pData.groups.some(g => {
+              const end = endorsements[`${pid}:${g.group_id}`];
+              return !end || end.changed_since;
+            });
+            if (!hasPending) return false;
+          }
+          return true;
+        })
+        .sort(([a], [b]) => a.localeCompare(b));
+
+      if (!entries.length) {
+        const msg = pendingOnly
+          ? "No practices pending review. All group responses have been endorsed and are up to date."
+          : "No group responses found. Add users to groups to see aggregated responses here.";
+        container.innerHTML = `<div class="audit-empty">${escapeHtml(msg)}</div>`;
+        return;
+      }
+
+      // Group summary bar — one chip per group with "Endorse all pending" button
+      const allGroups = {};
+      for (const [pid, pData] of entries) {
+        for (const g of pData.groups) {
+          if (!allGroups[g.group_id]) allGroups[g.group_id] = { group_id: g.group_id, group_name: g.group_name, pending: 0, total: 0 };
+          allGroups[g.group_id].total++;
+          const end = endorsements[`${pid}:${g.group_id}`];
+          if (!end || end.changed_since) allGroups[g.group_id].pending++;
+        }
+      }
+      const groupSummaryHtml = Object.values(allGroups).length ? `
+        <div style="margin-bottom:18px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;">
+          <div style="font-weight:600;font-size:.88rem;margin-bottom:10px;">Groups — Endorse All Pending</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            ${Object.values(allGroups).map(g => `
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;font-size:.84rem;">
+                <strong>${escapeHtml(g.group_name)}</strong>
+                <span style="color:var(--muted)">${g.pending} pending / ${g.total} practices</span>
+                <button class="secondary" id="endorse-all-grp-${g.group_id}"
+                  onclick="endorseGroupResponses(${g.group_id},'${escapeHtml(g.group_name)}',null)"
+                  style="padding:3px 10px;font-size:.8rem;">Endorse all pending</button>
+              </div>`).join("")}
+          </div>
+        </div>` : "";
+
+      container.innerHTML = groupSummaryHtml + entries.map(([practiceId, pData]) => {
+        const p = practiceMap[practiceId];
+
+        // Per-group rows
+        const groupRows = pData.groups.map(g => {
+          const endKey     = `${practiceId}:${g.group_id}`;
+          const end        = endorsements[endKey];
+          const sc         = statusClass(g.aggregate_status);
+          const changed    = end?.changed_since;
+          const statusBadge = `<span class="status-select ${sc}" style="padding:3px 8px;border-radius:6px;font-size:.8rem;">${escapeHtml(g.aggregate_status)}</span>`;
+          const endorseNote = end
+            ? `<span style="font-size:.72rem;color:var(--muted);">✔ ${escapeHtml(end.endorsed_by)} ${new Date(end.endorsed_at * 1000).toLocaleDateString("en-AU")}</span>`
+            : `<span style="font-size:.72rem;color:var(--muted);">Not endorsed</span>`;
+          const changedBadge = changed ? `<span class="endorsement-changed-badge" style="margin-left:4px;font-size:.7rem;">↑ Updated</span>` : "";
+          const btnLabel = end ? "Re-endorse" : "Endorse";
+          const memberDetails = g.members.map(m => {
+            const msc = statusClass(m.assessment?.status || "");
+            return `<tr style="background:var(--bg);">
+              <td style="padding-left:28px;font-size:.8rem;color:var(--text-soft);">${escapeHtml(m.display_name)}</td>
+              <td><span class="status-select ${msc}" style="padding:2px 6px;border-radius:4px;font-size:.75rem;">${escapeHtml(m.assessment?.status || "Not Assessed")}</span></td>
+              <td class="wrap" style="font-size:.8rem;">${escapeHtml(m.assessment?.evidence || "—")}</td>
+              <td class="wrap" style="font-size:.8rem;">${escapeHtml(m.assessment?.gap      || "—")}</td>
+              <td class="wrap" style="font-size:.8rem;">${escapeHtml(m.assessment?.notes    || "—")}</td>
+              <td style="font-size:.8rem;">${escapeHtml(m.assessment?.owner || "—")}</td>
+              <td></td>
+            </tr>`;
+          }).join("");
+          return `<tr id="grp-row-${g.group_id}-${escapeHtml(practiceId)}">
+            <td>
+              <button onclick="toggleGroupDetail('${escapeHtml(practiceId)}',${g.group_id})"
+                style="background:none;border:none;cursor:pointer;padding:0;margin-right:6px;font-size:.85rem;color:var(--muted);" id="grp-toggle-${g.group_id}-${escapeHtml(practiceId)}">▶</button>
+              <strong>${escapeHtml(g.group_name)}</strong>
+              <span style="color:var(--muted);font-size:.78rem;margin-left:6px;">${g.members.length} member${g.members.length===1?"":"s"}</span>
+            </td>
+            <td>${statusBadge}</td>
+            <td colspan="3">${endorseNote}${changedBadge}</td>
+            <td></td>
+            <td><button class="secondary" id="endorse-grp-${g.group_id}-${escapeHtml(practiceId)}"
+              onclick="endorseGroupResponses(${g.group_id},'${escapeHtml(g.group_name)}',['${escapeHtml(practiceId)}'])"
+              style="padding:2px 8px;font-size:.78rem;">${btnLabel}</button></td>
+          </tr>
+          <tbody id="grp-detail-${g.group_id}-${escapeHtml(practiceId)}" style="display:none;">${memberDetails}</tbody>`;
+        }).join("");
+
+        // Ungrouped rows (shown only when filter is off or always)
+        const ungroupedRows = pData.ungrouped.map(r => {
+          const sc = statusClass(r.assessment?.status || "");
+          return `<tr style="opacity:.7;">
+            <td><span style="font-size:.75rem;color:var(--muted);">⊘ Ungrouped</span><br><strong style="font-size:.85rem;">${escapeHtml(r.display_name)}</strong></td>
+            <td><span class="status-select ${sc}" style="padding:3px 8px;border-radius:6px;font-size:.8rem;">${escapeHtml(r.assessment?.status || "Not Assessed")}</span></td>
+            <td class="wrap">${escapeHtml(r.assessment?.evidence || "—")}</td>
+            <td class="wrap">${escapeHtml(r.assessment?.gap      || "—")}</td>
+            <td class="wrap">${escapeHtml(r.assessment?.notes    || "—")}</td>
+            <td>${escapeHtml(r.assessment?.owner || "—")}</td>
+            <td></td>
+          </tr>`;
+        }).join("");
+
+        // Worst-case across all groups for the header badge
+        const allStatuses = pData.groups.map(g => g.aggregate_status);
+        const overallStatus = allStatuses.length
+          ? allStatuses.reduce((w, s) => {
+              const P = { "No": 0, "Partial": 1, "In Progress": 1, "Yes": 2, "Not Assessed": 3 };
+              return (P[s] ?? 3) < (P[w] ?? 3) ? s : w;
+            }, "Not Assessed")
+          : "Not Assessed";
+        const overallSc = statusClass(overallStatus);
+
+        const anyChanged = pData.groups.some(g => endorsements[`${practiceId}:${g.group_id}`]?.changed_since);
+        const anyUnendorsed = pData.groups.some(g => !endorsements[`${practiceId}:${g.group_id}`]);
+        const practiceChangedBadge = anyChanged
+          ? `<span class="endorsement-changed-badge" style="margin-left:8px;">↑ Updated since endorsement</span>`
+          : (anyUnendorsed ? `<span class="endorsement-changed-badge" style="margin-left:8px;background:rgba(239,68,68,.1);color:#b91c1c;border-color:rgba(239,68,68,.3);">⚠ Pending review</span>` : "");
+
+        return `<div class="dashboard-panel" style="margin-bottom:14px;">
+          <div style="margin-bottom:10px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <strong>${escapeHtml(practiceId)}</strong>${practiceChangedBadge}
+              <span class="badge" style="margin-left:6px;">${escapeHtml(p?.objectiveId || "")}</span>
+              <span class="status-select ${overallSc}" style="margin-left:6px;padding:2px 8px;border-radius:6px;font-size:.78rem;">${escapeHtml(overallStatus)}</span>
+              <div style="font-size:.83rem;color:var(--text-soft);margin-top:3px;">${escapeHtml(p?.practice || "")}</div>
+            </div>
+            <button class="secondary" onclick="toggleVersionHistory('${escapeHtml(practiceId)}', this)"
+              style="padding:3px 10px;font-size:.78rem;flex-shrink:0;">📋 Version History</button>
+          </div>
+          <div class="audit-table-wrap">
+            <table class="audit-table">
+              <thead><tr><th>Group</th><th>Worst-case Status</th><th colspan="3">Endorsement</th><th></th><th></th></tr></thead>
+              <tbody>${groupRows}${ungroupedRows}</tbody>
+            </table>
+          </div>
+          <div id="vhpanel-${escapeHtml(practiceId)}" class="version-history-panel" style="display:none;">
+            <div style="color:var(--muted);font-size:.82rem;padding:8px 0;">Loading versions…</div>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    function toggleGroupDetail(practiceId, groupId) {
+      const tbody  = document.getElementById(`grp-detail-${groupId}-${practiceId}`);
+      const toggle = document.getElementById(`grp-toggle-${groupId}-${practiceId}`);
+      if (!tbody) return;
+      const open = tbody.style.display === "none";
+      tbody.style.display = open ? "" : "none";
+      if (toggle) toggle.textContent = open ? "▼" : "▶";
+    }
+
+    async function endorseGroupResponses(groupId, groupName, practiceIds) {
+      const btnId = practiceIds
+        ? `endorse-grp-${groupId}-${practiceIds[0]}`
+        : `endorse-all-grp-${groupId}`;
+      const btn = document.getElementById(btnId);
+      if (btn) { btn.disabled = true; btn.textContent = "Endorsing…"; }
+      try {
+        const body = practiceIds ? { practiceIds } : {};
+        const resp = await adminFetch(`/admin/groups/${groupId}/endorse-responses`, {
+          method: "POST", body: JSON.stringify(body)
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Endorse" : "Endorse all pending"; }
+          alert(`Endorsement failed: ${result.error || resp.status}`);
+          return;
+        }
+        // Optimistically mark as up-to-date in local cache
+        if (Array.isArray(result.practiceIds)) {
+          window.__AESCSF_GROUP_ENDORSEMENTS__ = window.__AESCSF_GROUP_ENDORSEMENTS__ || {};
+          for (const pid of result.practiceIds) {
+            const key = `${pid}:${groupId}`;
+            window.__AESCSF_GROUP_ENDORSEMENTS__[key] = {
+              ...(window.__AESCSF_GROUP_ENDORSEMENTS__[key] || {}),
+              changed_since: false
+            };
+          }
+        }
+        await loadAndRenderResponses();
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = practiceIds ? "Endorse" : "Endorse all pending"; }
+        alert(err.message);
+      }
+    }
+
+    async function toggleVersionHistory(practiceId, btn) {
+      const panel = document.getElementById(`vhpanel-${practiceId}`);
+      if (!panel) return;
+      if (panel.style.display !== "none") {
+        panel.style.display = "none";
+        btn.textContent = "📋 Version History";
+        return;
+      }
+      panel.style.display = "";
+      btn.textContent = "▲ Hide History";
+      panel.innerHTML = `<div style="color:var(--muted);font-size:.82rem;padding:8px 0;">Loading versions…</div>`;
+      try {
+        const resp = await adminFetch(`/admin/practices/${encodeURIComponent(practiceId)}/versions`);
+        if (!resp.ok) { panel.innerHTML = `<div style="color:var(--danger);font-size:.82rem;">Failed to load (${resp.status})</div>`; return; }
+        const versions = await resp.json();
+        if (!versions.length) {
+          panel.innerHTML = `<div style="color:var(--muted);font-size:.82rem;padding:8px 0;">No versions recorded yet. Versions are created automatically each time a practice is saved.</div>`;
+          return;
+        }
+        const DIFF_FIELDS = ["status","owner","targetDate","lastReviewed","evidence","gap","notes"];
+        const fieldLabel = { status:"Status", owner:"Owner", targetDate:"Target Date", lastReviewed:"Last Reviewed", evidence:"Evidence", gap:"Gap / Remediation", notes:"Notes" };
+        function versionDiff(vNew, vOld) {
+          return DIFF_FIELDS.map(f => {
+            const a = String(vOld?.data?.[f] || "").trim();
+            const b = String(vNew?.data?.[f] || "").trim();
+            return a !== b ? { field: f, old: a, new: b } : null;
+          }).filter(Boolean);
+        }
+        function truncate(s, n) { return s.length > n ? s.slice(0, n) + "…" : s; }
+
+        panel.innerHTML = `
+          <div style="font-size:.82rem;font-weight:600;margin-bottom:10px;color:var(--text-soft);">
+            ${versions.length} version${versions.length===1?"":"s"} — most recent first
+          </div>
+          ${versions.map((v, idx) => {
+            const date = new Date(v.created_at * 1000).toLocaleString("en-AU");
+            const sc   = statusClass(v.data?.status || "");
+            const endorsedMark = v.is_endorsed
+              ? `<span class="version-endorsed-label">✔ Endorsed</span>` : "";
+            const endorseAction = v.is_endorsed
+              ? `<button class="remove-endorse-btn" onclick="removeEndorsement('${escapeHtml(practiceId)}')">Remove endorsement</button>`
+              : `<button class="endorse-btn" onclick="endorseVersion('${escapeHtml(practiceId)}', ${v.id})">Endorse this version</button>`;
+            const prevV = versions[idx + 1] || null;
+            const diffs = versionDiff(v, prevV);
+            let diffHtml = "";
+            if (diffs.length) {
+              diffHtml = `<div class="version-diff">${diffs.map(d => {
+                const oldPart = d.old ? `<span class="version-diff-old">${escapeHtml(truncate(d.old, 150))}</span><span class="version-diff-arrow">→</span>` : "";
+                const newPart = d.new ? `<span class="${d.old ? "version-diff-new" : "version-diff-new-only"}">${escapeHtml(truncate(d.new, 150))}</span>` : `<span class="version-diff-old"><em>(cleared)</em></span>`;
+                return `<div class="version-diff-row"><span class="version-diff-field">${escapeHtml(fieldLabel[d.field] || d.field)}</span>${oldPart}${newPart}</div>`;
+              }).join("")}</div>`;
+            } else if (prevV) {
+              diffHtml = `<div class="version-diff-none">No field changes from previous save</div>`;
+            } else {
+              diffHtml = `<div class="version-diff-none">First recorded version</div>`;
+            }
+            return `<div class="version-card ${v.is_endorsed ? "endorsed" : ""}" id="vc-${v.id}">
+              <div class="version-card-header">
+                ${endorsedMark}
+                <span class="status-select ${sc}" style="padding:2px 8px;border-radius:6px;font-size:.78rem;">${escapeHtml(v.data?.status || "Not Assessed")}</span>
+                <strong style="font-size:.82rem;">${escapeHtml(v.display_name || v.user_oid)}</strong>
+                <span style="color:var(--muted);font-size:.76rem;">${date}</span>
+                <span style="margin-left:auto;">${endorseAction}</span>
+              </div>
+              ${diffHtml}
+            </div>`;
+          }).join("")}`;
+      } catch (err) {
+        panel.innerHTML = `<div style="color:var(--danger);font-size:.82rem;">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function endorseVersion(practiceId, versionId) {
+      try {
+        const resp = await adminFetch(`/admin/practices/${encodeURIComponent(practiceId)}/endorse`, {
+          method: "POST",
+          body: JSON.stringify({ versionId })
+        });
+        if (!resp.ok) { alert(`Failed to endorse (${resp.status})`); return; }
+        /* Refresh endorsements cache and re-render the open panel */
+        const endResp = await adminFetch("/endorsements");
+        if (endResp.ok) window.__AESCSF_ENDORSEMENTS__ = await endResp.json();
+        /* Re-open the history panel to reflect the change */
+        const panel = document.getElementById(`vhpanel-${practiceId}`);
+        const btn   = panel?.closest(".dashboard-panel")?.querySelector(`[onclick*="toggleVersionHistory"]`);
+        if (panel && btn) {
+          panel.style.display = "none";
+          await toggleVersionHistory(practiceId, btn);
+        }
+        /* Refresh the whole responses panel so endorsement notes update */
+        const refreshBtn = document.getElementById("adminRefreshBtn");
+        refreshBtn?.click();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function removeEndorsement(practiceId) {
+      if (!confirm(`Remove endorsement for ${practiceId}?\n\nThe versions will remain — this just clears the official marker.`)) return;
+      try {
+        const resp = await adminFetch(`/admin/practices/${encodeURIComponent(practiceId)}/endorsement`, { method: "DELETE" });
+        if (!resp.ok) { alert(`Failed to remove endorsement (${resp.status})`); return; }
+        const endResp = await adminFetch("/endorsements");
+        if (endResp.ok) window.__AESCSF_ENDORSEMENTS__ = await endResp.json();
+        const refreshBtn = document.getElementById("adminRefreshBtn");
+        refreshBtn?.click();
+      } catch (err) { alert(err.message); }
+    }
+
+        async function adminFetch(path, options = {}) {
+      return fetch(`${APP_CONFIG.apiBaseUrl}${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          ...(options.headers || {})
+        },
+        credentials: "same-origin"
+      });
+    }
+
+    async function renderAdminPanel() {
+      const container = document.getElementById("adminUserList");
+      if (!container) return;
+      container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);">Loading users…</div>`;
+      try {
+        const resp = await adminFetch("/admin/users");
+        if (!resp.ok) { container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger);">Failed to load users (${resp.status})</div>`; return; }
+        _adminUsers = await resp.json();
+        container.innerHTML = _adminUsers.map(u => buildUserCard(u)).join("");
+        initResponseFilters();
+        /* Auto-load responses so admin sees the section immediately */
+        loadAndRenderResponses();
+      } catch (err) {
+        container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger);">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function buildUserCard(user) {
+      const initials    = (user.display_name || user.username || "?")
+        .split(" ").slice(0, 2).map(s => s[0].toUpperCase()).join("");
+      const currentOid  = window.__AESCSF_RBAC__?._oid || "";
+      const isSelf      = !!currentOid && currentOid === user.oid;
+
+      // Access section — read-only, sourced from group membership
+      const groupNames = (user.groups || []).map(g => escapeHtml(g.name)).join(", ");
+      const domainChips = (user.domains || []).map(d =>
+        `<span class="group-assignment-chip">${escapeHtml(d)}</span>`
+      ).join("");
+      const objectiveChips = (user.objectives || []).map(o =>
+        `<span class="group-assignment-chip objective">${escapeHtml(o)}</span>`
+      ).join("");
+
+      let accessHtml;
+      if (!user.groups?.length) {
+        accessHtml = `<div style="font-size:.78rem;color:var(--muted);font-style:italic;">Not in any group — assign to a group on the Groups page to grant assessment access.</div>`;
+      } else if (!domainChips && !objectiveChips) {
+        accessHtml = `<div style="font-size:.82rem;font-weight:600;color:var(--text-soft);margin-bottom:4px;">${groupNames}</div>
+          <div style="font-size:.78rem;color:var(--muted);font-style:italic;">Group has no domain assignments yet — configure on the Groups page.</div>`;
+      } else {
+        accessHtml = `<div style="font-size:.82rem;font-weight:600;color:var(--text-soft);margin-bottom:6px;">${groupNames}</div>
+          <div class="group-assignment-grid">${domainChips}${objectiveChips}</div>`;
+      }
+
+      return `
+        <article class="admin-user-card" id="user-card-${escapeHtml(user.oid)}">
+          <div class="admin-user-head">
+            <div class="admin-avatar">${escapeHtml(initials)}</div>
+            <div class="admin-user-info">
+              <div class="admin-user-name">${escapeHtml(user.display_name || user.username)}${isSelf ? ' <span style="font-size:.75rem;color:var(--muted);font-weight:400;">(you)</span>' : ""}</div>
+              <div class="admin-user-email">${escapeHtml(user.username)}</div>
+            </div>
+            <span class="role-badge ${user.role}">${escapeHtml(user.role)}</span>
+            ${isSelf ? "" : `
+            <select class="role-select" onchange="adminSetRole('${escapeHtml(user.oid)}',this.value,this)">
+              <option value="user"      ${user.role==="user"      ? "selected" : ""}>User</option>
+              <option value="assessor"  ${user.role==="assessor"  ? "selected" : ""}>Assessor</option>
+              <option value="dashboard" ${user.role==="dashboard" ? "selected" : ""}>Dashboard</option>
+              <option value="admin"     ${user.role==="admin"     ? "selected" : ""}>Admin</option>
+            </select>`}
+          </div>
+          <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
+            <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px;">Access via group</div>
+            ${accessHtml}
+          </div>
+        </article>`;
+    }
+
+    function adminToggleDomainChip(oid, domain, checkbox) {
+      const chip = document.getElementById(`chip-${oid}-${domain}`);
+      if (chip) chip.classList.toggle("checked", checkbox.checked);
+    }
+
+    async function adminSetRole(oid, role, el) {
+      const roleLabels = { admin: "Admin", assessor: "Assessor", dashboard: "Dashboard", user: "User" };
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/role`, {
+          method: "PUT", body: JSON.stringify({ role })
+        });
+        if (!resp.ok) { alert(`Failed to set role: ${resp.status}`); if (el?.tagName === "SELECT") { await renderAdminPanel(); } return; }
+        /* Update badge */
+        const card = document.getElementById(`user-card-${oid}`);
+        if (card) {
+          const badge = card.querySelector(".role-badge");
+          if (badge) { badge.textContent = roleLabels[role] || role; badge.className = `role-badge ${role}`; }
+        }
+      } catch (err) { alert(err.message); if (el?.tagName === "SELECT") { await renderAdminPanel(); } }
+    }
+
+    async function adminSaveAssignments(oid) {
+      const card = document.getElementById(`user-card-${oid}`);
+      if (!card) return;
+      const domains = ALL_DOMAINS.filter(d => {
+        const chip = document.getElementById(`chip-${oid}-${d}`);
+        return chip && chip.querySelector("input")?.checked;
+      });
+      const statusEl = document.getElementById(`save-status-${oid}`);
+      try {
+        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/assignments`, {
+          method: "PUT", body: JSON.stringify({ domains })
+        });
+        if (!resp.ok) { if (statusEl) statusEl.textContent = `Error ${resp.status}`; return; }
+        if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 3000); }
+      } catch (err) {
+        if (statusEl) statusEl.textContent = err.message;
+      }
+    }
+
+    document.getElementById("adminRefreshBtn")?.addEventListener("click", renderAdminPanel);
+    document.getElementById("responseLoadBtn")?.addEventListener("click", loadAndRenderResponses);
+    document.getElementById("responseDomainFilter")?.addEventListener("change", loadAndRenderResponses);
+    document.getElementById("responseObjectiveFilter")?.addEventListener("change", loadAndRenderResponses);
+    document.getElementById("responsePendingOnly")?.addEventListener("change", loadAndRenderResponses);
+
+    /* ═══════════════════════════════════════════════════════════════════
+       AUDIT LOG
+    ═══════════════════════════════════════════════════════════════════ */
+    let _auditState = { offset: 0, limit: 100, total: 0 };
+
+    async function renderAuditLog() {
+      _auditState.offset = 0;
+      await _loadAuditPage();
+    }
+
+    async function _loadAuditPage() {
+      const container = document.getElementById("auditTableContainer");
+      if (!container) return;
+      container.innerHTML = `<div class="audit-empty">Loading…</div>`;
+
+      const params = new URLSearchParams({ limit: _auditState.limit, offset: _auditState.offset });
+      const practice = document.getElementById("auditFilterPractice")?.value.trim();
+      const field    = document.getElementById("auditFilterField")?.value;
+      const from     = document.getElementById("auditFilterFrom")?.value;
+      const to       = document.getElementById("auditFilterTo")?.value;
+      if (practice) params.set("practice_id", practice);
+      if (field)    params.set("field", field);
+      if (from)     params.set("from", Math.floor(new Date(from).getTime() / 1000));
+      if (to)       params.set("to",   Math.floor(new Date(to + "T23:59:59").getTime() / 1000));
+
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/audit?${params}`, { credentials: "same-origin" });
+        if (!resp.ok) {
+          const hint = (resp.status === 401 || resp.status === 403)
+            ? ` \u2014 <a href="javascript:location.reload()" style="color:#1d4ed8;text-decoration:underline;">reload to sign in again</a>`
+            : "";
+          container.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load audit log (${resp.status})${hint}</div>`;
+          return;
+        }
+        const { rows, total, limit, offset } = await resp.json();
+        _auditState.total = total;
+
+        if (!rows.length) {
+          container.innerHTML = emptyStateHtml({ icon: "history", title: "No audit entries found", body: "No changes recorded for the selected filters. Try adjusting the date range or practice ID." });
+          return;
+        }
+
+        const tableHtml = `
+          <div class="audit-table-wrap">
+            <table class="audit-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>User</th>
+                  <th>Practice ID</th>
+                  <th>Field</th>
+                  <th>Old Value</th>
+                  <th>New Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td style="white-space:nowrap;">${new Date(r.created_at * 1000).toLocaleString("en-AU")}</td>
+                    <td style="white-space:nowrap;" title="${escapeHtml(r.username)}">${escapeHtml(r.display_name || r.username)}</td>
+                    <td style="white-space:nowrap;font-weight:600;">${r.practice_id.startsWith("USER:") ? `<span style="background:rgba(239,68,68,.08);color:#b91c1c;border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:1px 7px;font-size:.75rem;font-weight:700;">Admin</span> ${escapeHtml(r.practice_id.slice(5))}` : escapeHtml(r.practice_id)}</td>
+                    <td><span class="audit-field-badge">${escapeHtml(r.field)}</span></td>
+                    <td class="wrap audit-value-old">${escapeHtml(r.old_value || "—")}</td>
+                    <td class="wrap audit-value-new">${escapeHtml(r.new_value || "—")}</td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="audit-pagination">
+            <span>Showing ${offset + 1}–${Math.min(offset + rows.length, total)} of ${total} entries</span>
+            <button class="secondary" style="padding:5px 14px;font-size:.8rem;" ${offset === 0 ? "disabled" : ""}
+                    onclick="_auditState.offset=Math.max(0,_auditState.offset-_auditState.limit);_loadAuditPage()">← Prev</button>
+            <button class="secondary" style="padding:5px 14px;font-size:.8rem;" ${offset + rows.length >= total ? "disabled" : ""}
+                    onclick="_auditState.offset+=_auditState.limit;_loadAuditPage()">Next →</button>
+          </div>`;
+        container.innerHTML = tableHtml;
+      } catch (err) {
+        container.innerHTML = `<div class="audit-empty" style="color:var(--danger);">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    document.getElementById("auditRefreshBtn")?.addEventListener("click", renderAuditLog);
+    document.getElementById("auditSearchBtn")?.addEventListener("click", renderAuditLog);
+    document.getElementById("auditPurgeBtn")?.addEventListener("click", async () => {
+      const btn = document.getElementById("auditPurgeBtn");
+      if (!confirm("Purge audit log entries older than the configured retention period?\n\nThis cannot be undone.")) return;
+      btn.disabled = true;
+      btn.textContent = "Purging…";
+      try {
+        const resp = await adminFetch("/audit/purge", { method: "DELETE" });
+        const data = await resp.json();
+        if (!resp.ok) { alert(`Purge failed: ${data.error || resp.status}`); return; }
+        const msg = data.retentionDays === 0
+          ? data.message
+          : `Purged ${data.deleted} entr${data.deleted === 1 ? "y" : "ies"} older than ${data.retentionDays} days.`;
+        alert(msg);
+        renderAuditLog();
+      } catch (err) {
+        alert(`Purge error: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Purge old entries";
+      }
+    });
+
+    /* ═══════════════════════════════════════════════════════════════════
+       PRACTICE CHANGE HISTORY MODAL
+    ═══════════════════════════════════════════════════════════════════ */
+    async function openHistoryModal(practiceId) {
+      const modal = document.getElementById("historyModal");
+      const title = document.getElementById("historyModalTitle");
+      const body  = document.getElementById("historyModalBody");
+      if (!modal) return;
+      title.textContent = `Change History — ${practiceId}`;
+      body.innerHTML = `<div class="audit-empty">Loading…</div>`;
+      modal.style.display = "flex";
+
+      if (APP_CONFIG.storageMode !== "api") {
+        body.innerHTML = `<div class="audit-empty">Audit history requires API storage mode.</div>`;
+        return;
+      }
+
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/audit/practice/${encodeURIComponent(practiceId)}`, { credentials: "same-origin" });
+        if (!resp.ok) { body.innerHTML = `<div class="audit-empty" style="color:var(--danger);">Failed to load history (${resp.status})</div>`; return; }
+        const rows = await resp.json();
+        if (!rows.length) { body.innerHTML = `<div class="audit-empty">No changes recorded for this practice yet.</div>`; return; }
+        body.innerHTML = `
+          <table class="audit-table" style="min-width:0;">
+            <thead>
+              <tr><th>Timestamp</th><th>User</th><th>Field</th><th>Old Value</th><th>New Value</th></tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td style="white-space:nowrap;">${new Date(r.created_at * 1000).toLocaleString("en-AU")}</td>
+                  <td style="white-space:nowrap;" title="${escapeHtml(r.username)}">${escapeHtml(r.display_name || r.username)}</td>
+                  <td><span class="audit-field-badge">${escapeHtml(r.field)}</span></td>
+                  <td class="wrap audit-value-old">${escapeHtml(r.old_value || "—")}</td>
+                  <td class="wrap audit-value-new">${escapeHtml(r.new_value || "—")}</td>
+                </tr>`).join("")}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        body.innerHTML = `<div class="audit-empty" style="color:var(--danger);">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function closeHistoryModal() {
+      const modal = document.getElementById("historyModal");
+      if (modal) modal.style.display = "none";
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeHistoryModal();
+    });
+
+    /* ═══════════════════════════════════════════════════════════════════
+       EVIDENCE FILE UPLOAD
+    ═══════════════════════════════════════════════════════════════════ */
+    function formatBytes(bytes) {
+      if (bytes < 1024)        return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    async function loadFilesForPractice(practiceId) {
+      const container = document.getElementById(`files-${practiceId}`);
+      if (!container) return;
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/files/${encodeURIComponent(practiceId)}`, { credentials: "same-origin" });
+        if (!resp.ok) { container.innerHTML = `<div style="color:var(--danger);font-size:.78rem;">Failed to load files</div>`; return; }
+        const files = await resp.json();
+        if (!files.length) { container.innerHTML = `<div style="color:var(--muted);font-size:.78rem;">No files uploaded yet.</div>`; return; }
+        container.innerHTML = files.map(f => `
+          <div class="uploaded-file-row" id="file-row-${f.id}">
+            <span class="uploaded-file-name" title="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</span>
+            <span class="uploaded-file-meta">${formatBytes(f.size_bytes)} · ${new Date(f.uploaded_at * 1000).toLocaleDateString("en-AU")}</span>
+            <div class="uploaded-file-actions">
+              <a href="${APP_CONFIG.apiBaseUrl}/files/${f.id}/download" download="${escapeHtml(f.filename)}"
+                 class="file-btn">Download</a>
+              <button class="file-btn danger" onclick="deleteFile(${f.id},'${escapeHtml(practiceId)}')">Delete</button>
+            </div>
+          </div>`).join("");
+      } catch (err) {
+        container.innerHTML = `<div style="color:var(--danger);font-size:.78rem;">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function loadVisibleFileLists() {
+      document.querySelectorAll(".uploaded-files-list[id^='files-']").forEach(el => {
+        const practiceId = el.id.replace("files-", "");
+        loadFilesForPractice(practiceId);
+      });
+    }
+
+    function showFileError(practiceId, message) {
+      const container = document.getElementById(`files-${practiceId}`);
+      if (container) {
+        container.innerHTML = `<div style="color:var(--danger);font-size:.78rem;padding:4px 0;">${escapeHtml(message)}</div>`;
+      }
+    }
+
+    async function uploadFile(practiceId, file) {
+      const container = document.getElementById(`files-${practiceId}`);
+      const dropZone  = document.querySelector(`.file-drop-zone[data-practice-id="${CSS.escape(practiceId)}"]`);
+      if (dropZone) dropZone.textContent = `Uploading ${file.name}…`;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/files/${encodeURIComponent(practiceId)}`, {
+          method: "POST",
+          body: formData,
+          credentials: "same-origin"
+        });
+        const json = await resp.json();
+        if (!resp.ok) {
+          showFileError(practiceId, `Upload failed: ${json.error || resp.status}`);
+          return;
+        }
+        await loadFilesForPractice(practiceId);
+      } catch (err) {
+        showFileError(practiceId, `Upload error: ${err.message}`);
+      } finally {
+        if (dropZone) dropZone.innerHTML = `<input type="file" id="fileInput-${escapeHtml(practiceId)}" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.docx,.xlsx,.pptx,.doc,.xls" onchange="handleFileInputChange(event,'${escapeHtml(practiceId)}')">Click to upload or drag &amp; drop — PDF, images, Word, Excel, CSV (max 20 MB)`;
+      }
+    }
+
+    async function handleFileInputChange(event, practiceId) {
+      for (const file of Array.from(event.target.files)) {
+        await uploadFile(practiceId, file);
+      }
+      event.target.value = "";
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       Groups / Business Units
+       ══════════════════════════════════════════════════════════════════ */
+
+    let _groupsState = { groups: [], selectedId: null, activeTab: "members", overviewVisible: false };
+
+    function _allDomains() {
+      return [...new Set(PRACTICES.map(p => p.domain))].sort();
+    }
+    function _allObjectives() {
+      const map = new Map();
+      PRACTICES.forEach(p => { if (!map.has(p.objectiveId)) map.set(p.objectiveId, p.objective); });
+      return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    }
+
+    /* ── Group compliance helpers ─────────────────────────────────────────── */
+
+    const GOM_PRIORITY = { "No": 0, "Partial": 1, "In Progress": 1, "Yes": 2, "Not Assessed": 3 };
+    function gomWorstCase(a, b) {
+      return (GOM_PRIORITY[a] ?? 3) <= (GOM_PRIORITY[b] ?? 3) ? a : b;
+    }
+    function gomClass(s) {
+      return { "Yes": "gom-yes", "Partial": "gom-partial", "In Progress": "gom-partial", "No": "gom-no" }[s] || "gom-na";
+    }
+    function gomLabel(s) { return s === "Not Assessed" ? "—" : s; }
+
+    async function _loadGroupResponseData() {
+      const r = await adminFetch("/admin/group-responses");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    function _buildGroupDomainMap(data) {
+      const groupsMeta = data._groups_meta || {};
+      const allDomains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+      const groupMap   = {};
+
+      // Pre-create entries for all known groups (even with no assessed data yet)
+      for (const [gidStr, meta] of Object.entries(groupsMeta)) {
+        const gid = Number(gidStr);
+        const gDomains = meta.domains || [];
+        const gObjs    = meta.objectives || [];
+        const totalInScope = PRACTICES.filter(p =>
+          gDomains.includes(p.domain) || gObjs.includes(p.objectiveId)
+        ).length;
+        // coveredDomains = directly assigned domains + domains implied by objective assignments
+        const coveredDomains = [...new Set([
+          ...gDomains,
+          ...PRACTICES.filter(p => gObjs.includes(p.objectiveId)).map(p => p.domain)
+        ])];
+        groupMap[gid] = {
+          id: gid, name: meta.name, memberCount: 0,
+          domains: Object.fromEntries(allDomains.map(d => [d, "Not Assessed"])),
+          domainYes: {}, domainTotal: {},
+          totalPractices: 0, yesPractices: 0,
+          totalInScope,
+          coveredDomains, groupDomains: gDomains, groupObjectives: gObjs
+        };
+      }
+
+      for (const [practiceId, pData] of Object.entries(data)) {
+        if (practiceId === "_groups_meta") continue;
+        const practice = PRACTICES.find(p => p.practiceId === practiceId);
+        if (!practice) continue;
+        for (const g of pData.groups) {
+          if (!groupMap[g.group_id]) continue; // group not in meta; skip
+          const gm = groupMap[g.group_id];
+          gm.memberCount = Math.max(gm.memberCount, g.members.length);
+          gm.domains[practice.domain] = gomWorstCase(gm.domains[practice.domain], g.aggregate_status);
+          gm.totalPractices++;
+          if (g.aggregate_status === "Yes") gm.yesPractices++;
+          gm.domainTotal[practice.domain] = (gm.domainTotal[practice.domain] || 0) + 1;
+          if (g.aggregate_status === "Yes") gm.domainYes[practice.domain] = (gm.domainYes[practice.domain] || 0) + 1;
+        }
+      }
+      return groupMap;
+    }
+
+    async function renderGroupsOverview() {
+      const content = document.getElementById("groupsOverviewContent");
+      if (!content) return;
+      content.innerHTML = `<div class="groups-loading">Loading…</div>`;
+      try {
+        const data = await _getOrgGroupData();
+        const groupMap = _buildGroupDomainMap(data);
+        const groups  = Object.values(groupMap).sort((a, b) => a.name.localeCompare(b.name));
+        const domains = [...new Set(PRACTICES.map(p => p.domain))].sort();
+
+        if (!groups.length) {
+          content.innerHTML = `<div class="audit-empty">No groups configured yet. Create groups and assign domains on the Groups page.</div>`;
+          return;
+        }
+
+        // Only show domain columns that are assigned to at least one group (directly or via objectives)
+        const visibleDomains = domains.filter(d =>
+          groups.some(g => g.coveredDomains.includes(d))
+        );
+
+        content.innerHTML = `
+          <div class="groups-overview-wrap">
+            <table class="groups-overview-table">
+              <thead>
+                <tr>
+                  <th>Group</th>
+                  <th>Members</th>
+                  <th>Completion</th>
+                  ${visibleDomains.map(d => `<th title="${escapeHtml(d)}">${escapeHtml(d)}</th>`).join("")}
+                </tr>
+              </thead>
+              <tbody>
+                ${groups.map(g => {
+                  const pct = g.totalInScope ? Math.round(g.yesPractices / g.totalInScope * 100) : 0;
+                  const pctColor = pct >= 80 ? "#059669" : pct >= 50 ? "#b45309" : "#dc2626";
+                  return `<tr>
+                    <td>${escapeHtml(g.name)}</td>
+                    <td>${g.memberCount}</td>
+                    <td style="font-weight:700;color:${pctColor};">${g.totalInScope ? `${pct}%` : "—"}</td>
+                    ${visibleDomains.map(d => {
+                      if (!g.coveredDomains.includes(d)) return `<td class="gom-na" title="Not assigned">N/A</td>`;
+                      return `<td class="${gomClass(g.domains[d])}">${escapeHtml(gomLabel(g.domains[d]))}</td>`;
+                    }).join("")}
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+            <div class="gom-legend">
+              <div class="gom-legend-item"><div class="gom-legend-dot gom-yes" style="background:rgba(16,185,129,.5);"></div> Yes — all practices compliant</div>
+              <div class="gom-legend-item"><div class="gom-legend-dot gom-partial" style="background:rgba(245,158,11,.5);"></div> Partial / In Progress</div>
+              <div class="gom-legend-item"><div class="gom-legend-dot gom-no" style="background:rgba(239,68,68,.5);"></div> No — at least one practice non-compliant</div>
+              <div class="gom-legend-item"><div class="gom-legend-dot" style="background:var(--border);"></div> — Not assessed yet</div>
+              <div class="gom-legend-item"><div class="gom-legend-dot" style="background:var(--surface-strong);"></div> N/A — domain not assigned to this group</div>
+            </div>
+          </div>`;
+      } catch (e) {
+        content.innerHTML = `<div class="audit-empty" style="color:var(--danger)">Failed to load: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    /* ── Dashboard view switching ─────────────────────────────────────────── */
+
+    let _dashView = localStorage.getItem("aescsf_dash_view") || "org";
+
+    function _applyDashView() {
+      const role = window.__AESCSF_RBAC__?.role;
+      const canSeeGroups = role === "admin" || role === "assessor";
+      document.getElementById("dashViewToggleWrapper").style.display = canSeeGroups ? "" : "none";
+      if (!canSeeGroups) _dashView = "org";
+      document.getElementById("dashOrgContent").style.display    = _dashView === "org"    ? "" : "none";
+      document.getElementById("dashGroupsContent").style.display = _dashView === "groups" ? "" : "none";
+      document.getElementById("dashViewOrgBtn")?.classList.toggle("active", _dashView === "org");
+      document.getElementById("dashViewGroupsBtn")?.classList.toggle("active", _dashView === "groups");
+      if (_dashView === "groups") _renderDashGroups();
+    }
+
+    function _setDashView(view) {
+      _dashView = view;
+      localStorage.setItem("aescsf_dash_view", view);
+      _applyDashView();
+    }
+
+    (function wireDashToggle() {
+      document.getElementById("dashViewOrgBtn")?.addEventListener("click", () => _setDashView("org"));
+      document.getElementById("dashViewGroupsBtn")?.addEventListener("click", () => _setDashView("groups"));
+    })();
+
+    let _dashGroupMap = null;
+
+    async function _renderDashGroups() {
+      const overview  = document.getElementById("dashGroupOverview");
+      const drilldown = document.getElementById("dashGroupDrilldown");
+      if (!overview) return;
+      drilldown.style.display = "none";
+      overview.innerHTML = `<div class="audit-empty" style="padding:24px;">Loading group data…</div>`;
+      try {
+        const data = await _getOrgGroupData();
+        _dashGroupMap = _buildGroupDomainMap(data);
+        const groups = Object.values(_dashGroupMap).sort((a, b) => a.name.localeCompare(b.name));
+        if (!groups.length) {
+          overview.innerHTML = `<div class="audit-empty">No groups found. Create groups and assign users to see group compliance.</div>`;
+          return;
+        }
+        overview.innerHTML = `
+          <div style="margin-bottom:14px;">
+            <div style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);">Click a group to drill down</div>
+          </div>
+          <div class="dashboard-group-grid" id="dashGroupCards">
+            ${groups.map(g => {
+              const pct = g.totalInScope ? Math.round(g.yesPractices / g.totalInScope * 100) : 0;
+              const pctColor = pct >= 80 ? "#059669" : pct >= 50 ? "#b45309" : "#dc2626";
+              const domainDots = g.coveredDomains.map(d => {
+                const s = g.domains[d] || "Not Assessed";
+                const abbr = d.slice(0,4).toUpperCase();
+                const bg  = { "Yes": "rgba(16,185,129,.15)", "Partial": "rgba(245,158,11,.15)", "In Progress": "rgba(245,158,11,.15)", "No": "rgba(239,68,68,.15)" }[s] || "var(--border)";
+                const col = { "Yes": "#059669", "Partial": "#b45309", "In Progress": "#b45309", "No": "#dc2626" }[s] || "var(--muted)";
+                return `<div title="${escapeHtml(d)}: ${escapeHtml(s)}" style="padding:2px 6px;border-radius:4px;font-size:.63rem;font-weight:700;background:${bg};color:${col};">${escapeHtml(abbr)}</div>`;
+              }).join("");
+              return `<div class="dashboard-group-card" data-group-id="${g.id}">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                  <div style="font-weight:700;font-size:.93rem;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g.name)}</div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;color:var(--muted);"><path d="M9 18l6-6-6-6"/></svg>
+                </div>
+                <div style="font-size:.75rem;color:var(--muted);margin-bottom:12px;">${g.memberCount} member${g.memberCount===1?"":"s"} · ${g.totalInScope || 0} practices in scope</div>
+                <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
+                  <span style="font-size:1.8rem;font-weight:800;color:${pctColor};line-height:1;">${g.totalInScope ? `${pct}%` : "—"}</span>
+                  <span style="font-size:.75rem;color:var(--muted);">complete</span>
+                </div>
+                <div style="height:5px;border-radius:999px;background:var(--border);overflow:hidden;margin-bottom:10px;">
+                  <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:999px;"></div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:3px;">${domainDots}</div>
+              </div>`;
+            }).join("")}
+          </div>`;
+        overview.querySelectorAll(".dashboard-group-card[data-group-id]").forEach(card => {
+          card.addEventListener("click", () => _renderDashGroupDrilldown(parseInt(card.dataset.groupId)));
+        });
+      } catch (e) {
+        overview.innerHTML = `<div class="audit-empty">Could not load group data: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    function _renderDashGroupDrilldown(groupId) {
+      const overview  = document.getElementById("dashGroupOverview");
+      const drilldown = document.getElementById("dashGroupDrilldown");
+      const g = _dashGroupMap?.[groupId];
+      if (!g || !drilldown) return;
+      overview.style.display  = "none";
+      drilldown.style.display = "";
+
+      const pct      = g.totalInScope ? Math.round(g.yesPractices / g.totalInScope * 100) : 0;
+      const notYet   = g.totalInScope - g.yesPractices;
+      const partial  = g.coveredDomains.filter(d => ["Partial","In Progress"].includes(g.domains[d])).length;
+      const noCount  = g.coveredDomains.filter(d => g.domains[d] === "No").length;
+      const pctColor = pct >= 80 ? "var(--success)" : pct >= 50 ? "var(--warning)" : "var(--danger)";
+
+      const domainRows = g.coveredDomains.map(d => {
+        const s      = g.domains[d] || "Not Assessed";
+        const yes    = g.domainYes[d]   || 0;
+        const total  = g.domainTotal[d] || 0;
+        const scope  = PRACTICES.filter(p => p.domain === d && (
+          g.groupDomains.includes(p.domain) || g.groupObjectives.includes(p.objectiveId)
+        )).length;
+        const dpct   = scope ? Math.round(yes / scope * 100) : 0;
+        const badgeCls = { "Yes": "yes", "Partial": "partial", "In Progress": "partial", "No": "no" }[s] || "na";
+        return `<tr>
+          <td style="font-weight:600;">${escapeHtml(d)}</td>
+          <td><span class="gom-badge ${badgeCls}">${escapeHtml(s === "Not Assessed" ? "Not Assessed" : s)}</span></td>
+          <td style="color:var(--muted);font-size:.8rem;">${yes} / ${scope} practices</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;height:5px;border-radius:999px;background:var(--border);overflow:hidden;min-width:60px;">
+                <div style="height:100%;width:${dpct}%;background:${pct>=80?"var(--success)":pct>=50?"var(--warning)":"var(--danger)"};border-radius:999px;"></div>
+              </div>
+              <span style="font-size:.75rem;color:var(--muted);width:32px;text-align:right;">${dpct}%</span>
+            </div>
+          </td>
+        </tr>`;
+      }).join("");
+
+      drilldown.innerHTML = `
+        <button class="dash-drill-back" id="dashDrillBackBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+          All groups
+        </button>
+        <div style="margin-bottom:16px;">
+          <h2 style="margin:0 0 4px;font-size:1.3rem;font-weight:800;">${escapeHtml(g.name)}</h2>
+          <div style="font-size:.85rem;color:var(--muted);">${g.memberCount} member${g.memberCount===1?"":"s"} · ${g.coveredDomains.length} domain${g.coveredDomains.length===1?"":"s"} in scope</div>
+        </div>
+        <div class="dash-drill-stat-grid">
+          <div class="dash-drill-stat">
+            <div class="label">In Scope</div>
+            <div class="value">${g.totalInScope}</div>
+          </div>
+          <div class="dash-drill-stat">
+            <div class="label">Completed (Yes)</div>
+            <div class="value" style="color:var(--success);">${g.yesPractices}</div>
+          </div>
+          <div class="dash-drill-stat">
+            <div class="label">Partial / In Progress</div>
+            <div class="value" style="color:var(--warning);">${partial}</div>
+          </div>
+          <div class="dash-drill-stat">
+            <div class="label">Not Complete</div>
+            <div class="value" style="color:var(--danger);">${noCount}</div>
+          </div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:600;margin-bottom:6px;">
+            <span style="color:var(--text-soft);">Overall completion</span>
+            <span style="color:${pctColor};">${pct}%</span>
+          </div>
+          <div style="height:8px;border-radius:999px;background:var(--border);overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:999px;transition:width .4s;"></div>
+          </div>
+        </div>
+        <div class="dashboard-panel" style="margin-top:20px;padding:0;overflow:hidden;">
+          <div class="panel-header" style="padding:14px 18px;">
+            <h3 style="margin:0;font-size:.95rem;">Domain Breakdown</h3>
+          </div>
+          <table class="dash-drill-domain-table">
+            <thead><tr>
+              <th>Domain</th><th>Status</th><th>Practices</th><th>Progress</th>
+            </tr></thead>
+            <tbody>${domainRows || `<tr><td colspan="4" style="color:var(--muted);padding:16px;">No domain data yet.</td></tr>`}</tbody>
+          </table>
+        </div>`;
+
+      document.getElementById("dashDrillBackBtn")?.addEventListener("click", () => {
+        drilldown.style.display = "none";
+        overview.style.display  = "";
+      });
+    }
+
+    async function renderGroupsPage() {
+      const listCol = document.getElementById("groupsListCol");
+      if (!listCol) return;
+      listCol.innerHTML = `<div class="groups-loading">Loading groups…</div>`;
+      try {
+        const r = await adminFetch("/groups");
+        if (!r.ok) throw new Error(await r.text());
+        _groupsState.groups = await r.json();
+      } catch (e) {
+        listCol.innerHTML = `<div class="groups-loading" style="color:var(--danger)">Failed to load groups: ${escapeHtml(e.message)}</div>`;
+        return;
+      }
+      _renderGroupList();
+      if (_groupsState.selectedId) {
+        _renderGroupDetail(_groupsState.selectedId);
+      } else {
+        document.getElementById("groupsDetailCol").innerHTML = `
+          <div class="groups-empty-detail">
+            <div class="empty-state" style="padding:40px 16px">
+              <div class="empty-state-icon" style="width:48px;height:48px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="6" height="14" rx="1"/><rect x="9" y="3" width="6" height="18" rx="1"/><rect x="16" y="10" width="6" height="11" rx="1"/></svg></div>
+              <h3 class="empty-state-title">Select a group</h3>
+              <p class="empty-state-body">Choose a group from the list to manage members, assignments, and view results.</p>
+            </div>
+          </div>`;
+      }
+
+      const createBtn = document.getElementById("createGroupBtn");
+      if (createBtn && !createBtn.dataset.listenerAttached) {
+        createBtn.dataset.listenerAttached = "1";
+        createBtn.addEventListener("click", _openCreateGroupModal);
+      }
+
+      // Overview toggle — state lives on _groupsState so it survives re-render
+      const overviewBtn    = document.getElementById("groupsOverviewBtn");
+      const overviewPanel  = document.getElementById("groupsOverviewPanel");
+      const manageLayout   = document.getElementById("groupsManageLayout");
+      const applyOverviewVisibility = () => {
+        if (!overviewPanel || !manageLayout || !overviewBtn) return;
+        overviewPanel.style.display = _groupsState.overviewVisible ? "" : "none";
+        manageLayout.style.display  = _groupsState.overviewVisible ? "none" : "";
+        overviewBtn.textContent = _groupsState.overviewVisible ? "◀ Back to Groups" : "📊 Compliance Overview";
+      };
+      applyOverviewVisibility();
+      if (_groupsState.overviewVisible) renderGroupsOverview();
+      if (overviewBtn && !overviewBtn.dataset.listenerAttached) {
+        overviewBtn.dataset.listenerAttached = "1";
+        overviewBtn.addEventListener("click", () => {
+          _groupsState.overviewVisible = !_groupsState.overviewVisible;
+          applyOverviewVisibility();
+          if (_groupsState.overviewVisible) renderGroupsOverview();
+        });
+      }
+    }
+
+    function _renderGroupList() {
+      const listCol = document.getElementById("groupsListCol");
+      if (!listCol) return;
+      const { groups, selectedId } = _groupsState;
+      if (!groups.length) {
+        listCol.innerHTML = `
+          <div class="empty-state" style="padding:28px 16px">
+            <div class="empty-state-icon" style="width:40px;height:40px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="6" height="14" rx="1"/><rect x="9" y="3" width="6" height="18" rx="1"/><rect x="16" y="10" width="6" height="11" rx="1"/></svg></div>
+            <h3 class="empty-state-title">No groups yet</h3>
+            <p class="empty-state-body">Create your first business unit to get started.</p>
+          </div>`;
+        return;
+      }
+      listCol.innerHTML = groups.map(g => `
+        <div class="group-card${g.id === selectedId ? " selected" : ""}" data-group-id="${g.id}" role="button" tabindex="0">
+          <div class="group-card-name">${escapeHtml(g.name)}</div>
+          <div class="group-card-meta">
+            <span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 00-16 0"/></svg>
+              ${g.memberCount} member${g.memberCount !== 1 ? "s" : ""}
+            </span>
+            <span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+              ${g.domains.length} domain${g.domains.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>`).join("");
+
+      listCol.querySelectorAll(".group-card").forEach(card => {
+        const handler = () => {
+          _groupsState.selectedId = parseInt(card.dataset.groupId, 10);
+          listCol.querySelectorAll(".group-card").forEach(c => c.classList.remove("selected"));
+          card.classList.add("selected");
+          _groupsState.activeTab = "members";
+          _renderGroupDetail(_groupsState.selectedId);
+        };
+        card.addEventListener("click", handler);
+        card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") handler(); });
+      });
+    }
+
+    async function _renderGroupDetail(groupId) {
+      const detailCol = document.getElementById("groupsDetailCol");
+      if (!detailCol) return;
+      detailCol.innerHTML = `<div class="groups-loading">Loading…</div>`;
+      let group;
+      try {
+        const r = await adminFetch(`/groups/${groupId}`);
+        if (!r.ok) throw new Error(await r.text());
+        group = await r.json();
+      } catch (e) {
+        detailCol.innerHTML = `<div class="groups-loading" style="color:var(--danger)">Failed: ${escapeHtml(e.message)}</div>`;
+        return;
+      }
+
+      const activeTab = _groupsState.activeTab || "members";
+      detailCol.innerHTML = `
+        <div class="group-detail-panel">
+          <div class="group-detail-header">
+            <div>
+              <div class="group-detail-title">${escapeHtml(group.name)}</div>
+              ${group.description ? `<div class="group-detail-desc">${escapeHtml(group.description)}</div>` : ""}
+            </div>
+            <div class="group-detail-actions">
+              <button class="secondary" style="font-size:0.8rem;padding:6px 12px" id="gdEditBtn">Edit</button>
+              <button class="secondary" style="font-size:0.8rem;padding:6px 12px;color:var(--danger);border-color:var(--danger)" id="gdDeleteBtn">Delete</button>
+            </div>
+          </div>
+          <div class="group-detail-tabs">
+            <button class="group-detail-tab${activeTab==="members"?" active":""}" data-gtab="members">Members (${group.members.length})</button>
+            <button class="group-detail-tab${activeTab==="domains"?" active":""}" data-gtab="domains">Domains</button>
+            <button class="group-detail-tab${activeTab==="objectives"?" active":""}" data-gtab="objectives">Objectives</button>
+            <button class="group-detail-tab${activeTab==="results"?" active":""}" data-gtab="results">Results</button>
+            <button class="group-detail-tab${activeTab==="targets"?" active":""}" data-gtab="targets">Targets</button>
+          </div>
+          <div class="group-detail-body" id="groupDetailBody"></div>
+        </div>`;
+
+      detailCol.querySelectorAll(".group-detail-tab").forEach(tab => {
+        tab.addEventListener("click", async () => {
+          _groupsState.activeTab = tab.dataset.gtab;
+          detailCol.querySelectorAll(".group-detail-tab").forEach(t => t.classList.toggle("active", t === tab));
+          await _renderGroupTabContent(group, _groupsState.activeTab);
+        });
+      });
+      document.getElementById("gdEditBtn")?.addEventListener("click", () => _openEditGroupModal(group));
+      document.getElementById("gdDeleteBtn")?.addEventListener("click", () => _deleteGroup(group));
+      await _renderGroupTabContent(group, activeTab);
+    }
+
+    async function _renderGroupTabContent(group, tab) {
+      const body = document.getElementById("groupDetailBody");
+      if (!body) return;
+      if (tab === "members")         await _renderMembersTab(body, group);
+      else if (tab === "domains")    _renderDomainsTab(body, group);
+      else if (tab === "objectives") _renderObjectivesTab(body, group);
+      else if (tab === "results")    await _renderResultsTab(body, group);
+      else if (tab === "targets")    await _renderTargetsTab(body, group);
+    }
+
+    async function _renderMembersTab(body, group) {
+      await _ensureAllUsersLoaded();
+      const memberOids = new Set(group.members.map(m => m.oid));
+      const allUsers   = window.__AESCSF_ALL_USERS__ || [];
+      body.innerHTML = `
+        <div class="group-section-title">Current members</div>
+        <div class="group-member-list" id="gdMemberList">
+          ${group.members.length ? group.members.map(m => `
+            <div class="group-member-item">
+              <div class="group-member-avatar">${escapeHtml((m.display_name || m.username || "?")[0].toUpperCase())}</div>
+              <div class="group-member-name">${escapeHtml(m.display_name || m.username)}</div>
+              <div class="group-member-role"><span class="badge role-badge ${escapeHtml(m.role)}">${escapeHtml(m.role)}</span></div>
+            </div>`).join("") : `<div class="groups-loading">No members yet.</div>`}
+        </div>
+        ${allUsers.length ? `
+        <div class="group-section-title" style="margin-top:16px">Add / remove members</div>
+        <p style="font-size:.78rem;color:var(--muted);margin:0 0 8px">Each user can belong to only one group. Selecting a user who is already in another group will move them here.</p>
+        <div class="group-member-user-select" id="gdUserSelect">
+          ${allUsers.map(u => {
+            const inThisGroup  = memberOids.has(u.oid);
+            const inOtherGroup = !inThisGroup && u.group_id && u.group_id !== group.id;
+            const groupHint    = inOtherGroup ? ` — <span style="color:var(--warning);font-size:.75rem">in ${escapeHtml(u.group_name)}</span>` : "";
+            return `
+            <div class="group-member-user-row">
+              <input type="checkbox" id="gdUser_${escapeHtml(u.oid)}" value="${escapeHtml(u.oid)}" ${inThisGroup ? "checked" : ""}>
+              <label for="gdUser_${escapeHtml(u.oid)}">${escapeHtml(u.display_name || u.username)} <span style="color:var(--muted);font-size:.78rem">(${escapeHtml(u.role)})</span>${groupHint}</label>
+            </div>`;
+          }).join("")}
+        </div>
+        <button class="primary" style="font-size:.85rem" id="gdSaveMembersBtn">Save Members</button>` : ""}`;
+
+      document.getElementById("gdSaveMembersBtn")?.addEventListener("click", async () => {
+        const checked = [...body.querySelectorAll("#gdUserSelect input:checked")].map(i => i.value);
+        await _saveGroupMembers(group.id, checked);
+      });
+    }
+
+    function _renderDomainsTab(body, group) {
+      const assignedDomains = new Set(group.domains);
+      body.innerHTML = `
+        <div class="group-section-title">Assigned domains</div>
+        <div class="group-domain-checkbox-grid" id="gdDomainGrid">
+          ${_allDomains().map(d => `
+            <label class="group-domain-check-item">
+              <input type="checkbox" value="${escapeHtml(d)}" ${assignedDomains.has(d) ? "checked" : ""}>
+              ${escapeHtml(d)}
+            </label>`).join("")}
+        </div>
+        <button class="primary" style="font-size:.85rem" id="gdSaveDomainsBtn">Save Domain Assignments</button>
+        <p style="font-size:.8rem;color:var(--muted);margin-top:8px">Members inherit these domain assignments for their assessment access.</p>`;
+
+      document.getElementById("gdSaveDomainsBtn")?.addEventListener("click", async () => {
+        const checked = [...body.querySelectorAll("#gdDomainGrid input:checked")].map(i => i.value);
+        await _saveGroupDomains(group.id, checked);
+      });
+    }
+
+    function _renderObjectivesTab(body, group) {
+      const assignedObj = new Set(group.objectives);
+      body.innerHTML = `
+        <div class="group-section-title">Assigned objectives (fine-grained)</div>
+        <div class="group-domain-checkbox-grid" id="gdObjGrid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">
+          ${_allObjectives().map(([id, label]) => `
+            <label class="group-domain-check-item" title="${escapeHtml(label)}">
+              <input type="checkbox" value="${escapeHtml(id)}" ${assignedObj.has(id) ? "checked" : ""}>
+              <span><strong>${escapeHtml(id)}</strong><br><span style="font-size:.75rem;color:var(--muted)">${escapeHtml(label.length > 50 ? label.slice(0, 50) + "…" : label)}</span></span>
+            </label>`).join("")}
+        </div>
+        <button class="primary" style="font-size:.85rem;margin-top:8px" id="gdSaveObjBtn">Save Objective Assignments</button>
+        <p style="font-size:.8rem;color:var(--muted);margin-top:8px">Objective assignments are additive to domain assignments.</p>`;
+
+      document.getElementById("gdSaveObjBtn")?.addEventListener("click", async () => {
+        const checked = [...body.querySelectorAll("#gdObjGrid input:checked")].map(i => i.value);
+        await _saveGroupObjectives(group.id, checked);
+      });
+    }
+
+    async function _renderResultsTab(body, group) {
+      body.innerHTML = `<div class="groups-loading">Loading results…</div>`;
+      let data;
+      try {
+        const r = await adminFetch(`/groups/${group.id}/results`);
+        if (!r.ok) throw new Error(await r.text());
+        data = await r.json();
+      } catch (e) {
+        body.innerHTML = `<div class="groups-loading" style="color:var(--danger)">Failed: ${escapeHtml(e.message)}</div>`;
+        return;
+      }
+
+      if (!data.members || !data.members.length) {
+        body.innerHTML = `<div class="groups-loading">No members with assessment data yet.</div>`;
+        return;
+      }
+
+      const memberNames = data.members.map(m => m.displayName);
+
+      /* Build per-domain sections with practices */
+      const domainMap = new Map();
+      PRACTICES.forEach(p => {
+        if (!domainMap.has(p.domain)) domainMap.set(p.domain, []);
+        domainMap.get(p.domain).push(p);
+      });
+
+      /* Only show domains assigned to this group (or all if none assigned) */
+      const relevantDomains = group.domains.length
+        ? group.domains
+        : [...domainMap.keys()].sort();
+
+      const statusColor = s => {
+        if (["Fully","Yes"].includes(s)) return "var(--success)";
+        if (s === "Largely") return "var(--primary)";
+        if (["Partially","Partial","Present"].includes(s)) return "var(--warning)";
+        return "var(--muted)";
+      };
+
+      let html = `
+        <div style="margin-bottom:12px;font-size:.85rem;color:var(--muted)">
+          Showing aggregated results across <strong>${data.members.length}</strong> member${data.members.length !== 1?"s":""}.
+          Worst-case status shown where members differ.
+        </div>
+        <div style="overflow-x:auto">
+        <table class="group-results-table">
+          <thead>
+            <tr>
+              <th>Practice</th>
+              <th>Aggregated Status</th>
+              ${memberNames.map(n => `<th style="font-size:.72rem">${escapeHtml(n)}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>`;
+
+      const STATUS_RANK = { "Fully":6,"Yes":6,"Largely":5,"Partially":4,"Partial":3,"Present":2,"No":1,"Not":1,"Not Assessed":0 };
+      const worstStatus = statuses => statuses.reduce((worst, s) => {
+        const rank = STATUS_RANK[s] ?? 0;
+        return rank < (STATUS_RANK[worst] ?? 0) ? s : worst;
+      }, statuses[0] || "Not Assessed");
+
+      relevantDomains.forEach(domain => {
+        const practices = domainMap.get(domain) || [];
+        if (!practices.length) return;
+        html += `<tr class="group-results-domain-header"><td colspan="${2 + memberNames.length}">${escapeHtml(domain)}</td></tr>`;
+        practices.forEach(p => {
+          const memberStatuses = data.members.map(m => {
+            const a = (data.assessments[m.oid]?.data || {})[p.practiceId];
+            return a?.status || "Not Assessed";
+          });
+          const aggregated = worstStatus(memberStatuses);
+          html += `<tr>
+            <td>
+              <strong style="font-size:.78rem">${escapeHtml(p.practiceId)}</strong><br>
+              <span style="font-size:.75rem;color:var(--muted)">${escapeHtml(p.practice.length > 80 ? p.practice.slice(0,80)+"…" : p.practice)}</span>
+            </td>
+            <td><span style="color:${statusColor(aggregated)};font-weight:600;font-size:.82rem">${escapeHtml(aggregated)}</span></td>
+            ${memberStatuses.map(s => `<td style="color:${statusColor(s)};font-size:.8rem">${escapeHtml(s)}</td>`).join("")}
+          </tr>`;
+        });
+      });
+
+      html += `</tbody></table></div>`;
+      body.innerHTML = html;
+    }
+
+    async function _renderTargetsTab(body, group) {
+      body.innerHTML = `<div class="groups-loading">Loading targets…</div>`;
+      try {
+        const r = await adminFetch(`/groups/${group.id}/targets`);
+        const data = r.ok ? await r.json() : { targets: {} };
+        const targets = data.targets || {};
+
+        const assignedDomains    = group.domains    || [];
+        const assignedObjectives = group.objectives || [];
+        const dateRows = (items, targets) => items.map(k =>
+          `<div class="domain-target-row">
+            <label>${escapeHtml(k)}</label>
+            <input type="date" data-target-key="${escapeHtml(k)}" value="${escapeHtml(targets[k] || '')}">
+          </div>`
+        ).join("");
+
+        if (!assignedDomains.length && !assignedObjectives.length) {
+          body.innerHTML = `<div style="padding:24px;color:var(--muted);font-size:.875rem;line-height:1.55;">
+            This group has no domain or objective assignments yet.<br>Add them in the <strong>Domains</strong> and <strong>Objectives</strong> tabs first.
+          </div>`;
+          return;
+        }
+
+        body.innerHTML = `
+          ${assignedDomains.length ? `
+            <div class="group-section-title">Domain target dates</div>
+            <p style="font-size:.78rem;color:var(--muted);margin:0 0 10px">These dates apply to all practices in each assigned domain.</p>
+            <div class="domain-target-grid" id="gdTargetDomainGrid">
+              ${dateRows(assignedDomains, targets)}
+            </div>
+          ` : ""}
+          ${assignedObjectives.length ? `
+            <div class="group-section-title" style="margin-top:${assignedDomains.length ? 16 : 0}px">Objective target dates</div>
+            <p style="font-size:.78rem;color:var(--muted);margin:0 0 10px">These override domain dates for the specific practices within each objective.</p>
+            <div class="domain-target-grid" id="gdTargetObjGrid">
+              ${dateRows(assignedObjectives, targets)}
+            </div>
+          ` : ""}
+          <div class="domain-target-actions" style="margin-top:16px">
+            <button class="primary" style="font-size:.85rem" id="gdSaveTargetsBtn">Save target dates</button>
+            <span class="domain-target-status" id="gdTargetStatus"></span>
+          </div>`;
+
+        document.getElementById("gdSaveTargetsBtn")?.addEventListener("click", async () => {
+          const statusEl = document.getElementById("gdTargetStatus");
+          const newTargets = {};
+          body.querySelectorAll("input[data-target-key]").forEach(inp => {
+            if (inp.value) newTargets[inp.dataset.targetKey] = inp.value;
+          });
+          try {
+            const resp = await adminFetch(`/groups/${group.id}/targets`, {
+              method: "PUT", body: JSON.stringify({ targets: newTargets })
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            // Invalidate timeline cache for this group
+            if (window.__AESCSF_GROUP_TARGETS_CACHE__) delete window.__AESCSF_GROUP_TARGETS_CACHE__[group.id];
+            if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 2500); }
+          } catch (e) {
+            if (statusEl) statusEl.textContent = "Save failed: " + e.message;
+          }
+        });
+      } catch (e) {
+        body.innerHTML = `<div style="color:var(--danger);padding:16px">${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    async function _saveGroupMembers(groupId, oids) {
+      try {
+        const r = await adminFetch(`/groups/${groupId}/members`, {
+          method: "PUT", body: JSON.stringify({ members: oids })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        // Invalidate user cache — group memberships may have changed for other users
+        window.__AESCSF_ALL_USERS__ = null;
+        await _refreshGroup(groupId);
+        _showGroupToast("Members saved");
+      } catch (e) { alert("Failed to save members: " + e.message); }
+    }
+
+    async function _saveGroupDomains(groupId, domains) {
+      try {
+        const r = await adminFetch(`/groups/${groupId}/domains`, {
+          method: "PUT", body: JSON.stringify({ domains })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        await _refreshGroup(groupId);
+        _showGroupToast("Domain assignments saved");
+      } catch (e) { alert("Failed to save domains: " + e.message); }
+    }
+
+    async function _saveGroupObjectives(groupId, objectives) {
+      try {
+        const r = await adminFetch(`/groups/${groupId}/objectives`, {
+          method: "PUT", body: JSON.stringify({ objectives })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        await _refreshGroup(groupId);
+        _showGroupToast("Objective assignments saved");
+      } catch (e) { alert("Failed to save objectives: " + e.message); }
+    }
+
+    async function _refreshGroup(groupId) {
+      try {
+        const r = await adminFetch("/groups");
+        if (r.ok) _groupsState.groups = await r.json();
+      } catch (_) {}
+      _renderGroupList();
+      await _renderGroupDetail(groupId);
+    }
+
+    async function _deleteGroup(group) {
+      if (!confirm(`Delete group "${group.name}"? This will remove all member assignments. This cannot be undone.`)) return;
+      try {
+        const r = await adminFetch(`/groups/${group.id}`, { method: "DELETE" });
+        if (!r.ok) throw new Error(await r.text());
+        _groupsState.selectedId = null;
+        await renderGroupsPage();
+      } catch (e) { alert("Failed to delete group: " + e.message); }
+    }
+
+    function _openCreateGroupModal() {
+      const existing = document.getElementById("groupFormModal");
+      if (existing) existing.remove();
+      document.body.insertAdjacentHTML("beforeend", `
+        <div id="groupFormModal" style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9998;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
+          <div style="background:var(--surface-strong);border:1px solid var(--border);border-radius:var(--radius-md);width:min(440px,95vw);padding:24px;box-shadow:var(--shadow-lg)">
+            <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:16px">Create Group</h3>
+            <div class="field">
+              <label>Group Name</label>
+              <input type="text" id="gfName" placeholder="e.g. IT Operations" maxlength="80" style="width:100%;box-sizing:border-box">
+            </div>
+            <div class="field" style="margin-top:10px">
+              <label>Description <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+              <textarea id="gfDesc" rows="2" maxlength="300" style="width:100%;box-sizing:border-box"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+              <button class="secondary" id="gfCancelBtn">Cancel</button>
+              <button class="primary" id="gfSaveBtn">Create Group</button>
+            </div>
+          </div>
+        </div>`);
+
+      const modal = document.getElementById("groupFormModal");
+      document.getElementById("gfCancelBtn").addEventListener("click", () => modal.remove());
+      modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+      document.getElementById("gfSaveBtn").addEventListener("click", async () => {
+        const name = document.getElementById("gfName").value.trim();
+        const desc = document.getElementById("gfDesc").value.trim();
+        if (!name) { document.getElementById("gfName").focus(); return; }
+        try {
+          const r = await adminFetch("/groups", { method: "POST", body: JSON.stringify({ name, description: desc }) });
+          if (!r.ok) throw new Error(await r.text());
+          const created = await r.json();
+          modal.remove();
+          _groupsState.selectedId = created.id;
+          _groupsState.activeTab = "members";
+          await renderGroupsPage();
+        } catch (e) { alert("Failed to create group: " + e.message); }
+      });
+      document.getElementById("gfName").focus();
+    }
+
+    function _openEditGroupModal(group) {
+      const existing = document.getElementById("groupFormModal");
+      if (existing) existing.remove();
+      document.body.insertAdjacentHTML("beforeend", `
+        <div id="groupFormModal" style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9998;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
+          <div style="background:var(--surface-strong);border:1px solid var(--border);border-radius:var(--radius-md);width:min(440px,95vw);padding:24px;box-shadow:var(--shadow-lg)">
+            <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:16px">Edit Group</h3>
+            <div class="field">
+              <label>Group Name</label>
+              <input type="text" id="gfName" value="${escapeHtml(group.name)}" maxlength="80" style="width:100%;box-sizing:border-box">
+            </div>
+            <div class="field" style="margin-top:10px">
+              <label>Description</label>
+              <textarea id="gfDesc" rows="2" maxlength="300" style="width:100%;box-sizing:border-box">${escapeHtml(group.description || "")}</textarea>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+              <button class="secondary" id="gfCancelBtn">Cancel</button>
+              <button class="primary" id="gfSaveBtn">Save Changes</button>
+            </div>
+          </div>
+        </div>`);
+
+      const modal = document.getElementById("groupFormModal");
+      document.getElementById("gfCancelBtn").addEventListener("click", () => modal.remove());
+      modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+      document.getElementById("gfSaveBtn").addEventListener("click", async () => {
+        const name = document.getElementById("gfName").value.trim();
+        const desc = document.getElementById("gfDesc").value.trim();
+        if (!name) { document.getElementById("gfName").focus(); return; }
+        try {
+          const r = await adminFetch(`/groups/${group.id}`, { method: "PUT", body: JSON.stringify({ name, description: desc }) });
+          if (!r.ok) throw new Error(await r.text());
+          modal.remove();
+          await _refreshGroup(group.id);
+        } catch (e) { alert("Failed to update group: " + e.message); }
+      });
+      document.getElementById("gfName").focus();
+    }
+
+    function _showGroupToast(msg) {
+      const t = document.createElement("div");
+      t.style.cssText = "position:fixed;bottom:24px;right:24px;background:var(--success);color:#fff;padding:10px 18px;border-radius:8px;font-size:.875rem;font-weight:500;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,.2)";
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2500);
+    }
+
+    /* Load all users for the members tab — cache on window */
+    async function _ensureAllUsersLoaded() {
+      if (window.__AESCSF_ALL_USERS__) return;
+      try {
+        const r = await adminFetch("/groups/users");
+        if (r.ok) window.__AESCSF_ALL_USERS__ = await r.json();
+      } catch (_) {}
+    }
+
+    async function handleFileDrop(event, practiceId) {
+      event.preventDefault();
+      const dropZone = event.currentTarget;
+      dropZone.classList.remove("drag-over");
+      for (const file of Array.from(event.dataTransfer.files)) {
+        await uploadFile(practiceId, file);
+      }
+    }
+
+    async function deleteFile(fileId, practiceId) {
+      if (!confirm("Delete this file? This cannot be undone.")) return;
+      try {
+        const resp = await fetch(`${APP_CONFIG.apiBaseUrl}/files/${fileId}`, {
+          method: "DELETE", credentials: "same-origin"
+        });
+        if (!resp.ok) {
+          const j = await resp.json();
+          showFileError(practiceId, `Delete failed: ${j.error || resp.status}`);
+          return;
+        }
+        await loadFilesForPractice(practiceId);
+      } catch (err) {
+        showFileError(practiceId, `Delete error: ${err.message}`);
+      }
+    }
+
+// Expose functions referenced by inline HTML event handlers
+Object.assign(window, {
+  setTheme,
+  signOut,
+  closeHistoryModal,
+  acceptContribution,
+  handleFileInputChange,
+  openHistoryModal,
+  endorseGroupResponses,
+  toggleGroupDetail,
+  endorseVersion,
+  removeEndorsement,
+  adminSetRole,
+  deleteFile,
+  _auditState,
+  _loadAuditPage,
+});
