@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Secure Link Scanner{% endblock %}</title>
+  <link rel="stylesheet" href="{{ base }}/static/app.css">
+  <script src="{{ base }}/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ base }}/">Secure Link Scanner</a>
+    {% if user %}
+    <nav>
+      <span class="muted">{{ user.username }}</span>
+      <form method="post" action="{{ base }}/logout" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="link">Log out</button>
+      </form>
+    </nav>
+    {% endif %}
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

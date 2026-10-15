@@ -1,0 +1,35 @@
+# Caddy is the only container with a published port, and that port is bound
+# to the Tailscale IP only (see compose.yaml). Nothing listens on the public IP.
+{
+	admin off
+	# Port 80 is never published, so don't try to redirect HTTP -> HTTPS.
+	auto_https disable_redirects
+}
+
+{$SITE_HOST} {
+	# Default: Caddy's internal CA. Staff trust the root once
+	# (see docs/runbooks/m1-setup.md). Swap for Tailscale HTTPS certs if preferred.
+	tls internal
+
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	redir / /app/ 302
+
+	handle /app* {
+		reverse_proxy api:8000
+	}
+
+	# /dojo* is added in M4 (DefectDojo).
+
+	handle {
+		respond "Not found" 404
+	}
+}

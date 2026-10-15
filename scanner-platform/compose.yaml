@@ -1,0 +1,104 @@
+name: scanner-platform
+
+# Networks
+#   edge     - caddy only; the one network with a published port (Tailscale IP only)
+#   frontend - caddy <-> api (and DefectDojo nginx from M4); internal, no egress
+#   backend  - api <-> postgres, valkey (and worker/intel later); internal, no egress
+# Services that need outbound internet (worker, intel) get their own egress network later.
+networks:
+  edge: {}
+  frontend:
+    internal: true
+  backend:
+    internal: true
+
+volumes:
+  postgres_data: {}
+  valkey_data: {}
+  caddy_data: {}
+  caddy_config: {}
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+
+services:
+  caddy:
+    <<: *hardening
+    image: caddy:2-alpine
+    ports:
+      # Bound to the Tailscale interface only. Never use "443:443" here:
+      # Docker-published ports bypass UFW, so binding is the real control.
+      - "${TAILSCALE_IP:?set TAILSCALE_IP in .env}:443:443"
+    environment:
+      SITE_HOST: ${SITE_HOST:?set SITE_HOST in .env}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge, frontend]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    <<: *hardening
+    build: ./api
+    image: scanner-platform/api:dev
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379/0
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-28800}
+      COOKIE_SECURE: "true"
+    networks: [frontend, backend]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/app/healthz', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  postgres:
+    <<: *hardening
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [backend]
+    # No ports: never published.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  valkey:
+    <<: *hardening
+    image: valkey/valkey:8-alpine
+    command: ["sh", "-c", "exec valkey-server --appendonly yes --requirepass \"$$VALKEY_PASSWORD\""]
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?set VALKEY_PASSWORD in .env}
+    volumes:
+      - valkey_data:/data
+    networks: [backend]
+    # No ports: never published.
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
