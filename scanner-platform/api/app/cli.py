@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.db import get_sessionmaker
 from app.models import User
 from app.passwords import hash_password
+from app.services import audit
 
 
 def _prompt_password() -> str:
@@ -52,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
                     sys.exit(str(exc))
             else:
                 user.is_active = args.command == "enable-user"
+        audit(db, "cli", f"user.{args.command}", f"user:{args.username}")
         db.commit()
 
     print(f"{args.command}: {args.username} done")

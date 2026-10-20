@@ -16,7 +16,10 @@ COPY app ./app
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN useradd --system --uid 10001 --home-dir /srv app \
-    && chmod 0755 /usr/local/bin/docker-entrypoint.sh
+    && chmod 0755 /usr/local/bin/docker-entrypoint.sh \
+    && mkdir -p /data/authorisations \
+    && chown app:app /data/authorisations \
+    && chmod 0700 /data/authorisations
 USER app
 
 EXPOSE 8000

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Audit log · Secure Link Scanner{% endblock %}
+{% block content %}
+<h1>Audit log</h1>
+<p class="muted">Append only. Latest 500 entries.</p>
+<section class="card">
+  {% set audit = entries %}
+  {% include "_audit_table.html" %}
+</section>
+{% endblock %}

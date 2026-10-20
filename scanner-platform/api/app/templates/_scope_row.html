@@ -1,0 +1,50 @@
+{% set auth_live = item.authorisation.is_live(now) %}
+<tr id="scope-{{ item.id }}"
+    {% if item.verify_requested_at %}hx-get="{{ base }}/scope/{{ item.id }}/row" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  <td>{{ item.type }}</td>
+  <td><code>{{ item.value }}</code></td>
+  <td>#{{ item.auth_id }}</td>
+  <td>
+    {% if item.removed_at %}<span class="badge muted">removed</span>
+    {% elif item.verify_requested_at %}<span class="badge warn">checking…</span>
+    {% elif item.verified_at %}
+      <span class="badge ok">verified</span>
+      <span class="muted">{{ item.verify_method }} · {{ item.verified_at | localtime }}</span>
+    {% elif item.last_verify_error %}
+      <span class="badge bad">failed</span> <span class="muted">{{ item.last_verify_error }}</span>
+    {% else %}<span class="badge muted">unverified</span>{% endif %}
+    {% if not auth_live and not item.removed_at %}<br><span class="badge bad">authorisation not live</span>{% endif %}
+  </td>
+  <td>
+    {% if not item.removed_at %}
+      {% if item.type == "domain" %}
+        <form method="post" action="{{ base }}/scope/{{ item.id }}/verify" class="inline"
+              hx-post="{{ base }}/scope/{{ item.id }}/verify" hx-target="closest tr" hx-swap="outerHTML">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="small">{{ "Re-check" if item.verified_at else "Verify" }}</button>
+        </form>
+        <details class="howto">
+          <summary>How to verify</summary>
+          <p>Either publish a DNS TXT record:</p>
+          <p><code>{{ item.verify_record_name }}</code> TXT <code>{{ item.verify_record_value }}</code></p>
+          <p>or serve a file at <code>https://{{ item.value }}/.well-known/securelink-verify.txt</code> containing:</p>
+          <p><code>{{ item.verify_record_value }}</code></p>
+        </details>
+      {% elif not item.verified_at %}
+        <form method="post" action="{{ base }}/scope/{{ item.id }}/attest" class="inline"
+              hx-post="{{ base }}/scope/{{ item.id }}/attest" hx-target="closest tr" hx-swap="outerHTML">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label class="check"><input type="checkbox" name="confirm" value="yes" required>
+            Listed in signed letter #{{ item.auth_id }}</label>
+          <button type="submit" class="small">Confirm</button>
+        </form>
+      {% endif %}
+      <form method="post" action="{{ base }}/scope/{{ item.id }}/remove" class="inline"
+            hx-post="{{ base }}/scope/{{ item.id }}/remove" hx-target="closest tr" hx-swap="outerHTML"
+            hx-confirm="Remove {{ item.value }} from scope?">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="link danger">Remove</button>
+      </form>
+    {% endif %}
+  </td>
+</tr>

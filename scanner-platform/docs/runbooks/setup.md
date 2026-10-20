@@ -1,4 +1,4 @@
-# M1 host setup (Proxmox lab VM, later the Linode)
+# Host setup (Proxmox lab VM, later the Linode)
 
 Target: Ubuntu Server 24.04 LTS. You need sudo.
 
@@ -81,9 +81,14 @@ from tailscaled, and no root needs installing.
 
 ## Operations
 
-- Logs: `docker compose logs -f api caddy`. Login successes and failures are
-  logged by `app.auth` with the client IP. The append-only audit table arrives
-  in M2.
+- Logs: `docker compose logs -f api caddy verifier`.
+- Audit log: `/app/audit` in the UI. Logins, failed logins, user changes made
+  with the command-line tool, and every client, authorisation and scope change
+  are recorded there. Postgres refuses edits and deletes.
+- Add the Linode's own public range (and any other ranges that must never be
+  scanned) to `BLOCKLIST_EXTRA` in `.env`.
+- Authorisation PDFs live in the `authorisations` Docker volume. Back it up
+  together with Postgres (M6).
 - Disable a staff account immediately: `docker compose exec api python -m app.cli disable-user <name>`.
   Their existing sessions stop working on the next request.
 - Log everyone out: `docker compose exec valkey sh -c 'valkey-cli -a "$VALKEY_PASSWORD" --no-auth-warning --scan --pattern "session:*" | xargs -r valkey-cli -a "$VALKEY_PASSWORD" --no-auth-warning del'`

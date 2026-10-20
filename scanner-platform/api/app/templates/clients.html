@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Clients · Secure Link Scanner{% endblock %}
+{% block content %}
+<h1>Clients</h1>
+<section class="card">
+  {% if clients %}
+  <table>
+    <thead><tr><th>Name</th><th>Contact</th><th>Live authorisations</th><th>Scope items</th></tr></thead>
+    <tbody>
+    {% for c in clients %}
+      <tr>
+        <td><a href="{{ base }}/clients/{{ c.id }}">{{ c.name }}</a></td>
+        <td>{{ c.contact_name }}{% if c.contact_email %} &lt;{{ c.contact_email }}&gt;{% endif %}</td>
+        <td>{{ c.live_authorisations(now) | length }}</td>
+        <td>{{ c.scope_items | selectattr("removed_at", "none") | list | length }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No clients yet.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Add client</h2>
+  <form method="post" action="{{ base }}/clients" class="grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Name <input name="name" required maxlength="200"></label>
+    <label>Contact name <input name="contact_name" maxlength="200"></label>
+    <label>Contact email <input name="contact_email" type="email" maxlength="320"></label>
+    <div><button type="submit">Add client</button></div>
+  </form>
+</section>
+{% endblock %}

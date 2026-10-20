@@ -1,8 +1,31 @@
 {% extends "base.html" %}
 {% block content %}
+<h1>Dashboard</h1>
+<div class="stats">
+  <a class="stat" href="{{ base }}/clients"><span>{{ stats.clients }}</span>Clients</a>
+  <div class="stat"><span>{{ stats.live_auths }}</span>Live authorisations</div>
+  <div class="stat"><span>{{ stats.verified }}</span>Scannable scope items</div>
+  <div class="stat"><span>{{ stats.unverified }}</span>Awaiting verification</div>
+</div>
+
 <section class="card">
-  <h1>Dashboard</h1>
-  <p>Signed in as <strong>{{ user.username }}</strong>.</p>
-  <p class="muted">Clients, scopes and scan jobs arrive in milestone M2 and M3.</p>
+  <h2>Authorisations expiring within 30 days</h2>
+  {% if expiring %}
+  <table>
+    <thead><tr><th>Client</th><th>Signed by</th><th>Ends ({{ tz_name }})</th></tr></thead>
+    <tbody>
+    {% for a in expiring %}
+      <tr>
+        <td><a href="{{ base }}/clients/{{ a.client_id }}">{{ a.client.name }}</a></td>
+        <td>{{ a.signed_by }}</td>
+        <td>{{ a.valid_to | localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">None.</p>
+  {% endif %}
 </section>
+<p class="muted">Scan jobs arrive in milestone M3.</p>
 {% endblock %}

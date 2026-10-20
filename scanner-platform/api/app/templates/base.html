@@ -3,15 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
   <title>{% block title %}Secure Link Scanner{% endblock %}</title>
   <link rel="stylesheet" href="{{ base }}/static/app.css">
   <script src="{{ base }}/static/htmx.min.js" defer></script>
+  <script src="{{ base }}/static/app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="{{ base }}/">Secure Link Scanner</a>
     {% if user %}
     <nav>
+      <a href="{{ base }}/">Dashboard</a>
+      <a href="{{ base }}/clients">Clients</a>
+      <a href="{{ base }}/audit">Audit log</a>
       <span class="muted">{{ user.username }}</span>
       <form method="post" action="{{ base }}/logout" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -21,6 +26,7 @@
     {% endif %}
   </header>
   <main>
+    {% if error %}<p class="error banner" role="alert">{{ error }}</p>{% endif %}
     {% block content %}{% endblock %}
   </main>
 </body>

@@ -1,22 +1,22 @@
 import logging
 import secrets
-from datetime import UTC, datetime
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import redis
 from fastapi import APIRouter, Depends, FastAPI, Form, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentSession, CurrentUser, NotAuthenticated, require_csrf
 from app.config import get_settings
 from app.db import get_db
-from app.models import User
+from app.models import Authorisation, Client, ScopeItem, User, as_utc
 from app.passwords import verify_password
+from app.routes_scope import build_router
+from app.services import audit
 from app.sessions import (
     LOGIN_CSRF_COOKIE,
     SESSION_COOKIE,
@@ -27,10 +27,9 @@ from app.sessions import (
     record_login_failure,
 )
 from app.valkey import get_valkey
+from app.web import APP_DIR, make_templates
 
 log = logging.getLogger("app.auth")
-
-APP_DIR = Path(__file__).parent
 
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
@@ -49,8 +48,7 @@ def create_app() -> FastAPI:
     base = settings.base_path
 
     app = FastAPI(title="Secure Link Scanner", docs_url=None, redoc_url=None, openapi_url=None)
-    templates = Jinja2Templates(directory=APP_DIR / "templates")
-    templates.env.globals["base"] = base
+    templates = make_templates()
 
     def cookie_args(max_age: int | None = None) -> dict:
         return {
@@ -130,6 +128,8 @@ def create_app() -> FastAPI:
         username = username.strip()
         if is_login_locked(r, username, ip, settings.login_max_failures):
             log.warning("login locked user=%r ip=%s", username, ip)
+            audit(db, "anonymous", "user.login_locked", f"user:{username}", ip=ip)
+            db.commit()
             return render_login(request, "Too many failed attempts. Try again later.", 429)
 
         user = db.scalar(select(User).where(User.username == username))
@@ -137,10 +137,13 @@ def create_app() -> FastAPI:
         if not ok or user is None or not user.is_active:
             record_login_failure(r, username, ip, settings.login_lockout_seconds)
             log.warning("login failed user=%r ip=%s", username, ip)
+            audit(db, "anonymous", "user.login_failed", f"user:{username}", ip=ip)
+            db.commit()
             return render_login(request, "Invalid username or password.", 401)
 
         clear_login_failures(r, username)
         user.last_login_at = datetime.now(UTC)
+        audit(db, user.username, "user.login", f"user:{user.username}", ip=ip)
         db.commit()
         # A fresh token on every login, so a pre-set cookie can't be fixed onto a session.
         destroy_session(r, request.cookies.get(SESSION_COOKIE))
@@ -153,19 +156,48 @@ def create_app() -> FastAPI:
         return response
 
     @router.post("/logout", dependencies=[Depends(require_csrf)])
-    def logout(request: Request, r: Annotated[redis.Redis, Depends(get_valkey)]):
+    def logout(
+        request: Request,
+        user: CurrentUser,
+        db: Annotated[Session, Depends(get_db)],
+        r: Annotated[redis.Redis, Depends(get_valkey)],
+    ):
         destroy_session(r, request.cookies.get(SESSION_COOKIE))
+        audit(db, user.username, "user.logout", f"user:{user.username}", ip=client_ip(request))
+        db.commit()
         response = RedirectResponse(f"{base}/login", status_code=status.HTTP_303_SEE_OTHER)
         response.delete_cookie(SESSION_COOKIE, path=base)
         return response
 
     @router.get("/", response_class=HTMLResponse)
-    def dashboard(request: Request, user: CurrentUser, session: CurrentSession):
+    def dashboard(
+        request: Request,
+        user: CurrentUser,
+        session: CurrentSession,
+        db: Annotated[Session, Depends(get_db)],
+    ):
+        now = datetime.now(UTC)
+        auths = db.scalars(select(Authorisation).where(Authorisation.revoked_at.is_(None))).all()
+        live = [a for a in auths if a.is_live(now)]
+        items = db.scalars(select(ScopeItem).where(ScopeItem.removed_at.is_(None))).all()
+        stats = {
+            "clients": db.scalar(select(func.count(Client.id))),
+            "live_auths": len(live),
+            "verified": sum(1 for i in items if i.verified_at and i.authorisation.is_live(now)),
+            "unverified": sum(1 for i in items if not i.verified_at),
+        }
+        expiring = sorted(
+            (a for a in live if as_utc(a.valid_to) < now + timedelta(days=30)),
+            key=lambda a: a.valid_to,
+        )
         return templates.TemplateResponse(
-            request, "dashboard.html", {"user": user, "csrf_token": session.csrf_token}
+            request,
+            "dashboard.html",
+            {"user": user, "csrf_token": session.csrf_token, "stats": stats, "expiring": expiring},
         )
 
     app.include_router(router)
+    app.include_router(build_router(templates, base))
     app.mount(f"{base}/static", StaticFiles(directory=APP_DIR / "static"), name="static")
     return app
 

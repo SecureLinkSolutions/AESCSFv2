@@ -25,3 +25,35 @@ button.link { background: none; color: var(--accent); padding: 0; }
 form.inline { display: inline; }
 .muted { color: var(--muted); }
 .error { color: var(--error); }
+.topbar nav a { color: var(--fg); text-decoration: none; }
+.topbar nav a:hover { color: var(--accent); }
+a { color: var(--accent); }
+h2 { font-size: 1.1rem; margin-top: 0; }
+.card + .card, .stats + .card { margin-top: 16px; }
+.banner { background: var(--card); border: 1px solid var(--error); border-radius: 8px; padding: 10px 14px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: .85rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 16px; align-items: end; margin-top: 12px; }
+select { display: block; width: 100%; margin-top: 4px; padding: 8px; font: inherit; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); }
+input[type="checkbox"] { display: inline; width: auto; margin: 0 4px 0 0; }
+label.check { display: inline; margin: 0 8px 0 0; }
+button.small { padding: 3px 10px; font-size: .85rem; }
+button.danger, .danger { color: var(--error); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .8rem; border: 1px solid var(--border); }
+.badge.ok { color: #067647; border-color: #067647; }
+.badge.warn { color: #b54708; border-color: #b54708; }
+.badge.bad { color: var(--error); border-color: var(--error); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; color: var(--muted); text-decoration: none; }
+.stat span { display: block; font-size: 1.8rem; font-weight: 600; color: var(--fg); }
+details { margin-top: 12px; }
+details.howto { margin-top: 6px; font-size: .9rem; }
+details.howto p { margin: 4px 0; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; overflow-wrap: anywhere; }
+.small { font-size: .85rem; }
+.nowrap { white-space: nowrap; }
+@media (prefers-color-scheme: dark) {
+  .badge.ok { color: #6ce9a6; border-color: #6ce9a6; }
+  .badge.warn { color: #fdb022; border-color: #fdb022; }
+}

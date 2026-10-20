@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}{{ client.name }} · Secure Link Scanner{% endblock %}
+{% block content %}
+<p><a href="{{ base }}/clients">← Clients</a></p>
+<h1>{{ client.name }}</h1>
+<p class="muted">
+  {{ client.contact_name or "No contact" }}{% if client.contact_email %} &lt;{{ client.contact_email }}&gt;{% endif %}
+</p>
+
+<section class="card">
+  <h2>Authorisations</h2>
+  {% if client.authorisations %}
+  <table>
+    <thead><tr><th>#</th><th>Signed by</th><th>Window ({{ tz_name }})</th><th>Source IP</th><th>Status</th><th>Letter</th><th></th></tr></thead>
+    <tbody>
+    {% for a in client.authorisations %}
+      <tr>
+        <td>{{ a.id }}</td>
+        <td>{{ a.signed_by }}</td>
+        <td>{{ a.valid_from | localtime }} – {{ a.valid_to | localtime }}</td>
+        <td><code>{{ a.source_ip }}</code></td>
+        <td>
+          {% if a.revoked_at %}<span class="badge bad">revoked</span>
+          {% elif a.is_live(now) %}<span class="badge ok">live</span>
+          {% elif a.is_expired(now) %}<span class="badge muted">expired</span>
+          {% else %}<span class="badge warn">not started</span>{% endif %}
+        </td>
+        <td><a href="{{ base }}/authorisations/{{ a.id }}/document">PDF</a>
+            <span class="muted mono" title="SHA-256">{{ a.document_sha256[:12] }}</span></td>
+        <td>
+          {% if not a.revoked_at and not a.is_expired(now) %}
+          <form method="post" action="{{ base }}/authorisations/{{ a.id }}/revoke" class="inline"
+                data-confirm="Revoke this authorisation? Its scope stops being scannable immediately.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="reason" value="revoked from UI">
+            <button type="submit" class="link danger">Revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No authorisations yet. Upload the signed letter before adding scope.</p>
+  {% endif %}
+
+  <details>
+    <summary>Upload signed authorisation</summary>
+    <form method="post" action="{{ base }}/clients/{{ client.id }}/authorisations"
+          enctype="multipart/form-data" class="grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Signed letter (PDF) <input type="file" name="document" accept="application/pdf" required></label>
+      <label>Signed by <input name="signed_by" required maxlength="200"></label>
+      <label>Valid from ({{ tz_name }}) <input type="datetime-local" name="valid_from" required></label>
+      <label>Valid to ({{ tz_name }}) <input type="datetime-local" name="valid_to" required></label>
+      <label>Scanner source IP named in the letter <input name="source_ip" required maxlength="45"></label>
+      <div><button type="submit">Upload</button></div>
+    </form>
+  </details>
+</section>
+
+<section class="card">
+  <h2>Scope</h2>
+  <p class="muted">A domain covers itself and all its subdomains. Only verified items under a live authorisation can be scanned.</p>
+  {% set items = client.scope_items | selectattr("removed_at", "none") | list %}
+  {% if items %}
+  <table>
+    <thead><tr><th>Type</th><th>Value</th><th>Auth</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for item in items %}{% include "_scope_row.html" %}{% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No scope items.</p>
+  {% endif %}
+
+  {% set usable = client.usable_authorisations(now) %}
+  {% if usable %}
+  <form method="post" action="{{ base }}/clients/{{ client.id }}/scope" class="grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Type
+      <select name="type">
+        <option value="domain">Domain</option>
+        <option value="ip">IP address</option>
+        <option value="cidr">CIDR range</option>
+      </select>
+    </label>
+    <label>Value <input name="value" required maxlength="253" placeholder="example.com.au, 203.0.113.10 or 203.0.113.0/28"></label>
+    <label>Under authorisation
+      <select name="auth_id">
+        {% for a in usable %}<option value="{{ a.id }}">#{{ a.id }} · {{ a.signed_by }} · to {{ a.valid_to | localtime("%d %b %Y") }}</option>{% endfor %}
+      </select>
+    </label>
+    <div><button type="submit">Add scope item</button></div>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Recent activity</h2>
+  {% include "_audit_table.html" %}
+  <p><a href="{{ base }}/audit">Full audit log</a></p>
+</section>
+{% endblock %}

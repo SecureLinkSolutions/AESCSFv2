@@ -8,7 +8,7 @@
 
 {$SITE_HOST} {
 	# Default: Caddy's internal CA. Staff trust the root once
-	# (see docs/runbooks/m1-setup.md). Swap for Tailscale HTTPS certs if preferred.
+	# (see docs/runbooks/setup.md). Swap for Tailscale HTTPS certs if preferred.
 	tls internal
 
 	encode zstd gzip
@@ -24,6 +24,10 @@
 	redir / /app/ 302
 
 	handle /app* {
+		# Authorisation PDFs are capped at 10 MB by the app; refuse anything far larger here.
+		request_body {
+			max_size 12MB
+		}
 		reverse_proxy api:8000
 	}
 

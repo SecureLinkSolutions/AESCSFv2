@@ -15,6 +15,7 @@ def _env(tmp_path_factory):
         VALKEY_URL="redis://unused:6379/0",
         SECRET_KEY="test-secret-key-that-is-long-enough-123",
         COOKIE_SECURE="false",
+        AUTHORISATION_DIR=str(tmp_path_factory.mktemp("authorisations")),
     )
     from alembic import command
     from alembic.config import Config
@@ -31,13 +32,16 @@ def valkey():
 
 @pytest.fixture
 def db():
-    from app.db import get_sessionmaker
-    from app.models import User
+    from sqlalchemy import text
+
+    from app.db import get_engine, get_sessionmaker
 
     with get_sessionmaker()() as session:
         yield session
-        session.query(User).delete()
-        session.commit()
+    # Raw SQL: the ORM refuses to delete audit_log rows, by design.
+    with get_engine().begin() as conn:
+        for table in ("audit_log", "scope_items", "authorisations", "clients", "users"):
+            conn.execute(text(f"DELETE FROM {table}"))  # noqa: S608
 
 
 @pytest.fixture

@@ -4,15 +4,17 @@ name: scanner-platform
 #   edge     - caddy only; the one network with a published port (Tailscale IP only)
 #   frontend - caddy <-> api (and DefectDojo nginx from M4); internal, no egress
 #   backend  - api <-> postgres, valkey (and worker/intel later); internal, no egress
-# Services that need outbound internet (worker, intel) get their own egress network later.
+#   egress   - outbound internet, only for services that need it (verifier now; worker, intel later)
 networks:
   edge: {}
+  egress: {}
   frontend:
     internal: true
   backend:
     internal: true
 
 volumes:
+  authorisations: {}
   postgres_data: {}
   valkey_data: {}
   caddy_data: {}
@@ -54,6 +56,10 @@ services:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-28800}
       COOKIE_SECURE: "true"
+      TIMEZONE: ${TIMEZONE:-Australia/Sydney}
+      BLOCKLIST_EXTRA: ${BLOCKLIST_EXTRA:-}
+    volumes:
+      - authorisations:/data/authorisations
     networks: [frontend, backend]
     read_only: true
     tmpfs: [/tmp]
@@ -68,6 +74,26 @@ services:
       postgres:
         condition: service_healthy
       valkey:
+        condition: service_healthy
+
+  verifier:
+    <<: *hardening
+    image: scanner-platform/api:dev
+    command: ["python", "-m", "app.verifier"]
+    environment:
+      RUN_MIGRATIONS: "false"
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379/0
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      BLOCKLIST_EXTRA: ${BLOCKLIST_EXTRA:-}
+    # Needs outbound DNS and HTTPS to check TXT records and well-known files.
+    # It has no document volume and serves nothing.
+    networks: [backend, egress]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    depends_on:
+      api:
         condition: service_healthy
 
   postgres:
