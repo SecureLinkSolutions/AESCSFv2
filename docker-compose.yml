@@ -43,8 +43,10 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      # service_started, not service_healthy: the distroless oauth2-proxy
+      # image cannot run a healthcheck (see the note on that service).
       oauth2-proxy:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/healthz || exit 1"]
@@ -115,16 +117,17 @@ services:
       OAUTH2_PROXY_SCOPE:                "openid email profile"
 
     restart: unless-stopped
-    # /ping is oauth2-proxy's built-in unauthenticated health endpoint.
-    # Without this, nginx's depends_on: service_healthy below has nothing to
-    # wait on, and auth_request traffic could hit oauth2-proxy before it's
-    # finished starting up (e.g. still fetching the OIDC discovery document).
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4180/ping"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    # NOTE: no healthcheck here on purpose. From v7.6.0 the default
+    # oauth2-proxy tag is a distroless image — it has no shell and no
+    # wget/curl, so a shell- or wget-based healthcheck can never pass, and
+    # nginx's depends_on would then block the whole stack from starting.
+    # oauth2-proxy does expose an unauthenticated /ping endpoint; to actually
+    # use it, switch the image above to the "-alpine" variant (which ships
+    # BusyBox wget) and add:
+    #   healthcheck:
+    #     test: ["CMD", "wget", "--spider", "-q", "http://localhost:4180/ping"]
+    #   and set nginx's depends_on for this service to service_healthy.
+    # That trades distroless' smaller attack surface for readiness gating.
     # Opted in to Watchtower: receives digest-level security patches when
     # quay.io republishes the v7.6.0 tag.  The tag itself is still pinned —
     # a version bump (v7.7.0+) requires a manual compose file edit.
