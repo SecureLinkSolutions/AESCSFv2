@@ -1,5 +1,7 @@
 # ── Stage 1: Build the Vite app ──────────────────────────────────────────────
-FROM node:20-alpine AS builder
+# Node 20 reached end-of-life on 2026-04-30 and no longer gets security
+# patches; 24 is the current LTS line and matches server/Dockerfile.
+FROM node:24-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

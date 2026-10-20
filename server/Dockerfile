@@ -8,8 +8,11 @@ RUN apk add --no-cache python3 make g++
 # Create a non-root user for least-privilege execution
 RUN addgroup -S aescsf && adduser -S aescsf -G aescsf
 
-COPY package.json ./
-RUN npm install --omit=dev
+# Copy the lockfile too and use `npm ci`, so the image installs exactly the
+# audited versions. With `npm install` and no lockfile, every rebuild
+# re-resolved the ^ranges and silently drifted off the committed lockfile.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 COPY server.js ./
 
