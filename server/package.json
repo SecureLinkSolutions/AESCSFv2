@@ -1,11 +1,12 @@
 {
   "name": "aescsf-api",
   "version": "1.0.0",
-  "description": "AESCSF v2 Evidence Tracker — on-prem API backend",
+  "description": "AESCSF v2 Evidence Tracker \u2014 on-prem API backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node test/tenant-isolation.test.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",

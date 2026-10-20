@@ -129,6 +129,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS audit_log (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id    TEXT    NOT NULL DEFAULT '',
     user_oid     TEXT    NOT NULL,
     username     TEXT    NOT NULL DEFAULT '',
     display_name TEXT    NOT NULL DEFAULT '',
@@ -141,6 +142,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_practice ON audit_log(practice_id);
   CREATE INDEX IF NOT EXISTS idx_audit_user     ON audit_log(user_oid);
   CREATE INDEX IF NOT EXISTS idx_audit_time     ON audit_log(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_audit_tenant   ON audit_log(tenant_id, created_at DESC);
 
   CREATE TABLE IF NOT EXISTS files (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -288,6 +290,23 @@ try {
 } catch (e) { console.error("[AESCSF API] Files tenant_id backfill failed:", e.message); }
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_files_tenant ON files(tenant_id, practice_id)`); } catch {}
 
+/* Migration: add tenant_id column to audit_log if it doesn't exist yet, then
+ * backfill it from the acting user's tenant. Without this the audit log is
+ * global: an admin in one tenant could read — and purge — another tenant's
+ * change history. Rows whose user_oid is no longer in `users` keep tenant_id=''
+ * and are therefore visible to nobody, which is the safe default for an
+ * audit trail whose owner can't be established. */
+try { db.exec(`ALTER TABLE audit_log ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''`); } catch {}
+try {
+  db.exec(`
+    UPDATE audit_log
+    SET tenant_id = (SELECT tenant_id FROM users WHERE users.oid = audit_log.user_oid)
+    WHERE tenant_id = ''
+      AND EXISTS (SELECT 1 FROM users WHERE users.oid = audit_log.user_oid AND users.tenant_id != '')
+  `);
+} catch (e) { console.error("[AESCSF API] Audit tenant_id backfill failed:", e.message); }
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id, created_at DESC)`); } catch {}
+
 /* Migration: expand users role constraint from 2 to 4 values */
 try {
   const userTableSQL = db.prepare(
@@ -392,22 +411,17 @@ const stmtCountAdmins = db.prepare(
 const stmtGetAllUsers = db.prepare(
   "SELECT oid, username, display_name, role, created_at, last_seen FROM users WHERE tenant_id = ? ORDER BY display_name"
 );
-const stmtGetAssignments = db.prepare(
-  "SELECT domain FROM assignments WHERE user_oid = ? ORDER BY domain"
-);
-const stmtGetAllAssignments = db.prepare(`
-  SELECT a.user_oid, a.domain
-  FROM assignments a
-  JOIN users u ON a.user_oid = u.oid
+/* Domain ownership for the merged view, sourced from the group model that RBAC
+   actually enforces. The legacy per-user `assignments` table is no longer read
+   or written anywhere — see the removed admin assignment endpoints. */
+const stmtGetAllDomainOwners = db.prepare(`
+  SELECT DISTINCT gm.user_oid, gda.domain
+  FROM group_members gm
+  JOIN group_domain_assignments gda ON gda.group_id = gm.group_id
+  JOIN users u ON u.oid = gm.user_oid
   WHERE u.tenant_id = ?
-  ORDER BY a.user_oid, a.domain
+  ORDER BY gm.user_oid, gda.domain
 `);
-const stmtDeleteAssignments = db.prepare(
-  "DELETE FROM assignments WHERE user_oid = ?"
-);
-const stmtInsertAssignment = db.prepare(
-  "INSERT OR REPLACE INTO assignments (user_oid, domain, assigned_by, assigned_at) VALUES (?, ?, ?, unixepoch())"
-);
 const stmtGetAllAssessments = db.prepare(
   "SELECT a.user_oid, a.data FROM assessments a JOIN users u ON a.user_oid = u.oid AND a.tenant_id = u.tenant_id WHERE a.tenant_id = ?"
 );
@@ -440,13 +454,15 @@ const stmtDeleteGoldenSnapshot = db.prepare(
 );
 
 /* Audit log — statements use positional params */
+/* tenant_id is the FIRST parameter so a call site that forgets it fails loudly
+   on arity rather than silently writing an unattributable audit row. */
 const stmtInsertAudit = db.prepare(`
-  INSERT INTO audit_log (user_oid, username, display_name, practice_id, field, old_value, new_value)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO audit_log (tenant_id, user_oid, username, display_name, practice_id, field, old_value, new_value)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const stmtInsertAuditBatch = db.transaction((rows) => {
   for (const r of rows) {
-    stmtInsertAudit.run(r.userOid, r.username, r.displayName, r.practiceId, r.field, r.oldValue, r.newValue);
+    stmtInsertAudit.run(r.tenantId, r.userOid, r.username, r.displayName, r.practiceId, r.field, r.oldValue, r.newValue);
   }
 });
 
@@ -459,18 +475,8 @@ const stmtGetFileById = db.prepare(
   "SELECT id, user_oid, practice_id, filename, stored_name, mime_type, size_bytes, uploaded_at FROM files WHERE id = ? AND tenant_id = ?"
 );
 const stmtDeleteFileRecord = db.prepare("DELETE FROM files WHERE id = ?");
-const stmtGetObjectiveAssignments = db.prepare(
-  "SELECT objective_id FROM objective_assignments WHERE user_oid = ? ORDER BY objective_id"
-);
-const stmtGetAllObjectiveAssignments = db.prepare(
-  "SELECT user_oid, objective_id FROM objective_assignments ORDER BY user_oid, objective_id"
-);
-const stmtDeleteObjectiveAssignments = db.prepare(
-  "DELETE FROM objective_assignments WHERE user_oid = ?"
-);
-const stmtInsertObjectiveAssignment = db.prepare(
-  "INSERT OR REPLACE INTO objective_assignments (user_oid, objective_id, assigned_by, assigned_at) VALUES (?, ?, ?, unixepoch())"
-);
+/* The legacy `objective_assignments` table is likewise no longer read or
+   written; objective access comes from group_objective_assignments. */
 const stmtGetApproved = db.prepare(
   "SELECT data FROM approved_assessments WHERE tenant_id = ?"
 );
@@ -780,7 +786,7 @@ function getTenantUser(oid, tenantId) {
 }
 
 function buildMergedAssessment(tenantId) {
-  const allAssignments = stmtGetAllAssignments.all(tenantId);
+  const allAssignments = stmtGetAllDomainOwners.all(tenantId);
   const domainOwners = {};
   for (const { user_oid, domain } of allAssignments) {
     if (!domainOwners[domain]) domainOwners[domain] = [];
@@ -873,6 +879,7 @@ function diffAndLog(user, oldData, newData) {
       const newVal = String(newP[field] ?? "").trim();
       if (oldVal === newVal) continue;
       rows.push({
+        tenantId:    user.tenant,
         userOid:     user.oid,
         username:    user.username,
         displayName: user.display_name,
@@ -905,8 +912,10 @@ function insertPracticeVersions(userOid, displayName, tenant, oldData, newData) 
 
 /** Build an audit query dynamically based on supplied filter params. */
 function queryAudit(filters) {
-  const conditions = [];
-  const params     = {};
+  /* The tenant filter is unconditional and not caller-optional: every audit
+     read is scoped to the requester's tenant, including admin reads. */
+  const conditions = ["tenant_id = @tenant"];
+  const params     = { tenant: filters.tenant ?? "" };
 
   if (filters.userOid)    { conditions.push("user_oid = @userOid");       params.userOid    = filters.userOid; }
   if (filters.practiceId) { conditions.push("practice_id = @practiceId"); params.practiceId = filters.practiceId; }
@@ -914,7 +923,7 @@ function queryAudit(filters) {
   if (filters.from)       { conditions.push("created_at >= @from");       params.from       = filters.from; }
   if (filters.to)         { conditions.push("created_at <= @to");         params.to         = filters.to; }
 
-  const where  = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const where  = `WHERE ${conditions.join(" AND ")}`;
   const base   = `FROM audit_log ${where}`;
 
   const total  = db.prepare(`SELECT COUNT(*) AS n ${base}`).get(params).n;
@@ -956,11 +965,23 @@ function listFilesForPractice(practiceId, userOid, isAdmin, tenantId) {
 const stmtPurgeAudit = AUDIT_RETENTION_DAYS > 0
   ? db.prepare("DELETE FROM audit_log WHERE created_at < unixepoch() - ?")
   : null;
+const stmtPurgeAuditTenant = AUDIT_RETENTION_DAYS > 0
+  ? db.prepare("DELETE FROM audit_log WHERE created_at < unixepoch() - ? AND tenant_id = ?")
+  : null;
 
-function purgeAuditLog() {
+/**
+ * Purge audit entries past the retention window.
+ * Called with no argument by the scheduled job, where retention is a
+ * system-wide policy that legitimately spans tenants. Called WITH a tenantId
+ * from the admin endpoint, so one tenant's admin can never delete another
+ * tenant's audit trail.
+ */
+function purgeAuditLog(tenantId) {
   if (!stmtPurgeAudit) return { deleted: 0, retentionDays: 0 };
   const cutoffSeconds = AUDIT_RETENTION_DAYS * 86400;
-  const { changes } = stmtPurgeAudit.run(cutoffSeconds);
+  const { changes } = tenantId === undefined
+    ? stmtPurgeAudit.run(cutoffSeconds)
+    : stmtPurgeAuditTenant.run(cutoffSeconds, tenantId);
   if (changes > 0) {
     console.log(`[AESCSF] Audit log purge: removed ${changes} entr${changes === 1 ? "y" : "ies"} older than ${AUDIT_RETENTION_DAYS} days`);
   }
@@ -1539,6 +1560,7 @@ app.put("/api/admin/users/:oid/role", requireAuth, autoRegister, requireAdmin, (
 
   try {
     stmtInsertAudit.run(
+      req.user.tenant,
       req.user.oid,
       req.user.username,
       req.dbUser.display_name,
@@ -1554,50 +1576,15 @@ app.put("/api/admin/users/:oid/role", requireAuth, autoRegister, requireAdmin, (
   res.json({ updated: true, oid: req.params.oid, role });
 });
 
-app.put("/api/admin/users/:oid/assignments", requireAuth, autoRegister, requireAdmin, (req, res) => {
-  const { domains } = req.body || {};
-  if (!Array.isArray(domains)) {
-    return res.status(400).json({ error: "domains must be an array of strings" });
-  }
-  const target = getTenantUser(req.params.oid, req.user.tenant);
-  if (!target) return res.status(404).json({ error: "User not found" });
-
-  const oldDomains = getUserAssignments(req.params.oid);
-
-  const setAssignments = db.transaction((oid, domainList, byOid) => {
-    stmtDeleteAssignments.run(oid);
-    for (const domain of domainList) {
-      stmtInsertAssignment.run(oid, domain.toUpperCase(), byOid);
-    }
-  });
-
-  try {
-    setAssignments(req.params.oid, domains, req.user.oid);
-
-    const oldVal = oldDomains.slice().sort().join(", ") || "(none)";
-    const newVal = domains.map(d => d.toUpperCase()).sort().join(", ") || "(none)";
-    if (oldVal !== newVal) {
-      try {
-        stmtInsertAudit.run(
-          req.user.oid,
-          req.user.username,
-          req.dbUser.display_name,
-          `USER:${target.username || target.oid}`,
-          "domain_assignments",
-          oldVal,
-          newVal
-        );
-      } catch (auditErr) {
-        console.error("[AESCSF API] Admin audit log error (non-fatal):", auditErr);
-      }
-    }
-
-    res.json({ updated: true, oid: req.params.oid, domains });
-  } catch (err) {
-    console.error("[AESCSF API] Assignment update error:", err);
-    res.status(500).json({ error: "Failed to update assignments" });
-  }
-});
+/* NOTE: PUT /api/admin/users/:oid/assignments used to live here. It wrote to
+ * the legacy per-user `assignments` table, but RBAC has only ever read the
+ * group-based tables (see getUserAssignments), so the endpoint granted no
+ * access while reporting success and writing a "domain_assignments" audit
+ * entry. The admin UI moved to group-based access ("Access via group") and no
+ * longer called it. Removed rather than wired into enforcement: the legacy
+ * table still holds rows from when the endpoint was live, and honouring them
+ * now would silently activate grants nobody reviewed.
+ * Per-user access is granted by adding the user to a group. */
 
 app.get("/api/admin/assessment/merged", requireAuth, autoRegister, requireAdmin, (req, res) => {
   try {
@@ -1663,7 +1650,7 @@ app.post("/api/admin/users/:oid/approve-contributions", requireAuth, autoRegiste
   stmtUpsertApproved.run(req.user.tenant, JSON.stringify({ assessments: approvedAssessments, _approvedView: true }), req.user.oid);
 
   stmtInsertAudit.run(
-    req.user.oid, req.user.username, req.dbUser.display_name,
+    req.user.tenant, req.user.oid, req.user.username, req.dbUser.display_name,
     `USER:${target.username || req.params.oid}`, "contributions_approved",
     "", `${approvedCount} practices approved`
   );
@@ -1731,7 +1718,7 @@ app.post("/api/admin/users/:oid/endorse-contributions", requireAuth, autoRegiste
 
     try {
       stmtInsertAudit.run(
-        req.user.oid, req.user.username, req.dbUser.display_name,
+        req.user.tenant, req.user.oid, req.user.username, req.dbUser.display_name,
         `USER:${target.username || req.params.oid}`, "endorse_contributions",
         "", `${endorsedIds.length} practices`
       );
@@ -1931,6 +1918,7 @@ app.delete("/api/snapshots/:id", requireAuth, autoRegister, (req, res) => {
 app.get("/api/audit", requireAuth, autoRegister, (req, res) => {
   const isAdmin = req.dbUser.role === "admin";
   const filters = {
+    tenant:     req.user.tenant,
     userOid:    isAdmin ? (req.query.user_oid || null) : req.user.oid,
     practiceId: req.query.practice_id || null,
     field:      req.query.field       || null,
@@ -1955,6 +1943,7 @@ app.get("/api/audit", requireAuth, autoRegister, (req, res) => {
 app.get("/api/audit/export", exportLimiter, requireAuth, autoRegister, (req, res) => {
   const isAdmin = req.dbUser.role === "admin";
   const filters = {
+    tenant:     req.user.tenant,
     userOid:    isAdmin ? null : req.user.oid,
     practiceId: req.query.practice_id || null,
     field:      req.query.field       || null,
@@ -1983,6 +1972,7 @@ app.get("/api/audit/export", exportLimiter, requireAuth, autoRegister, (req, res
 app.get("/api/audit/practice/:id", requireAuth, autoRegister, (req, res) => {
   const isAdmin = req.dbUser.role === "admin";
   const filters = {
+    tenant:     req.user.tenant,
     practiceId: req.params.id,
     userOid:    isAdmin ? null : req.user.oid,
     limit:      200,
@@ -2007,7 +1997,7 @@ app.delete("/api/audit/purge", requireAuth, autoRegister, requireAdmin, (req, re
     return res.json({ deleted: 0, retentionDays: 0, message: "Retention is disabled (AESCSF_AUDIT_RETENTION_DAYS=0)" });
   }
   try {
-    const result = purgeAuditLog();
+    const result = purgeAuditLog(req.user.tenant);
     res.json(result);
   } catch (err) {
     console.error("[AESCSF API] Audit purge error:", err);
@@ -2015,36 +2005,10 @@ app.delete("/api/audit/purge", requireAuth, autoRegister, requireAdmin, (req, re
   }
 });
 
-/* ── Objective assignment routes ────────────────────────────────────────────────── */
-
-/**
- * PUT /api/admin/users/:oid/objective-assignments
- * Body: { objectives: ["ACCESS-1", "ARCHITECTURE-2", ...] }
- * Admin only. Replaces the user's objective assignments atomically.
- */
-app.put("/api/admin/users/:oid/objective-assignments", requireAuth, autoRegister, requireAdmin, (req, res) => {
-  const { objectives } = req.body || {};
-  if (!Array.isArray(objectives)) return res.status(400).json({ error: "objectives must be an array" });
-  const target = getTenantUser(req.params.oid, req.user.tenant);
-  if (!target) return res.status(404).json({ error: "User not found" });
-
-  const oldObjectives = getUserObjectiveAssignments(req.params.oid).sort().join(",");
-  const setObjectives = db.transaction((oid, list, byOid) => {
-    stmtDeleteObjectiveAssignments.run(oid);
-    for (const obj of list) stmtInsertObjectiveAssignment.run(oid, obj, byOid);
-  });
-  setObjectives(req.params.oid, objectives, req.user.oid);
-
-  const newObjectives = objectives.slice().sort().join(",");
-  if (oldObjectives !== newObjectives) {
-    stmtInsertAudit.run(
-      req.user.oid, req.user.username, req.dbUser.display_name,
-      `USER:${target.username || target.oid}`, "objective_assignments",
-      oldObjectives, newObjectives
-    );
-  }
-  res.json({ updated: true, oid: req.params.oid, objectives });
-});
+/* NOTE: PUT /api/admin/users/:oid/objective-assignments used to live here and
+ * was removed for the same reason as the domain-assignments endpoint above —
+ * it wrote to the legacy `objective_assignments` table that RBAC never reads.
+ * Objective-level access is granted via a group's objective assignments. */
 
 /**
  * GET /api/admin/responses
@@ -2134,7 +2098,7 @@ app.put("/api/admin/confidence/:practiceId", requireAuth, autoRegister, requireA
     const oldNotes  = existing?.notes  ?? "";
     if (oldRating !== rating) {
       stmtInsertAudit.run(
-        req.user.oid, req.user.username, req.dbUser.display_name,
+        req.user.tenant, req.user.oid, req.user.username, req.dbUser.display_name,
         practiceId, "confidence_rating",
         oldRating === null ? "" : String(oldRating),
         String(rating)
@@ -2142,7 +2106,7 @@ app.put("/api/admin/confidence/:practiceId", requireAuth, autoRegister, requireA
     }
     if (notes !== oldNotes) {
       stmtInsertAudit.run(
-        req.user.oid, req.user.username, req.dbUser.display_name,
+        req.user.tenant, req.user.oid, req.user.username, req.dbUser.display_name,
         practiceId, "confidence_notes",
         oldNotes.slice(0, MAX_AUDIT_VALUE_LEN),
         notes.slice(0, MAX_AUDIT_VALUE_LEN)
