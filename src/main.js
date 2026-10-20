@@ -3510,32 +3510,10 @@ function buildPdfDomainRows(rows) {
         `You have ${incomplete.length} assigned practice${incomplete.length === 1 ? "" : "s"} not yet assessed. Switch to Assessment to complete them.`;
     }
 
-    /* ── Objective assignment admin functions ────────────────────────────────── */
-    function adminToggleObjectiveChip(oid, objectiveId, checkbox) {
-      const chip = document.getElementById(`objchip-${oid}-${objectiveId}`);
-      if (chip) chip.classList.toggle("checked", checkbox.checked);
-    }
-
-    async function adminSaveObjectiveAssignments(oid) {
-      const objectives = [];
-      document.querySelectorAll(`[id^="objchip-${oid}-"]`).forEach(label => {
-        const cb = label.querySelector("input");
-        if (cb?.checked) objectives.push(label.id.replace(`objchip-${oid}-`, ""));
-      });
-      const statusEl = document.getElementById(`obj-save-status-${oid}`);
-      try {
-        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/objective-assignments`, {
-          method: "PUT", body: JSON.stringify({ objectives })
-        });
-        if (!resp.ok) { if (statusEl) statusEl.textContent = `Error ${resp.status}`; return; }
-        if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 3000); }
-        /* Update local _adminUsers cache */
-        const u = _adminUsers.find(u => u.oid === oid);
-        if (u) u.objectives = objectives;
-      } catch (err) {
-        if (statusEl) statusEl.textContent = err.message;
-      }
-    }
+    /* The per-user objective-assignment chip handlers lived here. The admin
+       user card now shows group-derived access only ("Access via group"), so
+       the chips they targeted are never rendered and the endpoint they called
+       has been removed server-side. */
 
     /* ── Multi-respondent responses view ─────────────────────────────────────── */
     async function approveContributions(userOid, practiceIds) {
@@ -4029,24 +4007,9 @@ function buildPdfDomainRows(rows) {
       } catch (err) { alert(err.message); if (el?.tagName === "SELECT") { await renderAdminPanel(); } }
     }
 
-    async function adminSaveAssignments(oid) {
-      const card = document.getElementById(`user-card-${oid}`);
-      if (!card) return;
-      const domains = ALL_DOMAINS.filter(d => {
-        const chip = document.getElementById(`chip-${oid}-${d}`);
-        return chip && chip.querySelector("input")?.checked;
-      });
-      const statusEl = document.getElementById(`save-status-${oid}`);
-      try {
-        const resp = await adminFetch(`/admin/users/${encodeURIComponent(oid)}/assignments`, {
-          method: "PUT", body: JSON.stringify({ domains })
-        });
-        if (!resp.ok) { if (statusEl) statusEl.textContent = `Error ${resp.status}`; return; }
-        if (statusEl) { statusEl.textContent = "Saved"; setTimeout(() => { statusEl.textContent = ""; }, 3000); }
-      } catch (err) {
-        if (statusEl) statusEl.textContent = err.message;
-      }
-    }
+    /* adminSaveAssignments() lived here — same story as the objective chips
+       above: the per-user domain chips it read are no longer rendered, and
+       its endpoint has been removed. Domain access is granted via groups. */
 
     document.getElementById("adminRefreshBtn")?.addEventListener("click", renderAdminPanel);
     document.getElementById("responseLoadBtn")?.addEventListener("click", loadAndRenderResponses);
