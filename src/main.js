@@ -3,8 +3,13 @@ import "./style.css";
 
 // npm package imports replacing CDN scripts
 import Chart from "chart.js/auto";
-import jsPDF from "jspdf";
-import "jspdf-autotable"; // side-effect: extends jsPDF.prototype.autoTable
+// jsPDF 4.x: the default export is an object, NOT the constructor — the class
+// only comes from the named export. `import jsPDF from "jspdf"` silently
+// yields an object here and blows up at `new jsPDF(...)`.
+import { jsPDF } from "jspdf";
+// jspdf-autotable 5.x no longer patches jsPDF.prototype.autoTable on import;
+// it exports a function called as autoTable(doc, options).
+import autoTable from "jspdf-autotable";
 import html2canvas from "html2canvas";
 
 // Make them global for the existing code that references them as globals
@@ -12,6 +17,7 @@ window.Chart = Chart;
 // Expose as both window.jsPDF and window.jspdf.jsPDF (CDN compat)
 window.jsPDF = jsPDF;
 window.jspdf = { jsPDF };
+window.autoTable = autoTable;
 
 // ── Paste the entire existing <script> content below ──
     const STORAGE_KEY = "aescsf-v2-evidence-tracker";
@@ -2310,47 +2316,43 @@ function buildPdfDomainRows(rows) {
         if (milRadarImage) doc.addImage(milRadarImage, "PNG", 438, 118, 324, 160, undefined, "FAST");
         else doc.text("Chart unavailable", 436, 142);
 
-        if (typeof doc.autoTable === "function") {
-          doc.autoTable({
-            startY: 324,
-            head: [["Domain", "Practices", "Completed", "Largely", "Partial / Open", "Gaps", "Average score / 3"]],
-            body: domainRows.map(item => [
-              item.label,
-              String(item.total),
-              String(item.completed),
-              String(item.largely),
-              String(item.partial),
-              String(item.gaps),
-              Number(item.score || 0).toFixed(2)
-            ]),
-            theme: "grid",
-            headStyles: { fillColor: [18, 52, 86] },
-            styles: { fontSize: 9, cellPadding: 5 }
-          });
-        }
+        autoTable(doc, {
+          startY: 324,
+          head: [["Domain", "Practices", "Completed", "Largely", "Partial / Open", "Gaps", "Average score / 3"]],
+          body: domainRows.map(item => [
+            item.label,
+            String(item.total),
+            String(item.completed),
+            String(item.largely),
+            String(item.partial),
+            String(item.gaps),
+            Number(item.score || 0).toFixed(2)
+          ]),
+          theme: "grid",
+          headStyles: { fillColor: [18, 52, 86] },
+          styles: { fontSize: 9, cellPadding: 5 }
+        });
 
         doc.addPage("a4", "landscape");
         addPdfPageFrame(doc, "Gap register", "Open remediation items and target dates from the live assessment");
-        if (typeof doc.autoTable === "function") {
-          doc.autoTable({
-            startY: 84,
-            head: [["Practice ID", "Domain", "Status", "Owner", "Target Date", "Gap / Remediation", "Evidence / Links"]],
-            body: (gapRows.length ? gapRows : [{ practice: { practiceId: "-", domain: "-" }, assessment: { status: "No open gaps", owner: "", targetDate: "", gap: "", attachments: "" } }]).map(row => [
-              row.practice.practiceId,
-              row.practice.domain,
-              row.assessment.status || "Not Assessed",
-              row.assessment.owner || "Not assigned",
-              formatDate(row.assessment.targetDate) || "Not set",
-              row.assessment.gap || "No remediation detail recorded.",
-              row.assessment.attachments || row.assessment.evidence || ""
-            ]),
-            theme: "grid",
-            headStyles: { fillColor: [18, 52, 86] },
-            styles: { fontSize: 8, cellPadding: 4, overflow: "linebreak", valign: "top" },
-            columnStyles: { 5: { cellWidth: 240 }, 6: { cellWidth: 200 } },
-            didDrawPage: () => addPdfPageFrame(doc, "Gap register", "Open remediation items and target dates from the live assessment")
-          });
-        }
+        autoTable(doc, {
+          startY: 84,
+          head: [["Practice ID", "Domain", "Status", "Owner", "Target Date", "Gap / Remediation", "Evidence / Links"]],
+          body: (gapRows.length ? gapRows : [{ practice: { practiceId: "-", domain: "-" }, assessment: { status: "No open gaps", owner: "", targetDate: "", gap: "", attachments: "" } }]).map(row => [
+            row.practice.practiceId,
+            row.practice.domain,
+            row.assessment.status || "Not Assessed",
+            row.assessment.owner || "Not assigned",
+            formatDate(row.assessment.targetDate) || "Not set",
+            row.assessment.gap || "No remediation detail recorded.",
+            row.assessment.attachments || row.assessment.evidence || ""
+          ]),
+          theme: "grid",
+          headStyles: { fillColor: [18, 52, 86] },
+          styles: { fontSize: 8, cellPadding: 4, overflow: "linebreak", valign: "top" },
+          columnStyles: { 5: { cellWidth: 240 }, 6: { cellWidth: 200 } },
+          didDrawPage: () => addPdfPageFrame(doc, "Gap register", "Open remediation items and target dates from the live assessment")
+        });
 
         const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
         doc.save(`aescsf-v2-assessment-report-${stamp}.pdf`);

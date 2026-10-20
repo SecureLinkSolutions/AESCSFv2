@@ -15,7 +15,7 @@
 #   ever updated automatically. nginx and api are local builds (no registry) so
 #   Watchtower cannot touch them — they update only via deploy/update.sh.
 #   oauth2-proxy is opted in: Watchtower pulls a new digest if quay.io releases
-#   a security patch under the same v7.6.0 tag.
+#   a security patch under the same v7.15.5 tag.
 #   Set WATCHTOWER_MONITOR_ONLY=true in .env to receive notifications only,
 #   with no automatic restarts.
 #
@@ -70,7 +70,7 @@ services:
   # It is NOT the reverse proxy — UPSTREAMS is set to "static://200" so it
   # returns 202 Accepted once a user is authenticated (nginx ignores the body).
   oauth2-proxy:
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
     expose:
       - "4180"
     environment:
@@ -116,8 +116,18 @@ services:
       OAUTH2_PROXY_REVERSE_PROXY:        "true"
       OAUTH2_PROXY_SCOPE:                "openid email profile"
 
+      # Since v7.15.5, with --reverse-proxy enabled, client-IP headers are
+      # only trusted from direct peers matching --trusted-proxy-ip. Left
+      # unset, oauth2-proxy trusts all source addresses and keeps the old
+      # leftmost X-Forwarded-For behaviour, which does not defend against
+      # spoofed XFF. That is not a login risk here, because this deployment
+      # grants no IP-based auth exemptions (no OAUTH2_PROXY_TRUSTED_IP) —
+      # client IP only affects logging. Set this to the Docker network CIDR
+      # that nginx talks to oauth2-proxy on if you add IP exemptions later:
+      # OAUTH2_PROXY_TRUSTED_PROXY_IP: "172.16.0.0/12"
+
     restart: unless-stopped
-    # NOTE: no healthcheck here on purpose. From v7.6.0 the default
+    # NOTE: no healthcheck here on purpose. Since v7.6.0 the default
     # oauth2-proxy tag is a distroless image — it has no shell and no
     # wget/curl, so a shell- or wget-based healthcheck can never pass, and
     # nginx's depends_on would then block the whole stack from starting.
@@ -129,7 +139,7 @@ services:
     #   and set nginx's depends_on for this service to service_healthy.
     # That trades distroless' smaller attack surface for readiness gating.
     # Opted in to Watchtower: receives digest-level security patches when
-    # quay.io republishes the v7.6.0 tag.  The tag itself is still pinned —
+    # quay.io republishes the v7.15.5 tag.  The tag itself is still pinned —
     # a version bump (v7.7.0+) requires a manual compose file edit.
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
